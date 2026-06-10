@@ -53,13 +53,18 @@
       'empty.noEventsToday': 'אין אירועים היום.',
       'empty.noQueuedWrites': 'אין כתיבות בתור.',
       'empty.next60Days': 'אין אירועים בחודשיים הקרובים.',
-      'empty.noBudget': 'אין תקציב.',
+      'empty.noBudget': 'אין תקציב עדיין.',
+      'empty.noRecentTxns': 'אין עסקאות אחרונות.',
       'empty.noGoals': 'אין יעדים.',
       'empty.noVehicle': 'אין רכב.',
       'empty.noRenewals': 'אין חידושים בחודשיים הקרובים.',
       'empty.noUpcoming': 'אין פריטים קרובים.',
       'empty.noOverdue': 'אין פריטים באיחור.',
       'empty.allClean': 'הכל נקי.',
+      // Appreciation ticker
+      'ticker.heading': 'הושלמו לאחרונה',
+      'ticker.empty': 'פעולות שהושלמו יופיעו כאן.',
+      'ticker.emptyEn': 'Completed actions will show up here.',
       'state.allGood': 'הכל בסדר',
       'state.loading': 'טוען…',
       // Calendar
@@ -91,6 +96,10 @@
       'settings.account': 'חשבון',
       'settings.sheet': 'גיליון',
       'settings.language': 'שפה',
+      'settings.appearance': 'מראה',
+      'settings.themeLight': '☀️ בהיר',
+      'settings.themeDark': '🌙 כהה',
+      'settings.themeAuto': '🔄 אוטומטי',
       'settings.pendingWrites': 'כתיבות בתור',
       'settings.about': 'אודות',
       'settings.sheetIdLabel': 'מזהה הגיליון',
@@ -120,6 +129,12 @@
       'toast.signinFailed': 'ההתחברות נכשלה: {err}',
       'toast.oauthNotConfigured': 'OAuth לא מוגדר — ראה README_SETUP.md',
       'toast.loadFailed': 'לא הצלחתי לטעון נתונים ואין מטמון זמין.',
+      'toast.gapiLoadError': 'לא הצלחתי לטעון את Google API. בדוק את החיבור לאינטרנט.',
+      'toast.gisLoadError': 'לא הצלחתי לטעון את Google Sign-In. בדוק את החיבור לאינטרנט.',
+      'signin.gapiLoadError': 'שגיאה בטעינת Google API',
+      'signin.gisLoadError': 'שגיאה בטעינת Google Sign-In',
+      'toast.sheetIdInvalid': 'מזהה גיליון לא תקין — בדוק שהוא בפורמט הנכון.',
+      'toast.sheetIdTestFailed': 'לא הצלחתי לאמת את מזהה הגיליון: {err}',
       'toast.demoPrefix': '(הדגמה) {label}',
       'toast.queuedOffline': 'נשמר בתור לא מקוון: {label}',
       'toast.queued': 'נשמר בתור: {label}',
@@ -160,12 +175,17 @@
       'empty.noQueuedWrites': 'No queued writes.',
       'empty.next60Days': 'Nothing in the next two months.',
       'empty.noBudget': 'No budget yet.',
+      'empty.noRecentTxns': 'No recent transactions.',
       'empty.noGoals': 'No goals yet.',
       'empty.noVehicle': 'No vehicle.',
       'empty.noRenewals': 'No renewals in the next two months.',
       'empty.noUpcoming': 'No upcoming items.',
       'empty.noOverdue': 'No overdue items.',
       'empty.allClean': 'All clean.',
+      // Appreciation ticker
+      'ticker.heading': 'Recently completed',
+      'ticker.empty': 'Completed actions will show up here.',
+      'ticker.emptyEn': 'Completed actions will show up here.',
       'state.allGood': 'All good',
       'state.loading': 'Loading…',
       'cal.allDay': 'all day',
@@ -191,6 +211,10 @@
       'settings.account': 'Account',
       'settings.sheet': 'Sheet',
       'settings.language': 'Language',
+      'settings.appearance': 'Appearance',
+      'settings.themeLight': '☀️ Light',
+      'settings.themeDark': '🌙 Dark',
+      'settings.themeAuto': '🔄 Auto',
       'settings.pendingWrites': 'Pending writes',
       'settings.about': 'About',
       'settings.sheetIdLabel': 'Sheet ID',
@@ -217,6 +241,12 @@
       'toast.signinFailed': 'Sign-in failed: {err}',
       'toast.oauthNotConfigured': 'OAuth not configured — see README_SETUP.md',
       'toast.loadFailed': 'Could not load data and no cache available.',
+      'toast.gapiLoadError': 'Could not load Google sign-in. Check your connection.',
+      'toast.gisLoadError': 'Could not load Google sign-in. Check your connection.',
+      'signin.gapiLoadError': 'Could not load Google sign-in',
+      'signin.gisLoadError': 'Could not load Google sign-in',
+      'toast.sheetIdInvalid': 'Invalid Sheet ID — check the format and try again.',
+      'toast.sheetIdTestFailed': 'Could not verify Sheet ID: {err}',
       'toast.demoPrefix': '(demo) {label}',
       'toast.queuedOffline': 'Queued offline: {label}',
       'toast.queued': 'Queued: {label}',
@@ -401,26 +431,40 @@
     if (cfg.DEMO_MODE) return;
     if (!cfg.CLIENT_ID || cfg.CLIENT_ID.startsWith('PASTE_')) return;
 
-    await loadScript('https://apis.google.com/js/api.js');
+    try {
+      await loadScript('https://apis.google.com/js/api.js');
+    } catch {
+      const btn = document.getElementById('signin-btn');
+      if (btn) { btn.textContent = t('signin.gapiLoadError'); btn.disabled = true; }
+      toast(t('toast.gapiLoadError'));
+      return;
+    }
     await new Promise((resolve) => gapi.load('client', resolve));
     await gapi.client.init({ discoveryDocs: [DISCOVERY] });
     state.gapiReady = true;
 
-    await loadScript('https://accounts.google.com/gsi/client');
+    try {
+      await loadScript('https://accounts.google.com/gsi/client');
+    } catch {
+      const btn = document.getElementById('signin-btn');
+      if (btn) { btn.textContent = t('signin.gisLoadError'); btn.disabled = true; }
+      toast(t('toast.gisLoadError'));
+      return;
+    }
     state.tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: cfg.CLIENT_ID,
       scope: SCOPES,
       callback: (resp) => {
         if (resp.error) { toast(t('toast.signinFailed', { err: resp.error })); return; }
         state.token = resp;
-        sessionStorage.setItem(TOKEN_KEY, JSON.stringify({ access_token: resp.access_token, expires_at: Date.now() + (resp.expires_in * 1000) }));
+         localStorage.setItem(TOKEN_KEY, JSON.stringify({ access_token: resp.access_token, expires_at: Date.now() + (resp.expires_in * 1000) }));
         afterSignIn();
       },
     });
     state.gisReady = true;
 
     // Restore session token if still valid (avoids forcing sign-in every reload).
-    const saved = sessionStorage.getItem(TOKEN_KEY);
+    const saved = localStorage.getItem(TOKEN_KEY);
     if (saved) {
       try {
         const t = JSON.parse(saved);
@@ -442,7 +486,7 @@
   }
 
   function signOut() {
-    sessionStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(TOKEN_KEY);
     state.token = null;
     state.user = null;
     if (window.google?.accounts?.oauth2) {
@@ -483,7 +527,7 @@
     try {
       const tabs = cfg.TABS;
       const ranges = [
-        `${tabs.reminders}!A:L`,
+        `${tabs.reminders}!A:O`,
         `${tabs.calendarEvents}!A:H`,
         `${tabs.people}!A:I`,
         `${tabs.finance_bdgt}!A:I`,
@@ -571,6 +615,10 @@
         notes: r['Notes'] || '',
         daysUntil,
         flag: flagFor(daysUntil, status),
+        // Phase 6.1 columns (cols M, N, O) — may be blank on legacy sheets
+        lastDoneBy: (r['LastDoneBy'] || '').trim(),
+        doneAt: parseDate(r['DoneAt']),
+        writeQueueTombstone: parseDate(r['WriteQueue_Tombstone']),
       };
     });
     const calendarEvents = rowsToObjects(named.calendarEvents).map(r => ({
@@ -654,6 +702,7 @@
     renderTodayCalendar();
     renderNext7();
     renderDrawers();
+    renderAppreciationTicker();
     renderSunday();
     renderSettings();
   }
@@ -880,6 +929,19 @@
       <div class="kv"><span>${escapeHtml(b.category)}</span><span class="v">${amountHtml(b.actual)} / ${amountHtml(b.target)} (${Math.round(b.pct * 100)}%)</span></div>
     `).join('') || `<div class="empty">${escapeHtml(t('empty.noBudget'))}</div>`;
 
+    // D4: Surface recent transactions (last 10) below the budget breakdown.
+    const recentTxns = (state.data.txns || [])
+      .filter(tx => tx.date)
+      .sort((a, b) => b.date - a.date)
+      .slice(0, 10);
+    const txnHtml = recentTxns.map(tx => `
+      <div class="kv"><span>${escapeHtml(formatDateHE(tx.date))} · ${escapeHtml(tx.desc || tx.account || '')}</span><span class="v">${amountHtml(tx.amount)}</span></div>
+    `).join('');
+    const recentEl = document.getElementById('money-recent-txns');
+    if (recentEl) {
+      recentEl.innerHTML = txnHtml || `<div class="empty">${escapeHtml(t('empty.noRecentTxns'))}</div>`;
+    }
+
     // Money KPI: % of monthly target. Sparkline: last 7 days of txn totals.
     const moneyPct = totalTarget ? Math.round(100 * totalActual / totalTarget) : null;
     renderKpi('money', moneyPct == null ? '' : `${moneyPct}%`, moneyPct != null && moneyPct > 100 ? 'neg' : 'pos');
@@ -976,6 +1038,8 @@
       toggle.addEventListener('click', () => d.classList.toggle('open'));
     });
   }
+
+  // ---------------- Appreciation ticker ----------------\n  // Shows up to 7 recently-completed reminders grouped by domain.\n  // Reads DoneAt and LastDoneBy from Phase 6.1 columns.\n  function renderAppreciationTicker() {\n    const el = document.getElementById('appreciation-ticker');\n    if (!el) return;\n    const completed = state.data.reminders\n      .filter(r => r.status === 'Done' && r.doneAt)\n      .sort((a, b) => b.doneAt - a.doneAt)\n      .slice(0, 7);\n    if (!completed.length) {\n      el.innerHTML = `<div class=\"empty\">${escapeHtml(t('ticker.empty'))}</div>`;\n      return;\n    }\n    // Group by domain\n    const byDomain = {};\n    completed.forEach(r => {\n      const dom = r.domain || 'Other';\n      if (!byDomain[dom]) byDomain[dom] = [];\n      byDomain[dom].push(r);\n    });\n    let html = '';\n    const domainOrder = ['Health', 'Money', 'Car', 'Education', 'Contracts', 'Calendar'];\n    const ordered = [...new Set([...domainOrder, ...Object.keys(byDomain)])];\n    ordered.forEach(dom => {\n      const items = byDomain[dom];\n      if (!items) return;\n      html += `<div class=\"ticker-domain\">${escapeHtml(dom)}</div>`;\n      items.forEach(r => {\n        const who = r.lastDoneBy || 'Someone';\n        const when = relativeTime(r.doneAt);\n        html += `<div class=\"ticker-row\"><span>✓ ${escapeHtml(r.title)}</span><span class=\"ticker-attribution\">${escapeHtml(who)}, ${when}</span></div>`;\n      });\n    });\n    el.innerHTML = html;\n  }\n\n  // Relative time helper for the ticker.\n  function relativeTime(d) {\n    if (!d) return '';\n    const min = Math.round((new Date() - d) / 60000);\n    if (min < 1) return 'just now';\n    if (min < 60) return `${min}m ago`;\n    const h = Math.round(min / 60);\n    if (h < 24) return `${h}h ago`;\n    const days = Math.round(h / 24);\n    if (days === 1) return 'yesterday';\n    if (days < 7) return `${days}d ago`;\n    return formatDateHE(d);\n  }
 
   // Build a last-7-day spending series from transactions (signed-amount sum per day).
   // Falls back to null if no transactions are available.
@@ -1081,6 +1145,11 @@
     document.querySelectorAll('[data-lang]').forEach(b => {
       b.classList.toggle('primary', b.dataset.lang === lang);
     });
+    // Theme toggle active state.
+    const theme = localStorage.getItem('familyinc.theme') || 'auto';
+    document.querySelectorAll('[data-theme]').forEach(b => {
+      b.classList.toggle('primary', b.dataset.theme === theme);
+    });
     renderQueue();
   }
 
@@ -1100,9 +1169,21 @@
     if (!r) return;
     r.status = 'Done';
     r.flag = '';
+    const now = new Date();
+    const iso = fmtISO(now);
+    const userName = (state.user && state.user.name) || 'Dashboard';
+    r.lastDoneBy = userName;
+    r.doneAt = now;
+    r.writeQueueTombstone = now;
+    const colM = colLetter(13);  // LastDoneBy
+    const colN = colLetter(14);  // DoneAt
+    const colO = colLetter(15);  // WriteQueue_Tombstone
     const writes = [
       { range: `${cfg.TABS.reminders}!G${rowNum}`, value: 'Done' },
-      { range: `${cfg.TABS.reminders}!H${rowNum}`, value: fmtISO(new Date()) },
+      { range: `${cfg.TABS.reminders}!H${rowNum}`, value: iso },
+      { range: `${cfg.TABS.reminders}!${colM}${rowNum}`, value: userName },
+      { range: `${cfg.TABS.reminders}!${colN}${rowNum}`, value: iso },
+      { range: `${cfg.TABS.reminders}!${colO}${rowNum}`, value: iso },
     ];
     // Bump recurring
     if (r.recurrence && r.recurrence !== 'One-off' && r.due) {
@@ -1131,6 +1212,7 @@
     await applyWrites([
       { range: `${cfg.TABS.reminders}!D${rowNum}`, value: fmtISO(newDate) },
       { range: `${cfg.TABS.reminders}!G${rowNum}`, value: 'Snoozed' },
+      { range: `${cfg.TABS.reminders}!O${rowNum}`, value: fmtISO(new Date()) },
     ], t('action.snoozed', { title: r.title, days }));
     renderAll();
   }
@@ -1143,7 +1225,10 @@
     const stamp = `[${fmtISO(new Date())} ${state.user?.name || 'You'}]`;
     const newNotes = (r.notes ? r.notes + ' \n' : '') + `${stamp} ${text}`;
     r.notes = newNotes;
-    await applyWrites([{ range: `${cfg.TABS.reminders}!J${rowNum}`, value: newNotes }], t('action.noteAdded'));
+    await applyWrites([
+      { range: `${cfg.TABS.reminders}!J${rowNum}`, value: newNotes },
+      { range: `${cfg.TABS.reminders}!O${rowNum}`, value: fmtISO(new Date()) },
+    ], t('action.noteAdded'));
     renderAll();
   }
 
@@ -1251,9 +1336,38 @@
     // Settings buttons
     document.getElementById('signout-btn').addEventListener('click', signOut);
     document.getElementById('refresh-btn').addEventListener('click', loadAll);
-    document.getElementById('settings-save').addEventListener('click', () => {
-      cfg.SHEET_ID = document.getElementById('settings-sheetid').value;
-      cfg.DEMO_MODE = document.getElementById('settings-demo').value === 'true';
+    document.getElementById('settings-save').addEventListener('click', async () => {
+      const newSheetId = document.getElementById('settings-sheetid').value.trim();
+      const newDemoMode = document.getElementById('settings-demo').value === 'true';
+
+      // D3: Validate Sheet ID format before saving (unless demo mode or blank/unchanged).
+      if (!newDemoMode && newSheetId && newSheetId !== cfg.SHEET_ID) {
+        // Google Sheets IDs are 44-char base64url strings.
+        if (!/^[A-Za-z0-9_-]{10,}$/.test(newSheetId)) {
+          toast(t('toast.sheetIdInvalid'));
+          return;
+        }
+        // Test-read one cell to catch typos before committing.
+        if (state.gapiReady) {
+          const saveBtn = document.getElementById('settings-save');
+          saveBtn.disabled = true;
+          try {
+            await gapi.client.sheets.spreadsheets.values.get({
+              spreadsheetId: newSheetId,
+              range: 'A1',
+            });
+          } catch (e) {
+            toast(t('toast.sheetIdTestFailed', { err: e.result?.error?.message || e.message || 'unknown' }));
+            saveBtn.disabled = false;
+            return;
+          } finally {
+            saveBtn.disabled = false;
+          }
+        }
+      }
+
+      cfg.SHEET_ID = newSheetId;
+      cfg.DEMO_MODE = newDemoMode;
       localStorage.setItem('family_inc_config_override', JSON.stringify({ SHEET_ID: cfg.SHEET_ID, DEMO_MODE: cfg.DEMO_MODE }));
       location.reload();
     });
@@ -1271,6 +1385,20 @@
       b.addEventListener('click', () => {
         const newLang = b.dataset.lang;
         try { localStorage.setItem('familyinc.lang', newLang); } catch {}
+        location.reload();
+      });
+    });
+
+    // Theme toggle clicks (Settings → Appearance section).
+    // Persist preference to localStorage; 'auto' removes the attribute entirely
+    // so the CSS media query takes over. Reload for clean pre-paint application.
+    document.querySelectorAll('[data-theme]').forEach(b => {
+      b.addEventListener('click', () => {
+        const val = b.dataset.theme;
+        try {
+          if (val === 'auto') { localStorage.removeItem('familyinc.theme'); }
+          else { localStorage.setItem('familyinc.theme', val); }
+        } catch {}
         location.reload();
       });
     });
