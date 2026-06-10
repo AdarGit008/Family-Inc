@@ -48,8 +48,8 @@ If it ever feels like spam, we turn the cap to 1, or pause the whole thing. The 
 If at any point you want out:
 
 1. Move or delete the `Family inc.` folder in Google Drive — that's all the data, gone.
-2. Cancel the Twilio number — that's all the outgoing messages, gone.
-3. Remove the scheduled Cowork task — that's the automation, gone.
+2. Cancel the Baileys bridge instance — that's all the outgoing messages, gone.
+3. Remove the Hermes scheduled task — that's the automation, gone.
 
 There is no other place the data lives. No app, no cloud DB, no backups outside the Drive folder.
 

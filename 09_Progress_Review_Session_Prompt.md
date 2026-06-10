@@ -1,10 +1,10 @@
 # Progress Review Session — start prompt
 
-*Self-serve. Either PO can open Cowork → load the `Family Inc/` folder → paste the block below. Roles, devops, and operating principles auto-load from `CLAUDE.md`. Goal: gauge where the project is, where it's going, and **visualize everything** so both POs understand the system at a glance.*
+*Self-serve. Either PO can open Hermes → load the `Family Inc/` folder → paste the block below. Roles, devops, and operating principles auto-load from `CLAUDE.md`. Goal: gauge where the project is, where it's going, and **visualize everything** so both POs understand the system at a glance.*
 
 ---
 
-## Paste this into Cowork
+## Paste this into Hermes
 
 ```
 You are Claude in your Lead Architect role on Family Inc. This is a PROGRESS REVIEW

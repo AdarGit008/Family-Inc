@@ -85,13 +85,13 @@ By the end, you should have a single page (write it down, then take a photo and 
 - Weekly review time slot
 - Off-limits list
 
-That single page is what Cowork will use to populate the master Sheet. Without this, the Sheet is just empty tabs.
+That single page is what Hermes will use to populate the master Sheet. Without this, the Sheet is just empty tabs.
 
 ---
 
 ## When you're done
 
-Drop the photo (or typed notes) into `D:\Claude\Family inc.\` and tell Cowork it's ready. Cowork will then:
+Drop the photo (or typed notes) into `D:\Claude\Family inc.\` and tell Hermes it's ready. Hermes will then:
 1. Populate the master Sheet from your notes.
 2. Schedule the first weekly briefing.
 3. Set up the first batch of reminders.

@@ -61,7 +61,7 @@ Phase 6.1 columns (added 2026-05-30 for the dashboard's offline-queue race guard
 
 ## The daily run
 
-Triggered by a Cowork scheduled task at 07:30 local.
+Triggered by a Hermes scheduled task at 07:30 local.
 
 ```
 1. Refresh Reminders tab (read from Google Sheets API)
@@ -216,13 +216,28 @@ Anything else → bot replies: "Didn't catch that. Send `?` to see today's list.
 ## Definition of done (Phase 2)
 
 - [ ] Baileys bridge paired (one QR scan) on an always-on machine; `recipients.json` placed next to `auth_state/` (numbers never in the Sheet or the repo).
-- [ ] Cowork scheduled task running daily at 07:30 Asia/Jerusalem.
+- [ ] Hermes scheduled task running daily at 07:30 Asia/Jerusalem.
 - [ ] At least 20 seed reminders in the Sheet across Car, Health, Education, Contracts.
 - [ ] First real digest received on a real phone by both Adar and Partner.
 - [ ] `/Briefings/reminders_log.csv` accumulating entries for ≥7 days.
 - [ ] One full overdue-snooze-done cycle completed end-to-end and visible in the log.
 
 When all six boxes are ticked, Phase 2 closes and Phase 3 (Finance) starts.
+
+### Phase 2 DoD — status & blockers
+
+*Last updated: 2026-06-10*
+
+| # | Checkbox | Status | Blockers & notes |
+|---|---|---|---|
+| 1 | Baileys bridge paired | ❌ | Bridge code (`whatsapp_bridge/baileys_listener.js`) exists and `wa_outbox.py` is wired for it. Needs: (a) an always-on Linux machine to host the bridge, (b) a spare WhatsApp number to pair as the Family inc. bot, (c) one QR scan to pair. `recipients.json` maps logical names → numbers — create from `Setup/12_WhatsApp_Group_Config_Seed.csv` recipients. |
+| 2 | Daily cron at 07:30 | ❌ | `reminders_engine.py` is complete (reads Sheet, classifies, renders, logs). Needs a scheduled task — either a system cron (`0 7 * * * python reminders_engine.py`) or a Hermes cron job. The engine already has `--dry-run` for testing. It currently reads `Family_OS.xlsx` from disk; when the Sheet moves to Google Drive, `read_reminders()` swaps to the Sheets API. |
+| 3 | 20 seed reminders | ~ | The `Reminders` tab schema exists in `Family_OS.xlsx` with the 15 columns. Need to do a count: how many non-template rows exist across Car, Health, Education, Contracts domains? Templates (rows starting with `[`) don't count. The spec's escalation tiers table (above) defines per-domain lead times — use those as defaults when seeding. |
+| 4 | First real digest received | ❌ | Blocked by (1) and (2). Once the bridge is paired and the daily cron fires, `wa_outbox.queue_message()` will deliver the digest. Dry-runs already produce correct output (verified via `python reminders_engine.py --dry-run`). The Baileys outbox is durable — queued messages survive bridge restarts. |
+| 5 | 7-day log | ❌ | Blocked by (2). `reminders_log.csv` has the columns and `append_log()` appends correctly. Once the daily cron runs for 7 consecutive days, this box auto-ticks. The log includes `skipped_due_to_tombstone` per the Phase 6.1 addendum. |
+| 6 | End-to-end cycle | ❌ | Blocked by (1), (2), and dashboard write-back. The dashboard can mark items done (Phase 6.1), but the reply-parsing loop (WhatsApp `done`/`snooze`/`mute` replies back to Status changes) is specified but not built. The log shows fires and dropped items; a full cycle means: engine fires → user acts → status updates → next run recognizes the change. Earliest credible path: use the dashboard for Done marking + the engine for firing — the reply parser can come later. |
+
+**Nearest path to first tick:** (3) can be done now — seed 20+ real reminders. (2) can be wired with a system cron today. (1) needs the always-on machine and phone number. With (1)+(2)+(3) done, each daily run produces a real digest → (4) ticks within 1 day, (5) within 7 days, and (6) within ~2 weeks of normal use.
 
 ---
 

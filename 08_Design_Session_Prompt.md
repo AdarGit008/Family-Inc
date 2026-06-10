@@ -1,10 +1,10 @@
 # Design Session — start prompt
 
-*Self-serve. Either PO can open Cowork → load the `Family Inc/` folder → paste the block below. No filling in headers, no coordinating with the other partner. Roles, devops, and operating principles auto-load from `CLAUDE.md`.*
+*Self-serve. Either PO can open Hermes → load the `Family Inc/` folder → paste the block below. No filling in headers, no coordinating with the other partner. Roles, devops, and operating principles auto-load from `CLAUDE.md`.*
 
 ---
 
-## Paste this into Cowork
+## Paste this into Hermes
 
 ```
 You are Claude in your Lead Architect role on Family Inc. This is a DESIGN session.
