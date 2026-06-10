@@ -1,8 +1,8 @@
 # Family inc. — Architecture & Roadmap
 
-*Living design doc. Edit freely; Cowork will update as decisions evolve.*
+*Living design doc. Edit freely; Hermes will update as decisions evolve.*
 
-Last updated: 2026-05-27
+Last updated: 2026-06-10
 
 ## North-Star goals
 
@@ -23,7 +23,7 @@ Last updated: 2026-05-27
 
 | Decision | Choice | Reason |
 |---|---|---|
-| Alert channel | WhatsApp via Twilio | Reliable, real API, family already on WhatsApp |
+| Alert channel | WhatsApp via self-hosted Baileys bridge | Free, no vendor dependency, family already on WhatsApp (decision 2026-06-04) |
 | Finance ingestion | Manual monthly CSV drop into Drive | Israeli banks lack APIs; scrapers are fragile and credential-risky |
 | Storage | Google Drive + Google Sheets | Easiest automation surface; both adults already have Google accounts |
 | Audience | Adar + partner | Shared access; no kid-facing UI yet |
@@ -52,7 +52,7 @@ Last updated: 2026-05-27
                        |
                        v
 +--------------------------------------------------------------+
-|  AUTOMATION LAYER (Cowork scheduled tasks)                   |
+|  AUTOMATION LAYER (Hermes scheduled tasks)                   |
 |  - Daily 07:30: today's-events check, urgent reminders fire  |
 |  - Weekly Sun 18:00: full family briefing generated          |
 |  - Monthly 1st: finance digest + anomaly report              |
@@ -64,8 +64,8 @@ Last updated: 2026-05-27
 +------------------+         +----------------------+
 |  ALERTS          |         |  DASHBOARD (PWA)     |
 |  WhatsApp via    |         |  Pinned to iPhone    |
-|  Twilio          |         |  Read-only view      |
-|  (Adar + partner)|         |  of the Sheet        |
+|  self-hosted     |         |  Read-only view      |
+|  Baileys bridge  |         |  of the Sheet        |
 +------------------+         +----------------------+
 ```
 
@@ -94,7 +94,7 @@ The **Reminders** tab is the keystone. Every domain writes to it, and one daily 
 |---|---|---|
 | 0 | Master Sheet created with all tab schemas; Drive folder structure; this doc | **done (2026-05-27)** |
 | 1 | Calendar merge + Sunday-evening briefing piped to WhatsApp | **in progress** — `sunday_briefing.py` built, `Calendar-Events` tab added, scheduled Sunday 18:00 with email fallback; Google Calendar connector suggested but not yet connected |
-| 2 | Reminders engine: daily check, escalation tiers, WhatsApp delivery | **in progress** — spec done (`02_Reminders_Engine_Spec.md`), dry-run engine built, Twilio not yet wired |
+| 2 | Reminders engine: daily check, escalation tiers, WhatsApp delivery via Baileys bridge | **in progress** — spec done (`02_Reminders_Engine_Spec.md`), dry-run engine built, Baileys bridge integrated (2026-06-04); awaits QR pairing + `recipients.json` + engine port to `wa_outbox.py` |
 | 3 | Finance ingestion + monthly digest | not started |
 | 4 | Education + Health trackers wired into Reminders | not started |
 | 5 | Long-term goals tracking + Friday progress report | not started |
@@ -104,17 +104,17 @@ The **Reminders** tab is the keystone. Every domain writes to it, and one daily 
 
 - **Partner sign-off assumed.** `03_Partner_Signoff.md` exists; treating it as agreed pending real conversation.
 - **Kickoff conversation deferred.** Seeded reminders + goals are placeholders; will be replaced after the 90-min session in `01_Family_Kickoff_Guide.md`.
-- **Until Twilio is provisioned**, the Reminders engine writes briefings to `/Briefings/` and drafts a Gmail to Adar as the alert channel. Switch to WhatsApp is a single function swap.
+- **Until Baileys QR is paired and `recipients.json` is provisioned**, the Reminders engine writes briefings to `/Briefings/` and drafts a Gmail to Adar as the alert channel. Switch to WhatsApp is a single function swap via `wa_outbox.py`.
 
 ## Open questions / blockers
 
-- Twilio account: not provisioned. Email fallback in place until then.
+- Baileys bridge: code in place (`Automation/whatsapp_bridge/`); awaits QR pairing + `recipients.json` on the host machine. Email fallback in place until then.
 - Google Calendar connector: suggested, not yet connected. Briefing falls back to manual `Calendar-Events` rows until then.
 - iCloud Calendar (partner): no native MCP yet. Manual entry into Calendar-Events with Source="iCloud" works as interim.
 - Kids' info: ages, schools, Kupat Holim — current Sheet values are placeholders.
 - Long-term goals: 2 placeholder goals seeded; replace after kickoff.
 
-## What Cowork is NOT doing (out of scope, for now)
+## What Hermes is NOT doing (out of scope, for now)
 
 - Trading or moving money on Adar's behalf.
 - Storing bank credentials anywhere.
