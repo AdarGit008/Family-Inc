@@ -48,7 +48,7 @@ ARCHIVE_TAB = DATA_DIR / "WhatsApp_Archive.csv"
 
 log = logging.getLogger("wa")
 
-ALERT_BUDGET_PER_DAY = 2  # shared family-wide cap (operating principle)
+from config import ALERT_BUDGET_PER_DAY
 CLASSES = ("ROUTINE", "DIGEST", "ALERT")
 DIGEST_GROUP_ORDER = ["daycare", "building", "family", "neighborhood", "student", "other"]
 DIGEST_GROUP_LABEL = {
@@ -168,8 +168,9 @@ ACTIONY_RE = re.compile(r"מחר|להביא|צריך|תזכורת|דדליין|�
 def _parse_dt(s: str) -> datetime:
     try:
         return datetime.fromisoformat(s.replace("Z", "").split("+")[0])
-    except ValueError:
-        return _NOW
+    except (ValueError, AttributeError):
+        log.warning("_parse_dt: could not parse %r — falling back to datetime.now()", s)
+        return datetime.now()
 
 def _in_evening(dt: datetime) -> bool:
     """18:00–08:00 window (teacher 'tomorrow bring X' tends to land here)."""
@@ -343,16 +344,102 @@ INBOX_COLS = ["msg_id", "group_name", "group_type", "sender_name", "sender_role"
 ARCHIVE_COLS = ["msg_id", "group_name", "sender_name", "received_at", "text", "one_liner"]
 
 def _processed_ids(path: Path) -> set[str]:
-    """msg_ids already written to the inbox tab, so reruns don't double-process."""
+    """msg_ids already written to the inbox tab, so reruns don't double-process.
+    Only reads recent rows (≤30 days old) to keep memory bounded — older rows
+    are archived separately by archive_old_inbox_rows()."""
     if not path.exists():
         return set()
     ids: set[str] = set()
+    cutoff = datetime.now() - timedelta(days=30)
     with path.open(encoding="utf-8") as fh:
         for row in csv.DictReader(fh):
             mid = (row.get("msg_id") or "").strip()
-            if mid:
-                ids.add(mid)
+            if not mid:
+                continue
+            # Only consider recent rows for dedup purposes
+            received = row.get("received_at", "")
+            if received:
+                try:
+                    if _parse_dt(received) < cutoff:
+                        continue  # old row — already archived, skip
+                except Exception:
+                    pass
+            ids.add(mid)
     return ids
+
+
+ARCHIVE_RETENTION_DAYS = 30
+
+
+def archive_old_inbox_rows(
+    inbox_path: Path,
+    archive_dir: Path,
+    retention_days: int = ARCHIVE_RETENTION_DAYS,
+    dry_run: bool = False,
+) -> int:
+    """Move rows older than `retention_days` from the inbox CSV into a monthly
+    archive CSV (one file per year-month, e.g. WhatsApp_Inbox_2026-05.csv).
+    Keeps the inbox CSV bounded — only recent rows remain.
+
+    Returns the number of rows archived."""
+    if not inbox_path.exists():
+        return 0
+
+    cutoff = datetime.now() - timedelta(days=retention_days)
+    recent_rows: list[dict] = []
+    archive_buckets: dict[str, list[dict]] = {}  # month_key -> rows
+    archived_count = 0
+
+    # Read all rows, split into recent vs archive buckets
+    with inbox_path.open(encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        fieldnames = reader.fieldnames or []
+        for row in reader:
+            received = row.get("received_at", "")
+            try:
+                dt = _parse_dt(received)
+            except Exception:
+                recent_rows.append(row)
+                continue
+
+            if dt < cutoff:
+                month_key = dt.strftime("%Y-%m")
+                archive_buckets.setdefault(month_key, []).append(row)
+                archived_count += 1
+            else:
+                recent_rows.append(row)
+
+    if archived_count == 0:
+        return 0
+
+    if dry_run:
+        print(f"  [dry-run] would archive {archived_count} rows across {len(archive_buckets)} month(s)")
+        return archived_count
+
+    # Write archive files
+    archive_dir.mkdir(exist_ok=True)
+    for month_key, rows in archive_buckets.items():
+        archive_path = archive_dir / f"WhatsApp_Inbox_{month_key}.csv"
+        write_header = not archive_path.exists() or archive_path.stat().st_size == 0
+        with archive_path.open("a", encoding="utf-8", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=fieldnames or INBOX_COLS)
+            if write_header:
+                writer.writeheader()
+            for r in rows:
+                writer.writerow(r)
+
+    # Rewrite inbox CSV with only recent rows
+    tmp_path = inbox_path.with_suffix(".csv.tmp")
+    with tmp_path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames or INBOX_COLS)
+        writer.writeheader()
+        for r in recent_rows:
+            writer.writerow(r)
+    tmp_path.replace(inbox_path)
+
+    print(f"  archived {archived_count} row(s) to {len(archive_buckets)} monthly file(s) "
+          f"in {archive_dir}")
+    return archived_count
 
 def alerts_dispatched_today(path: Path, today: date) -> int:
     """Count ALERTs actually *sent* today (keyed on dispatch time, not message
@@ -450,6 +537,11 @@ def run(inbox_path: Path, config_path: Path, today: date, dry_run: bool) -> Path
     use_llm = bool(os.environ.get("ANTHROPIC_API_KEY"))
     if not use_llm:
         print("(no ANTHROPIC_API_KEY — using deterministic classifier; hard rules still fire)")
+
+    # Archive old inbox rows (>30 days) to monthly CSV files to prevent
+    # unbounded inbox growth. Only runs in non-mock mode (mock data is tiny).
+    if not is_mock:
+        archive_old_inbox_rows(INBOX_TAB, DATA_DIR, dry_run=dry_run)
 
     # process in chronological order so 'recent context' is correct
     messages = sorted(messages, key=lambda m: _parse_dt(m.get("received_at", "")))
