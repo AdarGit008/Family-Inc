@@ -1,0 +1,17 @@
+{
+  "name": "familyinc-whatsapp-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Self-hosted, free WhatsApp Web companion that appends group messages to the Family inc. inbox JSONL. Privacy-first bridge from 07_WhatsApp_Group_Summarizer_Spec.md.",
+  "main": "baileys_listener.js",
+  "scripts": {
+    "start": "node baileys_listener.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.0",
+    "pino": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

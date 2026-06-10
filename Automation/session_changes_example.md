@@ -1,0 +1,7 @@
+- Introduced a STRINGS.he / STRINGS.en table in `Dashboard/app.js` as the single source of truth for every chrome string. A `t(key, vars)` helper does {var} interpolation; an `applyChromeStrings()` walker handles `data-i18n` (textContent), `data-i18n-html` (innerHTML, used for the sign-in screen's embedded demo anchor), and `data-i18n-placeholder` (input placeholders).
+- Translated every visible chrome surface: tabbar, Today-screen sections, six drawer names (contracts = "מנויים וחוזים"), banner, status pill, row action buttons, empty states across every list/drawer, Sunday view headings + inline copy, Settings (incl. sign-in / stale-badge / OAuth-not-configured / toast), and write-back action toasts.
+- Rewrote `duePhrase()` to be language-aware with proper Hebrew singular / dual ("יומיים") / plural grammar.
+- Added a "שפה / Language" segmented control in Settings that writes `localStorage.familyinc.lang` and reloads (pre-paint script on the next boot applies `lang`/`dir`).
+- Snooze pills kept as `+1d`/`+3d`/`+7d`/`+14d`/`+30d` per PO call — Latin units, universal numerals.
+- Date range on the Sunday header switched from `week of YYYY-MM-DD → YYYY-MM-DD` to a compact `D.M — D.M` (e.g. "7.6 — 14.6").
+- Appended one line to `Dashboard/DESIGN_LOG.md`.

@@ -1,0 +1,238 @@
+<!doctype html>
+<!--
+  Chrome language: Hebrew default with English fallback toggle in Settings.
+  Boot script reads localStorage.lang ("he" | "en") and rewrites lang + dir
+  before first paint. Default is "he" / "rtl"; ASCII source below stays in
+  English for legibility — the chrome string set lives in app.js.
+-->
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Family inc.</title>
+  <!--
+    Description is read at PWA install time and cached by iOS; client-side
+    i18n can't reach it post-install. Kept as the language-neutral brand so
+    the Hebrew/English toggle isn't contradicted by the home-screen string.
+  -->
+  <meta name="description" content="Family inc." />
+  <meta name="theme-color" content="#5E6AD2" />
+
+  <!-- iOS PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Family inc." />
+  <!-- iOS 26 auto-applies the Liquid Glass treatment to this icon. -->
+  <link rel="apple-touch-icon" href="icon-180.png" />
+
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+
+  <!-- Google Fonts: Inter (UI), Heebo (Hebrew fallback), Geist Mono (numerals) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Heebo:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
+
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Pre-paint lang/dir application from user preference (default: he/rtl) -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('familyinc.lang');
+        if (saved === 'en') {
+          document.documentElement.setAttribute('lang', 'en');
+          document.documentElement.setAttribute('dir', 'ltr');
+        }
+      } catch (_) { /* localStorage blocked — keep he/rtl default */ }
+    })();
+  </script>
+</head>
+<body>
+  <!-- Sign-in screen (shown when not authenticated and not in demo mode) -->
+  <div id="signin-screen" class="signin" hidden>
+    <div style="font-size: 48px">🏠</div>
+    <h2>Family inc.</h2>
+    <p data-i18n-html="signin.prompt">Sign in with the Google account that has access to your <code>Family_OS</code> sheet.</p>
+    <button class="signin-btn" id="signin-btn" data-i18n="signin.button">Sign in with Google</button>
+    <p style="margin-top:24px;font-size:12px" data-i18n-html="signin.demoLine">
+      Or <a href="#" id="demo-link">try with demo data</a>.
+    </p>
+  </div>
+
+  <!-- App shell -->
+  <div id="app" hidden>
+    <header class="app-header">
+      <h1>🏠 Family inc.</h1>
+      <div class="date" id="header-date"></div>
+    </header>
+
+    <div id="stale-badge" class="stale-badge" hidden></div>
+
+    <!-- TODAY view -->
+    <section class="view active" id="view-today">
+      <div id="status-pill" class="status-pill" hidden><span id="status-pill-text"></span></div>
+      <div id="banner" class="banner clear" data-i18n="state.loading">Loading…</div>
+
+      <div class="section">
+        <h2 data-i18n="section.todayList">Today</h2>
+        <div id="today-list"></div>
+      </div>
+
+      <div class="section">
+        <h2 data-i18n="section.todayCalendar">Today's calendar</h2>
+        <div id="today-cal"></div>
+      </div>
+
+      <div class="section">
+        <h2 data-i18n="section.next7">Next 7 days</h2>
+        <div id="next7-list"></div>
+      </div>
+
+      <div class="section">
+        <h2 data-i18n="section.domains">Domains</h2>
+        <div class="drawer" data-drawer="money">
+          <div class="drawer-toggle">
+            <span class="drawer-label"><span class="drawer-name" data-i18n="drawer.money">Money</span><span id="money-summary" class="row-meta"></span></span>
+            <span class="kpi" id="money-kpi"></span>
+            <svg class="sparkline" id="money-spark" viewBox="0 0 80 24"></svg>
+          </div>
+          <div class="drawer-body" id="money-body"></div>
+        </div>
+        <div class="drawer" data-drawer="health">
+          <div class="drawer-toggle">
+            <span class="drawer-label"><span class="drawer-name" data-i18n="drawer.health">Health</span><span id="health-summary" class="row-meta"></span></span>
+            <span class="kpi" id="health-kpi"></span>
+            <svg class="sparkline" id="health-spark" viewBox="0 0 80 24"></svg>
+          </div>
+          <div class="drawer-body" id="health-body"></div>
+        </div>
+        <div class="drawer" data-drawer="goals">
+          <div class="drawer-toggle">
+            <span class="drawer-label"><span class="drawer-name" data-i18n="drawer.goals">Goals</span><span id="goals-summary" class="row-meta"></span></span>
+            <span class="kpi" id="goals-kpi"></span>
+            <svg class="sparkline" id="goals-spark" viewBox="0 0 80 24"></svg>
+          </div>
+          <div class="drawer-body" id="goals-body"></div>
+        </div>
+        <div class="drawer" data-drawer="car">
+          <div class="drawer-toggle">
+            <span class="drawer-label"><span class="drawer-name" data-i18n="drawer.car">Car</span><span id="car-summary" class="row-meta"></span></span>
+            <span class="kpi" id="car-kpi"></span>
+            <svg class="sparkline" id="car-spark" viewBox="0 0 80 24"></svg>
+          </div>
+          <div class="drawer-body" id="car-body"></div>
+        </div>
+        <div class="drawer" data-drawer="contracts">
+          <div class="drawer-toggle">
+            <span class="drawer-label"><span class="drawer-name" data-i18n="drawer.contracts">Contracts</span><span id="contracts-summary" class="row-meta"></span></span>
+            <span class="kpi" id="contracts-kpi"></span>
+            <svg class="sparkline" id="contracts-spark" viewBox="0 0 80 24"></svg>
+          </div>
+          <div class="drawer-body" id="contracts-body"></div>
+        </div>
+        <div class="drawer" data-drawer="education">
+          <div class="drawer-toggle">
+            <span class="drawer-label"><span class="drawer-name" data-i18n="drawer.education">Education</span><span id="education-summary" class="row-meta"></span></span>
+            <span class="kpi" id="education-kpi"></span>
+            <svg class="sparkline" id="education-spark" viewBox="0 0 80 24"></svg>
+          </div>
+          <div class="drawer-body" id="education-body"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SUNDAY view -->
+    <section class="view sunday" id="view-sunday">
+      <h2 class="briefing-title" data-i18n="sunday.title">Sunday Briefing</h2>
+      <div class="week" id="sunday-week"></div>
+
+      <div class="sub" data-i18n="sunday.weekAhead">Week ahead</div>
+      <div id="sunday-week-ahead"></div>
+
+      <div class="sub" data-i18n="sunday.remindersThisWeek">Reminders firing this week</div>
+      <div id="sunday-reminders"></div>
+
+      <div class="sub" data-i18n="sunday.overdue">Overdue</div>
+      <div id="sunday-overdue"></div>
+
+      <div class="sub" data-i18n="sunday.money">Money</div>
+      <div id="sunday-money"></div>
+
+      <div class="sub" data-i18n="sunday.goals">Goals</div>
+      <div id="sunday-goals"></div>
+
+      <div class="sub" data-i18n="sunday.hygiene">Data hygiene</div>
+      <div id="sunday-hygiene"></div>
+    </section>
+
+    <!-- SETTINGS view -->
+    <section class="view settings" id="view-settings">
+      <div class="section">
+        <h2 data-i18n="settings.account">Account</h2>
+        <div class="row">
+          <div id="settings-account" data-i18n="state.loading">Loading…</div>
+          <div class="actions" style="display:flex">
+            <button class="action-btn" id="signout-btn" data-i18n="settings.signOut">Sign out</button>
+            <button class="action-btn" id="refresh-btn" data-i18n="settings.forceRefresh">Force refresh</button>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <h2 data-i18n="settings.language">Language</h2>
+        <div class="row">
+          <div class="actions" style="display:flex">
+            <button class="action-btn" data-lang="he" data-i18n="settings.langHebrew">עברית</button>
+            <button class="action-btn" data-lang="en" data-i18n="settings.langEnglish">English</button>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <h2 data-i18n="settings.sheet">Sheet</h2>
+        <div class="row">
+          <label><span data-i18n="settings.sheetIdLabel">Sheet ID</span>
+            <input id="settings-sheetid" placeholder="from Google Sheet URL" data-i18n-placeholder="settings.sheetIdPlaceholder" />
+          </label>
+          <label><span data-i18n="settings.demoModeLabel">Demo mode</span>
+            <select id="settings-demo">
+              <option value="true" data-i18n="settings.demoOn">On (use mock data)</option>
+              <option value="false" data-i18n="settings.demoOff">Off (live Google Sheet)</option>
+            </select>
+          </label>
+          <div class="actions" style="display:flex; margin-top: 12px">
+            <button class="action-btn primary" id="settings-save" data-i18n="settings.saveReload">Save & reload</button>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <h2 data-i18n="settings.pendingWrites">Pending writes</h2>
+        <div class="row" id="settings-queue" data-i18n="empty.noQueuedWrites">No queued writes.</div>
+      </div>
+      <div class="section">
+        <h2 data-i18n="settings.about">About</h2>
+        <div class="row">
+          <span data-i18n="settings.aboutBody">Family inc. dashboard · v0.1 · Phase 6 prototype</span>
+          <div class="row-note" data-i18n="settings.aboutNote">Data lives in your Google Sheet. This page is a local view.</div>
+        </div>
+      </div>
+    </section>
+
+    <nav class="tabbar">
+      <button data-tab="today" class="active" data-i18n="tabbar.today">Today</button>
+      <button data-tab="sunday" data-i18n="tabbar.sunday">Sunday</button>
+      <button data-tab="settings" data-i18n="tabbar.settings">Settings</button>
+    </nav>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {/* offline only — fine to fail */});
+      });
+    }
+  </script>
+</body>
+</html>

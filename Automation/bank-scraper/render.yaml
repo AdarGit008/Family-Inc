@@ -1,0 +1,29 @@
+# Render Blueprint — Family inc. bank scraper cron
+# Cron is UTC: 03:30 UTC = 06:30 Israel (IDT). Winter (IST) it runs 05:30 local — fine.
+services:
+  - type: cron
+    name: familyinc-bank-scraper
+    runtime: node
+    schedule: "30 3 * * *"
+    buildCommand: npm install
+    startCommand: node scrape.js
+    envVars:
+      - key: MIZRAHI_USERNAME
+        sync: false
+      - key: MIZRAHI_PASSWORD
+        sync: false
+      - key: MAX_USERNAME
+        sync: false
+      - key: MAX_PASSWORD
+        sync: false
+      - key: CAL_USERNAME
+        sync: false
+      - key: CAL_PASSWORD
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: FINANCE_CSV_FOLDER_ID
+        sync: false
+      # israeli-bank-scrapers needs Chromium; puppeteer downloads it at build.
+      - key: PUPPETEER_CACHE_DIR
+        value: /opt/render/project/.cache/puppeteer

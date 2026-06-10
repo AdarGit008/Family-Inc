@@ -1,0 +1,648 @@
+{
+  "reminders": [
+    [
+      "Title",
+      "Domain",
+      "Owner",
+      "Due Date",
+      "Lead Times (days)",
+      "Recurrence",
+      "Status",
+      "Last Sent",
+      "Channel",
+      "Notes",
+      "Days until",
+      "Auto-flag"
+    ],
+    [
+      "Car annual test (Test Rishui)",
+      "Car",
+      "Adar",
+      "2026-10-15",
+      "60,30,7,1",
+      "Yearly",
+      "Pending",
+      "",
+      "WhatsApp",
+      "Plate XX-XXX-XX",
+      "140",
+      ""
+    ],
+    [
+      "Car insurance renewal",
+      "Car",
+      "Adar",
+      "2026-11-01",
+      "30,7,1",
+      "Yearly",
+      "Pending",
+      "",
+      "WhatsApp",
+      "Currently with Harel",
+      "157",
+      ""
+    ],
+    [
+      "Dentist \u2014 Adar",
+      "Health",
+      "Adar",
+      "2026-05-26",
+      "30,7",
+      "6-month",
+      "Pending",
+      "",
+      "WhatsApp",
+      "",
+      "-2",
+      "OVERDUE"
+    ],
+    [
+      "Dentist \u2014 Child 1",
+      "Health",
+      "Partner",
+      "2026-09-10",
+      "30,7",
+      "6-month",
+      "Pending",
+      "",
+      "WhatsApp",
+      "",
+      "105",
+      ""
+    ],
+    [
+      "1st-grade registration opens",
+      "Education",
+      "Both",
+      "2026-12-15",
+      "30,14,7,1",
+      "Once",
+      "Pending",
+      "",
+      "WhatsApp",
+      "City portal",
+      "201",
+      ""
+    ],
+    [
+      "Parent-teacher conference",
+      "Education",
+      "Both",
+      "2026-11-20",
+      "14,3,1",
+      "Bi-yearly",
+      "Pending",
+      "",
+      "WhatsApp",
+      "",
+      "176",
+      ""
+    ],
+    [
+      "Quarterly savings transfer",
+      "Finance",
+      "Adar",
+      "2026-06-30",
+      "7,1",
+      "Quarterly",
+      "Pending",
+      "",
+      "WhatsApp",
+      "\u20aa5000 \u2192 savings",
+      "33",
+      ""
+    ],
+    [
+      "Pay annual home insurance",
+      "Finance",
+      "Adar",
+      "2026-06-03",
+      "14,3",
+      "Yearly",
+      "Pending",
+      "",
+      "WhatsApp",
+      "",
+      "6",
+      "WEEK OUT"
+    ]
+  ],
+  "calendarEvents": [
+    [
+      "Date",
+      "Start",
+      "End",
+      "Title",
+      "Owner",
+      "Source",
+      "Location",
+      "Notes"
+    ],
+    [
+      "2026-05-29",
+      "19:00",
+      "20:30",
+      "Date night",
+      "Both",
+      "Manual",
+      "Cafe Levinsky"
+    ],
+    [
+      "2026-06-03",
+      "",
+      "",
+      "Sunday review",
+      "Both",
+      "Manual",
+      "Home",
+      "Sunday family operating ritual"
+    ],
+    [
+      "2026-06-06",
+      "20:00",
+      "21:30",
+      "Adar's cousin's birthday",
+      "Adar",
+      "iCloud",
+      "Tel Aviv",
+      "Bring small gift"
+    ],
+    [
+      "2026-06-10",
+      "",
+      "",
+      "Quarterly savings transfer",
+      "Adar",
+      "System",
+      "Reminders tab",
+      "Auto-linked from Reminders row 8"
+    ]
+  ],
+  "people": [
+    [
+      "Name",
+      "Role",
+      "Date of Birth",
+      "Teudat Zehut",
+      "Kupat Holim",
+      "Primary Doctor",
+      "Blood Type",
+      "Allergies",
+      "Notes"
+    ],
+    [
+      "[Adar]",
+      "Parent",
+      "1985-01-01",
+      "000000000",
+      "Clalit",
+      "Dr. Cohen",
+      "O+",
+      "None",
+      "Replace with real values"
+    ],
+    [
+      "[Partner]",
+      "Parent",
+      "1986-01-01",
+      "000000000",
+      "Maccabi",
+      "Dr. Levi",
+      "A+",
+      "Peanuts"
+    ],
+    [
+      "[Child 1]",
+      "Child",
+      "2018-01-01",
+      "000000000",
+      "Clalit",
+      "Dr. Cohen",
+      "?",
+      "None"
+    ],
+    [
+      "[Child 2]",
+      "Child",
+      "2021-01-01",
+      "000000000",
+      "Clalit",
+      "Dr. Cohen",
+      "?",
+      "Dairy"
+    ]
+  ],
+  "finance_bdgt": [
+    [
+      "Category",
+      "Monthly Target (ILS)",
+      "Actual (current month)",
+      "Variance",
+      "% of Target",
+      "YTD Actual"
+    ],
+    [
+      "Housing",
+      "8500",
+      "6800",
+      "1700",
+      "0.8000",
+      "0"
+    ],
+    [
+      "Groceries",
+      "4000",
+      "432",
+      "3568",
+      "0.1081",
+      "0"
+    ],
+    [
+      "Transport",
+      "1500",
+      "280",
+      "1220",
+      "0.1867",
+      "0"
+    ],
+    [
+      "Childcare",
+      "5000",
+      "0",
+      "5000",
+      "0.0000",
+      "0"
+    ],
+    [
+      "Utilities",
+      "1200",
+      "0",
+      "1200",
+      "0.0000",
+      "0"
+    ],
+    [
+      "Health",
+      "800",
+      "0",
+      "800",
+      "0.0000",
+      "0"
+    ],
+    [
+      "Entertainment",
+      "800",
+      "0",
+      "800",
+      "0.0000",
+      "0"
+    ],
+    [
+      "Dining out",
+      "1000",
+      "0",
+      "1000",
+      "0.0000",
+      "0"
+    ],
+    [
+      "Subscriptions",
+      "400",
+      "0",
+      "400",
+      "0.0000",
+      "0"
+    ],
+    [
+      "Savings",
+      "5000",
+      "0",
+      "5000",
+      "0.0000",
+      "0"
+    ],
+    [
+      "Other",
+      "500",
+      "0",
+      "500",
+      "0.0000",
+      "0"
+    ]
+  ],
+  "finance_txns": [
+    [
+      "Date",
+      "Account",
+      "Description",
+      "Amount (ILS)",
+      "Category",
+      "Subcategory",
+      "Tags",
+      "Imported From",
+      "Notes"
+    ],
+    [
+      "2026-05-10",
+      "[Joint Checking]",
+      "SHUFERSAL DEAL",
+      "-432.5",
+      "Groceries",
+      "Supermarket",
+      "kids",
+      "hapoalim_2026-05.csv",
+      "Sample row"
+    ],
+    [
+      "2026-05-12",
+      "[Visa Cal \u2014 Adar]",
+      "PAZ GAS STATION",
+      "-280",
+      "Transport",
+      "Fuel",
+      "car",
+      "cal_2026-05.csv"
+    ],
+    [
+      "2026-05-15",
+      "[Joint Checking]",
+      "MORTGAGE PAYMENT",
+      "-6800",
+      "Housing",
+      "Mortgage",
+      "fixed",
+      "hapoalim_2026-05.csv"
+    ],
+    [
+      "2026-05-20",
+      "[Joint Checking]",
+      "SALARY \u2014 ADAR",
+      "28500",
+      "Income",
+      "Salary",
+      "income",
+      "hapoalim_2026-05.csv"
+    ]
+  ],
+  "goals": [
+    [
+      "Goal",
+      "Owner",
+      "Horizon",
+      "Target Date",
+      "90-Day Milestone",
+      "% Complete",
+      "Last Update",
+      "Status",
+      "Notes"
+    ],
+    [
+      "[Buy a home in the Center]",
+      "Both",
+      "3 years",
+      "2029-05-01",
+      "Open dedicated savings account + 30k\u20aa in",
+      "5",
+      "2026-05-25",
+      "On track",
+      "Need partner alignment on neighborhood"
+    ],
+    [
+      "[60k\u20aa emergency fund]",
+      "Adar",
+      "1 year",
+      "2027-05-01",
+      "Reach 20k\u20aa",
+      "20",
+      "2026-05-25",
+      "On track"
+    ],
+    [
+      "[Career: lead larger team]",
+      "Partner",
+      "2 years",
+      "2028-05-01",
+      "Take internal management course",
+      "0",
+      "2026-05-25",
+      "Not started"
+    ]
+  ],
+  "health": [
+    [
+      "Person",
+      "Provider",
+      "Specialty",
+      "Last Visit",
+      "Next Due",
+      "Frequency",
+      "Action Needed",
+      "Contact",
+      "Notes"
+    ],
+    [
+      "[Adar]",
+      "Dr. Cohen \u2014 Clalit",
+      "Family doctor",
+      "2026-01-10",
+      "2027-01-10",
+      "Yearly",
+      "Schedule annual check",
+      "[clinic phone]"
+    ],
+    [
+      "[Adar]",
+      "Dr. Stern",
+      "Dentist",
+      "2026-02-15",
+      "2026-08-15",
+      "6-month",
+      "Schedule cleaning",
+      "[clinic phone]"
+    ],
+    [
+      "[Partner]",
+      "Dr. Levi \u2014 Maccabi",
+      "Family doctor",
+      "2025-11-05",
+      "2026-11-05",
+      "Yearly",
+      "",
+      "[clinic phone]"
+    ],
+    [
+      "[Child 1]",
+      "Dr. Cohen \u2014 Clalit",
+      "Pediatrician",
+      "2026-03-20",
+      "2026-09-20",
+      "6-month",
+      "Routine check",
+      "[clinic phone]"
+    ],
+    [
+      "[Child 1]",
+      "Tipat Halav",
+      "Vaccines",
+      "2026-04-01",
+      "2026-10-01",
+      "Per schedule",
+      "MMR booster",
+      "[Tipat Halav phone]"
+    ],
+    [
+      "[Child 2]",
+      "Tipat Halav",
+      "Vaccines",
+      "2026-02-10",
+      "2026-08-10",
+      "Per schedule",
+      "12-month vaccines",
+      "[Tipat Halav phone]"
+    ]
+  ],
+  "education": [
+    [
+      "Child",
+      "Institution",
+      "Year/Grade",
+      "Teacher/Caregiver",
+      "Next Key Date",
+      "Type",
+      "Action Needed",
+      "Contact",
+      "Notes"
+    ],
+    [
+      "[Child 1]",
+      "[Preschool name]",
+      "Gan Trom-Hova",
+      "[Teacher]",
+      "2026-09-01",
+      "School year start",
+      "Buy supplies, label clothes",
+      "[teacher@school]"
+    ],
+    [
+      "[Child 1]",
+      "[Preschool name]",
+      "Gan Trom-Hova",
+      "[Teacher]",
+      "2026-11-20",
+      "Parent-teacher",
+      "Schedule meeting slot",
+      "[teacher@school]"
+    ],
+    [
+      "[Child 2]",
+      "[Daycare name]",
+      "Maon",
+      "[Caregiver]",
+      "2026-12-15",
+      "1st-grade registration opens",
+      "Register on city portal",
+      "[city helpdesk]",
+      "Adar to lead"
+    ]
+  ],
+  "car": [
+    [
+      "Vehicle",
+      "Plate",
+      "Owner",
+      "Annual Test (Rishui)",
+      "Insurance Renewal",
+      "Insurance Provider",
+      "License Expiry",
+      "Mechanic",
+      "Notes"
+    ],
+    [
+      "[Make/Model \u2014 Year]",
+      "[XX-XXX-XX]",
+      "Adar",
+      "2026-10-15",
+      "2026-11-01",
+      "Harel",
+      "2030-03-15",
+      "[Mechanic shop]",
+      "Last service date in notes"
+    ]
+  ],
+  "contracts": [
+    [
+      "Contract",
+      "Provider",
+      "Type",
+      "Start Date",
+      "Renewal Date",
+      "Monthly Cost (ILS)",
+      "Annual Cost (ILS)",
+      "Auto-Renew",
+      "Notes"
+    ],
+    [
+      "[Mortgage]",
+      "Bank Hapoalim",
+      "Mortgage",
+      "2024-06-01",
+      "\u2014",
+      "6800",
+      "81600",
+      "Yes",
+      "30-year fixed"
+    ],
+    [
+      "[Home insurance]",
+      "Harel",
+      "Insurance",
+      "2025-09-01",
+      "2026-09-01",
+      "320",
+      "3840",
+      "Yes"
+    ],
+    [
+      "[Car insurance]",
+      "Harel",
+      "Insurance",
+      "2025-11-01",
+      "2026-11-01",
+      "580",
+      "6960",
+      "No",
+      "Shop around each year"
+    ],
+    [
+      "[Electricity]",
+      "IEC",
+      "Utility",
+      "\u2014",
+      "\u2014",
+      "550",
+      "6600",
+      "Yes",
+      "Estimated avg"
+    ],
+    [
+      "[Internet]",
+      "Bezeq",
+      "Utility",
+      "2025-01-01",
+      "2027-01-01",
+      "99",
+      "1188",
+      "Yes"
+    ],
+    [
+      "[Mobile \u2014 Adar]",
+      "Pelephone",
+      "Utility",
+      "\u2014",
+      "\u2014",
+      "49",
+      "588",
+      "Yes"
+    ]
+  ]
+}

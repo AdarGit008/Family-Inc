@@ -1,0 +1,9 @@
+Family inc. — Dira BeHanacha tracker fallback
+Reason: HTTP request failed
+
+The automated scrape did not return parseable results.
+Manual fallback:
+  1. Open https://www.dira.moch.gov.il/
+  2. Filter by מחוז הצפון, sort by date
+  3. Look specifically for: קרית טבעון, קריית טבעון, ⟨town⟩, ⟨town⟩, טבעון
+  4. Paste any new lotteries into the Goals tab under 'House — ⟨town⟩'.
