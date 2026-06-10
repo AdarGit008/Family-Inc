@@ -14,7 +14,8 @@ Sections (in order):
   5. Goals — status, with any 90-day milestones in <= 30 days flagged
   6. Data hygiene — rows that are missing or stale
 
-When Twilio is wired in, send_to_whatsapp() swaps in for the file write.
+When the Baileys bridge is paired (QR scan + recipients.json on host), send_to_whatsapp()
+via wa_outbox.queue_message() swaps in for the file write.
 When Google Calendar is connected, the scheduled task syncs events into
 the Calendar-Events tab BEFORE running this script — so this engine stays
 data-source-agnostic.
