@@ -2,7 +2,7 @@
 
 *Companion to `00_Architecture_and_Roadmap.md`. Living document.*
 
-Last updated: 2026-05-27
+Last updated: 2026-06-10
 
 ---
 

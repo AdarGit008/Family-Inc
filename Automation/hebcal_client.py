@@ -99,10 +99,25 @@ def _fetch_hebcal_month(year: int, month: int) -> dict:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
-def shabbat_times(d: Optional[date] = None) -> dict:
+def shabbat_times(d: Optional[date] = None, *, next: bool = False) -> dict:
     """Return {candle_lighting, havdalah, parasha} for the Shabbat of the
-    week containing `d` (Israel time strings, ISO 8601)."""
+    ISO week containing ``d``.
+
+    The ISO week runs Monday–Sunday. Because Shabbat falls on Saturday
+    (ISO day 6), calling this on a Saturday returns the Shabbat that just
+    ended — not the one upcoming.  If you always want the *next* Shabbat
+    set ``next=True``: when ``d`` is Saturday (or later in the ISO week)
+    the lookup shifts forward by one week.
+
+    Timestamps are ISO 8601 Israel-time strings (e.g. "2026-06-05T19:10:00+03:00").
+    """
     d = d or date.today()
+    if next:
+        # ISO week runs Mon–Sun; Saturday is day 6. If we’re on Sat or
+        # later in the week, the ISO week’s Shabbat already passed — bump
+        # forward 7 days to land in the next ISO week (next Shabbat).
+        if d.isoweekday() >= 6:
+            d = d + timedelta(days=7)
     # ISO week as cache key: same Shabbat for any day in that week
     iso_year, iso_week, _ = d.isocalendar()
     key = f"shabbat:{iso_year}-W{iso_week:02d}"

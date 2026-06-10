@@ -252,10 +252,8 @@ def section_next_week(data: dict) -> str:
     rs = data["next_week_reminders"][:3]
     if not rs:
         return "Next week: clean slate."
-    lines = ["Looking ahead to next week:"]
-    for r in rs:
-        lines.append(f"  {r['date']} — {r['title']} [{r['domain']}]")
-    return "\n".join(lines)
+    bullets = "\n".join(f"  - {r['date']} \u2014 {r['title']} [{r['domain']}]" for r in rs)
+    return "Next week's three things:\n" + bullets
 
 def _goal_index(today: date) -> int:
     """Round-robin by ISO week so all four goals cycle monthly."""
@@ -300,42 +298,19 @@ def section_shabbat(today: date) -> str:
 # Renderers — templated + (optional) Claude
 def render_template(data: dict, today: date) -> str:
     banner = "_RUNNING IN MOCK MODE_\n\n" if data.get("_mock") else ""
-    lines = [
-        f"# {today.strftime('%A')} family briefing",
-        f"_{today.strftime('%B %-d, %Y')}_",
-        "",
+    parts = [
+        f"# Family inc. — Friday Briefing",
+        f"_{today.strftime('%A, %B %-d, %Y')}_\n",
+        banner.rstrip() if banner else "",
+        f"**Money.** {section_spend(data)}\n",
+        f"**Kids.** {section_kids(data)}\n",
+        f"**Ahead.** {section_next_week(data)}\n",
+        f"**Goals.** {section_goal_nudge(data, today)}\n",
+        f"**Contracts.** {section_contract(data, today)}\n",
+        f"**Shabbat.** {section_shabbat(today)}\n",
+        "---\n_Auto-generated. Edits go back into Family_OS.xlsx._",
     ]
-    if banner.strip():
-        lines.append(banner.strip())
-        lines.append("")
-
-    # Money — wrap spend detail in a conversational sentence.
-    lines.append(section_spend(data))
-    lines.append("")
-
-    # Kids — highlight the biggest moment of the week.
-    lines.append(section_kids(data))
-    lines.append("")
-
-    # Next week's three things.
-    lines.append(section_next_week(data))
-    lines.append("")
-
-    # Goal nudge — one goal, round-robin.
-    lines.append(section_goal_nudge(data, today))
-    lines.append("")
-
-    # Contracts — heads-up if renewals are near.
-    lines.append(section_contract(data, today))
-    lines.append("")
-
-    # Shabbat times.
-    lines.append(section_shabbat(today))
-    lines.append("")
-    lines.append("---")
-    lines.append("_Auto-generated. Edits go back into Family_OS.xlsx._")
-
-    return "\n".join(lines) + "\n"
+    return "\n".join(p for p in parts if p) + "\n"
 
 def render_with_claude(data: dict, today: date) -> Optional[str]:
     """Rewrite via Anthropic SDK; return None if key/SDK missing so caller falls back."""
