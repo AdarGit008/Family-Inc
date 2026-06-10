@@ -180,7 +180,9 @@ SYSTEM_INSTRUCTION = (
 
 ALWAYS_ATTACH = [
     "CLAUDE.md",
-    "06_Lift_Recommendations_2026-05-30.md",
+    # BACKLOG.md is a stable symlink → current dated backlog file.
+    # Override with env var FAMILY_INC_BACKLOG if the file is renamed.
+    os.environ.get("FAMILY_INC_BACKLOG", "BACKLOG.md"),
 ]
 
 LANE_DEFAULTS: dict[str, list[str]] = {

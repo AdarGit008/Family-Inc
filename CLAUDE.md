@@ -70,8 +70,8 @@ Family Inc/
 │   └── code/                              ← drop-in scripts (.js, .gs)
 ├── Briefings/                             ← generated briefing outputs
 ├── Family_OS.xlsx                         ← master sheet template
-├── reminders_engine.py                    ← legacy script (kept until ported)
-└── sunday_briefing.py                     ← legacy script (kept until ported)
+├── reminders_engine.py                    ← reminders engine (active; reads Sheet, writes briefings)
+└── sunday_briefing.py                     ← sunday briefing engine (active; reads Sheet, writes weekly recap)
 ```
 
 ## Operating principles (non-negotiable)
@@ -90,8 +90,8 @@ Family Inc/
 | You need to know | Read |
 |---|---|
 | What we're trying to build | `00_Architecture_and_Roadmap.md` |
-| What's done / pending / declined | `06_Lift_Recommendations_2026-05-30.md` (status legend at top) |
-| Live backlog ordered by week | `06_Lift_Recommendations_2026-05-30.md` §"Ship order" |
+| What's done / pending / declined | `BACKLOG.md` → `06_Lift_Recommendations_2026-05-30.md` (status legend at top) |
+| Live backlog ordered by week | `BACKLOG.md` §"Ship order" |
 | Dashboard contract | `05_Dashboard_Design.md` |
 | Reminders engine contract | `02_Reminders_Engine_Spec.md` |
 | Goals + owners + kids info | `02_Kickoff_Output_2026-05-30.md` |
@@ -110,11 +110,11 @@ The interactive prototype at `Dashboard/` is the canonical design surface. To ke
 
 **Session loop (whoever leads runs this):**
 
-1. Open Cowork → load the `Family Inc/` folder.
+1. Open Hermes → load the `Family Inc/` folder.
 2. Paste the session-start prompt (e.g. `08_Design_Session_Prompt.md` for a design session).
 3. Claude reads `Dashboard/DESIGN_LOG.md` to see the prior session's state.
 4. Decisions land as direct edits to `Dashboard/{index.html, app.js, styles.css, mock_data.json}`.
-5. Cowork commits + pushes to `main` *(method: `[TODO: Adar — choose: auto-commit per save, manual `git push` at end of session, or session-end script]`).*
+5. Hermes commits + pushes to `main` *(method: `[TODO: Adar — choose: auto-commit per save, manual `git push` at end of session, or session-end script]`).*
 6. GitHub Pages redeploys; the live URL is fresh in ~30 seconds.
 7. Leader refreshes their pinned PWA on phone or laptop → sees the change.
 8. Loop until end-of-session.
@@ -123,14 +123,20 @@ The interactive prototype at `Dashboard/` is the canonical design surface. To ke
 
 **One-time setup checklist (Adar's responsibility, blocking Shanee's first solo session):**
 
-- [ ] Create GH repo containing `Dashboard/` (root or `/docs/`)
-- [ ] Enable GH Pages from `main`
+- [x] Create GH repo containing `Dashboard/` — **done**: https://github.com/AdarGit008/Family-Inc
+- [ ] Enable GH Pages from `main` (repo Settings → Pages → Source: main, /root or /docs)
 - [ ] Decide and document the commit-on-save flow
 - [ ] Pin the live URL as a PWA on both phones
 - [ ] Paste the live URL into this file under "Live URL" above
 - [ ] Confirm Family Inc folder sync method (iCloud Drive vs Google Drive vs Dropbox)
 
-Until this checklist is complete, design sessions can still run locally — Claude edits files, leader opens `Dashboard/index.html` in a desktop browser. The phone-preview workflow waits on the GH Pages step.
+**Prioritized remaining items:**
+1. Enable GH Pages (unblocks everything else — needed before URL exists)
+2. Paste live URL here (so Shanee can bookmark/pin without asking Adar)
+3. Pin PWA on both phones (Shanee's solo-session independence)
+4. Decide commit-on-save flow (currently: manual `git push` at session end)
+
+> Note: "No live-machine dependency" is aspirational — the GH Pages URL will always be up once #1 above is done. Until then, sessions run locally (`Dashboard/index.html` in desktop browser).
 
 ## Phase status snapshot (2026-05-30)
 
@@ -210,7 +216,7 @@ Same message as Step 1, Claude appends:
 
 > **Attach these to your Gemini chat:**
 > - `00_Architecture_and_Roadmap.md` *(always)*
-> - `06_Lift_Recommendations_2026-05-30.md` *(always — for backlog status)*
+> - `BACKLOG.md` *(always — for backlog status)*
 > - `CLAUDE.md` *(always — for principles + roles)*
 > - *[lane-specific files that changed this session]*
 
