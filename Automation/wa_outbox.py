@@ -67,12 +67,17 @@ def queue_message(to: str, body: str, source: str = "unknown") -> str:
 
 def bridge_alive(now: datetime | None = None) -> bool:
     """True if the bridge heartbeat is fresh. Callers surface a warning when
-    False — queued messages will still go out when the bridge returns."""
+    False — queued messages will still go out when the bridge returns.
+
+    Reads the file's mtime (consistent with whatsapp_summarizer.bridge_staleness_warning).
+    The heartbeat file content is NOT parsed — it may be arbitrary text.
+    """
     try:
-        ts = datetime.fromisoformat(HEARTBEAT_FILE.read_text().strip().replace("Z", "+00:00"))
-    except (OSError, ValueError):
+        mtime = HEARTBEAT_FILE.stat().st_mtime
+    except OSError:
         return False
-    now = now or datetime.now(ts.tzinfo)
+    ts = datetime.fromtimestamp(mtime)
+    now = now or datetime.now()
     return (now - ts) <= STALE_AFTER
 
 
