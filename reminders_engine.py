@@ -35,9 +35,7 @@ SHEET_PATH = ROOT / "Family_OS.xlsx"
 BRIEFINGS_DIR = ROOT / "Briefings"
 LOG_PATH = BRIEFINGS_DIR / "reminders_log.csv"
 
-ALERT_BUDGET_PER_DAY = 2
-OVERDUE_REPEAT_DAYS = 3
-TOMBSTONE_SKIP_HOURS = 6   # Phase 6.1 offline-queue race guard (see spec §"The daily run")
+from Automation.config import ALERT_BUDGET_PER_DAY, OVERDUE_REPEAT_DAYS, TOMBSTONE_SKIP_HOURS, QUIET_HOURS_START, QUIET_HOURS_END, BATCH_WINDOW_MINUTES
 DROP_FIRST_DOMAINS = {"Goals"}   # de-prioritised — covered by Friday report
 ALWAYS_INCLUDE_DOMAINS = {"Health"}  # never trimmed
 
@@ -315,6 +313,62 @@ def append_log(today: date, digests: dict[str, Digest], log_path: Path,
             ])
 
 
+
+# ---------------------------------------------------------------------------
+# Guardrails: quiet hours + batch-window dedup
+# ---------------------------------------------------------------------------
+def is_quiet_hours(now: datetime) -> bool:
+    """Return True if `now` falls inside the quiet window (QUIET_HOURS_START – QUIET_HOURS_END).
+    The window straddles midnight: start ≥ QUIET_HOURS_START OR hour < QUIET_HOURS_END."""
+    h = now.hour
+    return h >= QUIET_HOURS_START or h < QUIET_HOURS_END
+
+
+def batch_deduplicate(digests: dict[str, Digest], now: datetime, window_minutes: int = BATCH_WINDOW_MINUTES) -> dict[str, Digest]:
+    """Merge fires that would result in rapid-fire messages within `window_minutes`.
+
+    The daily engine normally runs once, so this guard is relevant when the engine
+    is called multiple times in quick succession (e.g. a retry or a forced rerun).
+    It deduplicates by comparing each fire's reminder title against recent log entries
+    so the same alert isn't sent twice within the batch window.
+
+    For the current architecture (one run per day at 07:30), this is a no-op unless
+    a second run fires within BATCH_WINDOW_MINUTES of the first. The function is here
+    so callers can rely on the guarantee going forward.
+    """
+    cutoff = now - timedelta(minutes=window_minutes)
+    if not LOG_PATH.exists():
+        return digests  # no history, nothing to dedup
+
+    # Read recent log entries to find titles already sent in the batch window.
+    sent_recently: set[str] = set()
+    try:
+        with LOG_PATH.open(newline="", encoding="utf-8") as fh:
+            reader = csv.DictReader(fh)
+            for row in reader:
+                try:
+                    run_dt = datetime.fromisoformat(row.get("run_date", ""))
+                    if run_dt >= cutoff:
+                        for title in (row.get("titles_sent") or "").split(" | "):
+                            if title.strip():
+                                sent_recently.add(title.strip())
+                except (ValueError, TypeError):
+                    pass
+    except OSError:
+        return digests
+
+    if not sent_recently:
+        return digests
+
+    deduped: dict[str, Digest] = {}
+    for recipient, d in digests.items():
+        kept = [f for f in d.fires if f.reminder.title not in sent_recently]
+        dropped = [f for f in d.fires if f.reminder.title in sent_recently]
+        new_d = Digest(recipient=recipient, fires=kept, dropped=d.dropped + dropped)
+        deduped[recipient] = new_d
+    return deduped
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -326,6 +380,13 @@ def run(today: date, dry_run: bool = False, now: datetime | None = None,
     if now is None:
         now = datetime.now() if today == date.today() else datetime.combine(today, time(7, 30))
     path = sheet_path or SHEET_PATH
+
+    # Quiet-hours guard: surface a warning but still run in dry-run mode.
+    if is_quiet_hours(now) and not dry_run:
+        print(f"quiet-hours guard: {now.strftime('%H:%M')} is inside "
+              f"{QUIET_HOURS_START:02d}:00–{QUIET_HOURS_END:02d}:00 — no messages sent. "
+              f"Re-run after {QUIET_HOURS_END:02d}:00.")
+        return {}
 
     reminders = read_reminders(path)
 
@@ -343,6 +404,9 @@ def run(today: date, dry_run: bool = False, now: datetime | None = None,
     digests = route(fires)
     for d in digests.values():
         apply_budget(d)
+
+    # Batch-window dedup: suppress any fires already sent in the last BATCH_WINDOW_MINUTES.
+    digests = batch_deduplicate(digests, now)
 
     if tombstoned:
         print(f"tombstone-guard: skipped {len(tombstoned)} row(s) "
