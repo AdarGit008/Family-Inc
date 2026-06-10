@@ -20,6 +20,8 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from hebrew_categorizer import categorize
+
 ROOT = Path(__file__).parent
 BRIEFINGS_DIR = ROOT.parent / "Briefings"
 SAMPLE_CSV = BRIEFINGS_DIR / "sample_transactions.csv"
@@ -74,9 +76,10 @@ def load_transactions(path: Path) -> list[dict]:
             except (KeyError, ValueError):
                 continue
             v = row.get("vendor", "").strip()
+            raw_cat = (row.get("category") or "").strip()
+            cat = raw_cat if raw_cat and raw_cat.lower() != "uncategorized" else categorize(v, amt)
             rows.append({"date": d, "vendor": v, "amount": amt, "abs": abs(amt),
-                         "category": (row.get("category") or "Uncategorized").strip(),
-                         "norm": normalize_vendor(v), "root": root_token(v)})
+                         "category": cat, "norm": normalize_vendor(v), "root": root_token(v)})
     return rows
 
 # Detectors
@@ -92,7 +95,8 @@ def detect_subscription_creep(rows: list[dict]) -> list[dict]:
                 streak += 1; max_streak = max(streak, max_streak)
             else:
                 streak = 1
-        if max_streak >= 2:
+        # Only report if the streak is still active (covers the most recent month in data)
+        if max_streak >= 2 and streak == max_streak:
             out.append({"type": "subscription_creep", "vendor": vendor, "consecutive_months": max_streak})
     return out
 
