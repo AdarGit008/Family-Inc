@@ -34,7 +34,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Heebo:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
 
   <link rel="stylesheet" href="styles.css" />
-  <!-- Pre-paint lang/dir application from user preference (default: he/rtl) -->
+  <!-- Pre-paint lang/dir + theme application from user preference (default: he/rtl, auto theme) -->
   <script>
     (function () {
       try {
@@ -43,7 +43,11 @@
           document.documentElement.setAttribute('lang', 'en');
           document.documentElement.setAttribute('dir', 'ltr');
         }
-      } catch (_) { /* localStorage blocked — keep he/rtl default */ }
+        var theme = localStorage.getItem('familyinc.theme');
+        if (theme === 'light' || theme === 'dark') {
+          document.documentElement.setAttribute('data-theme', theme);
+        }
+      } catch (_) { /* localStorage blocked — keep he/rtl + auto theme defaults */ }
     })();
   </script>
 </head>
@@ -97,6 +101,7 @@
             <svg class="sparkline" id="money-spark" viewBox="0 0 80 24"></svg>
           </div>
           <div class="drawer-body" id="money-body"></div>
+          <div class="drawer-body" id="money-recent-txns" style="border-top:1px solid var(--border,#333);margin-top:4px;padding-top:4px"></div>
         </div>
         <div class="drawer" data-drawer="health">
           <div class="drawer-toggle">
@@ -138,6 +143,11 @@
           </div>
           <div class="drawer-body" id="education-body"></div>
         </div>
+      </div>
+
+      <div class="section appreciation-section" id="appreciation-section">
+        <h2 data-i18n="ticker.heading">Recently completed</h2>
+        <div id="appreciation-ticker"></div>
       </div>
     </section>
 
@@ -183,6 +193,16 @@
           <div class="actions" style="display:flex">
             <button class="action-btn" data-lang="he" data-i18n="settings.langHebrew">עברית</button>
             <button class="action-btn" data-lang="en" data-i18n="settings.langEnglish">English</button>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <h2 data-i18n="settings.appearance">Appearance</h2>
+        <div class="row">
+          <div class="actions" style="display:flex">
+            <button class="action-btn" data-theme="light" data-i18n="settings.themeLight">☀️ Light</button>
+            <button class="action-btn" data-theme="dark" data-i18n="settings.themeDark">🌙 Dark</button>
+            <button class="action-btn" data-theme="auto" data-i18n="settings.themeAuto">🔄 Auto</button>
           </div>
         </div>
       </div>
