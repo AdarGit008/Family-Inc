@@ -6,6 +6,9 @@
  *
  * 1. LISTEN — group messages ONLY, normalized into the WhatsApp_Inbox schema,
  *    appended as JSON lines to ../inbox/whatsapp_inbox.jsonl.
+ *    ALSO accepts 1:1 replies from Adar/Shanee (configurable JIDs), parses
+ *    basic reminder-reply commands, writes them to ../inbox/replies.jsonl,
+ *    and sends immediate acknowledgment.
  * 2. SEND — polls ../outbox/whatsapp_outbox.jsonl (written by the Python
  *    automations: reminders engine, briefings, whatsapp_summarizer alerts)
  *    and delivers each queued message to Adar/Shanee 1:1. Decision
@@ -15,6 +18,9 @@
  * ./recipients.json ({"adar": "9725...@s.whatsapp.net", "shanee": ...}).
  * That file lives next to auth_state/ on the bridge machine and is never
  * committed. Any outbox row addressed to anyone else is refused and logged.
+ *
+ * REPLY SCOPE GUARD: inbound 1:1 replies are accepted ONLY from the JIDs
+ * listed in recipients.json. Everything else from @s.whatsapp.net is dropped.
  *
  * Nothing leaves the machine. The Python classifier (whatsapp_summarizer.py)
  * reads the JSONL file on its hourly run. This is the privacy-first path from
@@ -30,8 +36,10 @@
  *   # auth persists in ./auth_state/ ; restart resumes without re-scanning
  *
  * --- Scope guard ---
- * Reads GROUPS ONLY (jid ends in @g.us). 1:1 chats (@s.whatsapp.net) are
- * dropped before any processing — matches the spec's "No 1:1 chat reading."
+ * Group messages (jid ends in @g.us) are always accepted.
+ * 1:1 chats (@s.whatsapp.net) are accepted ONLY from configured recipient JIDs
+ * (Adar + Shanee) and are treated as reminder-reply commands. All other 1:1
+ * messages are dropped.
  * Media bodies are never stored; only has_media=true is recorded.
  */
 
@@ -49,6 +57,7 @@ const ROOT = __dirname;
 const AUTH_DIR = path.join(ROOT, 'auth_state');
 const INBOX_DIR = path.join(ROOT, '..', 'inbox');
 const INBOX_FILE = path.join(INBOX_DIR, 'whatsapp_inbox.jsonl');
+const REPLIES_FILE = path.join(INBOX_DIR, 'replies.jsonl');
 const HEARTBEAT_FILE = path.join(INBOX_DIR, 'heartbeat.txt');
 const OUTBOX_DIR = path.join(ROOT, '..', 'outbox');
 const OUTBOX_FILE = path.join(OUTBOX_DIR, 'whatsapp_outbox.jsonl');
@@ -100,6 +109,110 @@ function appendInbox(row) {
   fs.appendFileSync(INBOX_FILE, JSON.stringify(row) + '\n', 'utf-8');
 }
 
+// --- Reply handling (02_Reminders_Engine_Spec.md §"Reply parsing") ----------
+
+/**
+ * Parse a reminder-reply command from inbound text.
+ * Returns {cmd, index, n} or null if no command recognized.
+ *
+ * Commands understood:
+ *   done, 1 done, 1 ✅         → cmd='done'
+ *   +7, 1 +7, snooze 7d        → cmd='snooze' with n=7
+ *   mute 30d, 1 mute           → cmd='mute' with n=30 (default 30)
+ *   list, today, ?             → cmd='list'
+ *   help                       → cmd='help'
+ */
+function parseReply(text) {
+  const t = (text || '').trim().toLowerCase();
+  if (!t) return null;
+
+  // Strip WhatsApp bold/italic markers
+  const clean = t.replace(/[*_~`]/g, '').trim();
+
+  // Index prefix: "1 done", "2 +7", "3 mute"
+  const indexMatch = clean.match(/^(\d+)\s+(.+)$/);
+  const index = indexMatch ? parseInt(indexMatch[1], 10) : null;
+  const cmdPart = indexMatch ? indexMatch[2] : clean;
+
+  // done / ✅
+  if (/^(done|✅)$/.test(cmdPart)) {
+    return { cmd: 'done', index, n: null };
+  }
+
+  // snooze: +N, snooze Nd, +Nd
+  const snoozeMatch = cmdPart.match(/^\+(\d+)$/);
+  if (snoozeMatch) {
+    return { cmd: 'snooze', index, n: parseInt(snoozeMatch[1], 10) };
+  }
+  const snoozeWordMatch = cmdPart.match(/^snooze\s+(\d+)d?$/);
+  if (snoozeWordMatch) {
+    return { cmd: 'snooze', index, n: parseInt(snoozeWordMatch[1], 10) };
+  }
+
+  // mute: mute, mute Nd
+  if (/^mute$/.test(cmdPart)) {
+    return { cmd: 'mute', index, n: 30 };
+  }
+  const muteMatch = cmdPart.match(/^mute\s+(\d+)d?$/);
+  if (muteMatch) {
+    return { cmd: 'mute', index, n: parseInt(muteMatch[1], 10) };
+  }
+
+  // list / today / ?
+  if (/^(list|today|\?)$/.test(cmdPart)) {
+    return { cmd: 'list', index: null, n: null };
+  }
+
+  // help
+  if (cmdPart === 'help') {
+    return { cmd: 'help', index: null, n: null };
+  }
+
+  return null; // unrecognized
+}
+
+/**
+ * Build an immediate acknowledgment for recognized commands.
+ * For done/snooze/mute this is a quick confirmation; the engine applies the
+ * actual sheet change and may send a follow-up message.
+ * For list/?, the engine will send the full digest separately.
+ */
+function ackText(parsed, rawText) {
+  if (!parsed) {
+    return "👋 Didn't catch that. Reply with:\n" +
+           "• 1 ✅ to mark done\n" +
+           "• 1 +7 to snooze 7 days\n" +
+           "• 1 mute to mute 30 days\n" +
+           "• ? to see today's list";
+  }
+  switch (parsed.cmd) {
+    case 'done':
+      return parsed.index
+        ? `✅ Got it — marking #${parsed.index} as done`
+        : '✅ Got it — marking as done';
+    case 'snooze':
+      return parsed.index
+        ? `📆 Got it — snoozing #${parsed.index} by ${parsed.n} day(s)`
+        : `📆 Got it — snoozing by ${parsed.n} day(s)`;
+    case 'mute':
+      return parsed.index
+        ? `🤐 Got it — muting #${parsed.index} for ${parsed.n} day(s)`
+        : `🤐 Got it — muting for ${parsed.n} day(s)`;
+    case 'list':
+    case '?':
+    case 'today':
+      return '📋 Fetching today\'s reminders…';
+    case 'help':
+      return 'Reply to reminder digests:\n' +
+             '• N ✅ — mark #N done\n' +
+             '• N +D — snooze #N by D days\n' +
+             '• N mute — mute #N 30 days\n' +
+             '• ? — show today\'s list';
+    default:
+      return null;
+  }
+}
+
 // --- Outbound (Baileys-first delivery, decision 2026-06-04) ----------------
 
 function loadRecipients() {
@@ -116,6 +229,24 @@ function loadRecipients() {
   } catch (e) {
     return null; // missing/invalid -> sending disabled, listening unaffected
   }
+}
+
+/**
+ * Return the set of JIDs that are allowed to send 1:1 replies.
+ * These are the JIDs configured in recipients.json (Adar + Shanee).
+ */
+function replyJids() {
+  const r = loadRecipients();
+  if (!r) return new Set();
+  return new Set(Object.values(r));
+}
+
+/**
+ * Check if a JID is a configured reply sender.
+ * Used to lift the groups-only guard for 1:1 messages from Adar/Shanee.
+ */
+function isReplySender(jid) {
+  return replyJids().has(jid);
 }
 
 function readJsonl(file) {
@@ -199,7 +330,7 @@ async function start() {
   sock.ev.on('connection.update', (u) => {
     const { connection, lastDisconnect } = u;
     if (connection === 'open') {
-      console.log('[baileys] connected — listening to GROUP messages; outbox sender armed');
+      console.log('[baileys] connected — listening to GROUP messages + 1:1 replies; outbox sender armed');
       beat();
       processOutbox(sock); // flush anything queued while we were down
       if (!global._beatTimer) {
@@ -225,9 +356,42 @@ async function start() {
     for (const msg of messages) {
       try {
         const jid = msg.key?.remoteJid;
-        if (!isGroup(jid)) continue;       // GROUPS ONLY
         if (msg.key?.fromMe) continue;     // ignore our own sends
 
+        // --- 1:1 reply handling (reminder commands from Adar/Shanee) ---
+        if (!isGroup(jid)) {
+          if (!isReplySender(jid)) continue; // drop unknown 1:1 messages
+          const text = extractText(msg);
+          if (!text) continue; // empty message, skip
+          const senderJid = msg.key?.participant || jid;
+          const senderName = msg.pushName || senderJid.split('@')[0];
+          const tsSec = Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000);
+
+          const parsed = parseReply(text);
+
+          // Write reply to replies.jsonl for the Python engine to process
+          const replyRow = {
+            msg_id: msg.key?.id,
+            sender_jid: senderJid,
+            sender_name: senderName,
+            received_at: new Date(tsSec * 1000).toISOString(),
+            text: text,
+            parsed: parsed ? { cmd: parsed.cmd, index: parsed.index, n: parsed.n } : null,
+            recognized: !!parsed,
+          };
+          fs.appendFileSync(REPLIES_FILE, JSON.stringify(replyRow) + '\n', 'utf-8');
+          console.log(`[reply] ${senderName}: "${text}" → ${parsed ? parsed.cmd : 'unrecognized'}`);
+
+          // Send immediate acknowledgment
+          const ack = ackText(parsed, text);
+          if (ack) {
+            await sock.sendMessage(jid, { text: ack });
+            console.log(`[reply-ack] → ${senderName}: ${ack.slice(0, 60)}`);
+          }
+          continue;
+        }
+
+        // --- Group message handling (existing) ---
         const text = extractText(msg);
         const media = hasMedia(msg);
         if (!text && !media) continue;     // nothing to record
