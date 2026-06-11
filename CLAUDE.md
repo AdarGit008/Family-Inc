@@ -43,7 +43,7 @@ One source of truth per domain · boring tech · alert budget 2/day enforced at 
 1. Read `BACKLOG.md` first — it says where we are.
 2. Work the current milestone; don't open new lanes without a PO call logged in `DECISIONS.md`.
 3. Constants go in config, utilities in `automation/lib/`, message copy in templates (reviewable against `DESIGN.md` §6).
-4. Session end: tests green if code moved, `BACKLOG.md` statuses flipped, commit pushed.
+4. Session end: tests green if code moved, `BACKLOG.md` statuses flipped, `python3 Automation/session_kickoff.py` regenerated `NEXT_SESSION_PROMPT.md`, and the PO gets ONE terminal block (stage → review gate if milestone-closing → commit → push) to run on their machine. Next session opens by pasting `NEXT_SESSION_PROMPT.md`.
 5. **Milestone reviews only** (new spec / architecture shift / budget-privacy-delivery changes / each M-close): run `Automation/review.py`, resolve as Apply / Defend / Open, log directional outcomes in `DECISIONS.md`. Tiny edits never trigger review.
 
 ## Guardrails for Claude in this repo

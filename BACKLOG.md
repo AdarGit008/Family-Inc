@@ -3,6 +3,8 @@
 *The only live backlog. Status legend: ⬜ todo · 🔵 in progress · ✅ done · 🧊 frozen.*
 *v1 definition and acceptance criteria live in `SPEC.md` §11. Migration session plan lives in `ENGINEERING.md` §9.*
 
+**Now:** next milestone = **M1** (not started) · open via `NEXT_SESSION_PROMPT.md` · last session: 2026-06-12 (remake D-019 + review D-020 + Hermes integration D-022 + workflow port D-023)
+
 ## v1 — to first real message on both phones
 
 ### M1 — Repo restructure (1 session)

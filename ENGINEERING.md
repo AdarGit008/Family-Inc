@@ -25,6 +25,7 @@ family-inc/
 │   ├── whatsapp_summarizer.py
 │   ├── hebcal_client.py
 │   ├── review.py                 # milestone review tool
+│   ├── session_kickoff.py        # regenerates NEXT_SESSION_PROMPT.md at session end
 │   └── bridge/                   # Baileys listener + sender (Node)
 │       ├── baileys_listener.js  package.json
 │       └── state/               # gitignored: auth_state/, inbox/, outbox/, ledgers
@@ -156,7 +157,7 @@ Rollback at any point = `git revert` + redeploy; the Sheet schema only ever gain
 
 ## 11. Review ritual (revised 2026-06-11)
 
-Reviews fire on **milestones**, not every session: new spec, architecture change, anything touching delivery/budget/privacy guarantees, and each M-milestone close. Mechanism: `automation/review.py` builds the prompt + attachment list; reviewer = best available external model (Gemini default; substitutions logged). Output is resolved in-session as Apply / Defend (reason appended to the affected doc §History) / Open (PO question), and the resolution lands in `DECISIONS.md` if directional. Tiny edits never trigger review.
+Reviews fire on **milestones**, not every session: new spec, architecture change, anything touching delivery/budget/privacy guarantees, and each M-milestone close. Mechanism: `automation/review.py` builds the prompt + attachment list; reviewer = best available external model (Gemini default; substitutions logged). Output is resolved in-session as Apply / Defend (reason appended to the affected doc §History) / Open (PO question), and the resolution lands in `DECISIONS.md` if directional. Tiny edits never trigger review. On milestone-closing sessions the gate runs **blocking inside the handoff chain** (`… && review gate && git commit && git push` — Porto pattern, D-023): a MAJOR finding stops the commit until resolved or explicitly overridden by the PO.
 
 **review.py contract:** inputs = `--lane` (drives default attachments), `--changes` (markdown bullet list of what the session changed), optional `--extra-files`; output = the assembled prompt (`--dry-run`) or the model's review, always saved under `Briefings/review_*.md` as the audit trail. Failure behavior: a failed or truncated review never blocks a milestone — log the failure, proceed, and note it in `BACKLOG.md`. `run_review_deepseek.py` is the interim DeepSeek sender (plain + chunked modes, key from `DEEPSEEK_API_KEY` env only); it folds into review.py as a provider in M1.
 
