@@ -111,7 +111,7 @@ Dashboard deploys are just `git push` (Pages rebuilds in ~30s). The PWA on both 
 
 ## 7. Testing policy
 
-Minimum bar — these exist and stay green from M1 onward:
+Base: the 2026-06-12 integrated suite (`tests/` — 55 tests over engine + briefing, green) is the starting point; M1 renames it to the target layout and extends it. Minimum bar — these exist and stay green from M1 onward:
 
 | Suite | Covers |
 |---|---|

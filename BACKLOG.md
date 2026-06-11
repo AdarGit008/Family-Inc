@@ -7,13 +7,16 @@
 
 ### M1 — Repo restructure (1 session)
 
-- ⬜ Create `automation/lib/` (`sheet.py`, `llm.py`, `outbox.py`, `dates.py`, `money.py`, `config.py`) — single implementations, scripts import from lib
+*2026-06-12 head start: the integrated Hermes sprint already delivered `Automation/config.py` (shared constants), a 55-test pytest suite (`tests/`), `requirements*.txt`, and `reply_handler.py` — several items below start from that base instead of zero.*
+
+- ⬜ Create `automation/lib/` (`sheet.py`, `llm.py`, `outbox.py`, `dates.py`, `money.py`, `config.py`) — single implementations, scripts import from lib. `Automation/config.py` exists; move + absorb remaining script-level constants
 - ⬜ Delete root-level `reminders_engine.py` + `sunday_briefing.py` (canonical copies live in `automation/`)
-- ⬜ Move frozen scripts → `attic/` (see Frozen lanes below)
+- ⬜ Move frozen scripts → `attic/` (see Frozen lanes below); archive `Progress/` status page (status lives only here)
 - ⬜ Purge Twilio references from code + runbooks (fallback documented only in `SPEC.md` §10)
-- ⬜ Update `review.py` lane defaults + always-attach list to the new canon docs (it still references archived paths)
-- ⬜ Remove hand-written future-dated files from `Briefings/`; add `briefings/fixtures/` for test fixtures
-- ⬜ `pytest` scaffolding + first tests green (tombstone window, budget ledger, recurrence bump, classifier hard rules)
+- ⬜ Update `review.py` lane defaults + always-attach list to the new canon docs (it still references archived paths); fold `run_review_deepseek.py` in as a provider
+- ⬜ Gitignore generated `Briefings/` output (re-apply skipped Hermes commit `556f445` deliberately); move review/audit artifacts to a tracked `reviews/` dir + update `ENGINEERING.md` §11 paths; remove hand-written future-dated files; add `tests/fixtures/`
+- ⬜ Extend the Hermes pytest suite (55 green: engine + briefing) to cover outbox budget ledger, classifier hard rules, golden-file rendering; rename to match target layout
+- ⬜ Convert `requirements*.txt` → uv (`pyproject.toml` + lockfile) per `ENGINEERING.md` §2
 
 ### M2 — One source of truth (1 session)
 
@@ -42,7 +45,7 @@
 
 ## v1.1 candidates (unordered — pick after v1 is boring)
 
-- Reply parsing (done/snooze via WhatsApp) — *unlocks reinstating reply footers*
+- Reply parsing (done/snooze via WhatsApp) — *code exists (`Automation/reply_handler.py`, Hermes C4); remaining: lift the bridge's 1:1 read guard for exactly the two adult JIDs, tests, then reinstate reply footers*
 - Inbox-append trigger for the classifier (inotify on `inbox.jsonl`) — sub-hour critical latency without changing the hourly digest cadence *(review suggestion, 2026-06-12)*
 - Google Calendar connector → Calendar-Events auto-populated
 - iCloud → GCal ICS subscribe (15 min, `Setup/05`)

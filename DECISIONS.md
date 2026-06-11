@@ -5,6 +5,8 @@
 
 | Date | Decision | Why | Supersedes |
 |---|---|---|---|
+| 2026-06-12 | **Hermes parallel sprint integrated.** A second AI session ("Hermes") had pushed 15 commits to origin from another clone; 10 code commits cherry-picked onto the remake (tests ×55, `config.py`, reply parsing, quiet-hours/batch-window impl, fixes), 5 doc/status commits superseded by the remake. "Hermes" naming **not adopted**. Originals preserved on `remote-backup` branch | Real work must not be lost; remade docs supersede its doc edits | Hermes doc commits A1–A4, Progress-page status |
+| 2026-06-12 | **Sessions must `git pull --ff-only` before any work; origin is the sync point between agents** (added as session protocol step 0) | Two sessions diverged silently for a week — local audit was stale against pushed work | Implicit "local folder is current" assumption |
 | 2026-06-12 | Remake milestone review run (DeepSeek; Gemini unavailable this session) and resolved: 6 applies (schema-drift guard, data-driven tombstone tuning, specified email fallback, review.py contract, auth-state restore note, no-digest runbook), 5 defends, 0 open — no direction changes. Audit: `Briefings/review_remake_2026-06-12.md` | Milestone-only ritual: a new spec qualifies | — |
 | 2026-06-11 | **Full remake.** Canon docs = `SPEC.md` + `ENGINEERING.md` + `DESIGN.md` + `DECISIONS.md` + `BACKLOG.md`; superseded docs → `Archive/` | 4 competing sources of truth for status; doc sprawl outpaced shipping | All numbered docs |
 | 2026-06-11 | Runtime = **one VPS** ("the appliance"): Baileys bridge + systemd timers + all Python | Bridge needs always-on anyway; no home hardware; one failure domain | Cowork scheduled tasks, Render cron, "always-on home machine" |

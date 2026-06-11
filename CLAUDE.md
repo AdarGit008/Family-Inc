@@ -39,6 +39,7 @@ One source of truth per domain · boring tech · alert budget 2/day enforced at 
 
 ## Session protocol
 
+0. `git pull --ff-only` before touching anything — other agents push to origin; the local folder is not assumed current (lesson of 2026-06-12, see `DECISIONS.md`).
 1. Read `BACKLOG.md` first — it says where we are.
 2. Work the current milestone; don't open new lanes without a PO call logged in `DECISIONS.md`.
 3. Constants go in config, utilities in `automation/lib/`, message copy in templates (reviewable against `DESIGN.md` §6).
