@@ -40,8 +40,11 @@ logs/*
 !logs/.gitkeep
 
 # Seeds — personal values (names, schedules) stay on the machines that need
-# them; the repo is public-portfolio-safe by construction (CLAUDE.md guardrail)
+# them; the repo is public-portfolio-safe by construction (CLAUDE.md guardrail).
+# redact.txt = D-030 rewrite rules; it carries the strings it removes, so it
+# lives only on PO machines + backups (deploy/publish.sh refuses to run without it)
 seeds/*.csv
+seeds/redact.txt
 
 # Archive docs carrying personal data (kid names, health backlog, money
 # baseline) — untracked at M3 session 1 (D-027 follow-up to D-024; files stay

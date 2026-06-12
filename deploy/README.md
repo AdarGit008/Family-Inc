@@ -2,7 +2,7 @@
 
 *Runbook = ordered commands. The "why" lives in `ENGINEERING.md` §5–§6; if they disagree, ENGINEERING wins and the disagreement is a bug.*
 
-Layout: `systemd/` units (source of truth for schedules — change via PR, never on the box) · `provision.sh` (idempotent, root, once) · `deploy.sh` (the only way code reaches the box) · `backup.sh` (Sun 03:00 timer).
+Layout: `systemd/` units (source of truth for schedules — change via PR, never on the box) · `provision.sh` (idempotent, root, once) · `deploy.sh` (the only way code reaches the box) · `backup.sh` (Sun 03:00 timer) · `publish.sh` + `publish_paths.txt` (one-time D-030 history rewrite, §6).
 
 ## 1. Provision (~10 min)
 
@@ -58,7 +58,52 @@ journalctl -u family-bridge -n 20           # "connected", no QR loop
 
 Import `seeds/08_Israeli_Reminders_Seed.csv` (≥20 rows across Car/Health/Education/Contracts) into the Reminders tab — column mapping in `seeds/README.md`. Copy real `seeds/` + `dashboard/config.js` to any machine that needs them (both gitignored, D-024).
 
-## 6. Dashboard on Pages + PWA (~10 min)
+## 6. Publish the repo (one-time, before Pages — D-030)
+
+Git history still holds pre-D-024 personal blobs (the 8 Archive docs at their
+old paths, seed CSVs, `Briefings/`, `Dashboard/config.js`, …). Rewrite BEFORE
+the repo ever goes public — D-027f deferred this as safe only while private.
+
+On the PO's Mac (never the VPS), repo still private:
+
+```bash
+brew install git-filter-repo     # once
+deploy/publish.sh                # mirror-clone → filter-repo → verify → confirmed force-push
+```
+
+The script consumes `deploy/publish_paths.txt` (paths stripped from all
+history) + `seeds/redact.txt` (string redactions; gitignored — PO machines and
+backups only) and refuses to push unless every stripped path and every
+redaction string greps clean across every blob of every ref. Aborting leaves
+origin untouched.
+
+Then, in order:
+
+1. **Re-point the VPS** — every pre-rewrite clone is orphaned:
+   ```bash
+   ssh root@<vps>
+   cd /opt/family-inc && sudo -u familyinc git fetch origin \
+     && sudo -u familyinc git reset --hard origin/main && deploy/deploy.sh
+   ```
+2. **Fresh-clone the Mac working copy.** Keep the old clone renamed
+   `Family Inc pre-rewrite/` until done; carry over the gitignored personals:
+   the 8 `Archive/` docs + `Archive/Progress/`, `seeds/*.csv` +
+   `seeds/redact.txt`, `dashboard/config.js`. Any parallel-agent clone
+   re-clones the same way.
+3. **Flip public:** GitHub → Settings → General → Danger Zone → Change
+   visibility → Public. Only after publish.sh verified clean.
+4. **Drop the PAT:** a public repo needs no credentials —
+   `sudo -u familyinc git -C /opt/family-inc remote set-url origin https://github.com/AdarGit008/Family-Inc.git`,
+   then revoke the provision PAT (GitHub → Settings → Developer settings →
+   Fine-grained tokens). Do this *after* step 1 (the old URL still carries the
+   token the fetch needs).
+5. *Paranoia option:* GitHub keeps unreachable objects server-side until its
+   own gc, and the rewrite can't reach those. The repo was never public, so
+   nothing was ever exposed; for absolute certainty, delete + recreate the
+   repo under the same name instead of force-pushing (re-add the two Actions
+   secrets afterwards).
+
+## 7. Dashboard on Pages + PWA (~10 min)
 
 1. GitHub repo → Settings → Pages → Source: **GitHub Actions**.
 2. Repo → Settings → Secrets and variables → Actions: add `DASHBOARD_CLIENT_ID`, `DASHBOARD_SHEET_ID` (the workflow writes them into `config.js` at deploy — never into git).
@@ -66,14 +111,14 @@ Import `seeds/08_Israeli_Reminders_Seed.csv` (≥20 rows across Car/Health/Educa
 4. Push to `main` (or run the `pages` workflow manually) → site live in ~1 min.
 5. Both phones: open the Pages URL → Share → Add to Home Screen. Sign in once.
 
-## 7. Backups (~5 min, one-time)
+## 8. Backups (~5 min, one-time)
 
 ```bash
 sudo -u familyinc -i rclone config        # interactive: Google Drive remote named per RCLONE_REMOTE
 sudo -u familyinc /opt/family-inc/deploy/backup.sh   # prove one green run
 ```
 
-## 8. Acceptance watch (3 days — SPEC §11)
+## 9. Acceptance watch (3 days — SPEC §11)
 
 Both phones get the 07:30 digest 3 consecutive days; one done→recur cycle visible in `logs/reminders_log.csv`; then flip `BACKLOG.md` M3 and tag `v1-live`.
 

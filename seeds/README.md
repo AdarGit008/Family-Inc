@@ -19,11 +19,12 @@ Expected files (M3 seeding, BACKLOG.md):
 ## Importing `Reminders_Import_M3.csv` (go-live step 5)
 
 31 rows, drafted 2026-06-12 from the 08 seed + the 2026-05-30 kickoff health
-backlog (routine family health reminders,
-document renewals, September daycare onboarding). Changes vs
-the 08 seed: the stale daycare-registration row (due Feb 2026, past) was
-replaced by September-onboarding rows; one bill owner reassigned per
-kickoff money ownership. **Review dates and owners before importing.**
+backlog (routine family health reminders, document renewals, September daycare
+onboarding). Changes vs the 08 seed: the stale daycare-registration row (due
+Feb 2026, past) was replaced by September-onboarding rows; one recurring-bill
+owner reassigned per kickoff money ownership. **Review dates and owners before
+importing.** (Wording genericized 2026-06-12, D-030b; the old phrasing leaves
+history with the publication rewrite.)
 
 Columns match SPEC §6.1 A–P exactly; K–O are intentionally blank (K/L are
 sheet formulas, M–O are dashboard-written). To import without killing the

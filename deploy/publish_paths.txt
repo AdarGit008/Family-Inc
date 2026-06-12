@@ -1,0 +1,29 @@
+# D-030 — paths stripped from ALL history by deploy/publish.sh (--invert-paths).
+# A bare directory line covers everything under it. Scan-derived 2026-06-12:
+# every line matched a personal-data token in at least one historical blob.
+# The 8 personal Archive docs (gitignored on disk since D-027f):
+Archive/00_Runbook.md
+Archive/02_Kickoff_Output_2026-05-30.md
+Archive/05_Dashboard_Design.md
+Archive/06_Lift_Recommendations_2026-05-30.md
+Archive/07_Maccabi_Passport_Forwarders.md
+Archive/07_WhatsApp_Group_Summarizer_Spec.md
+Archive/CLAUDE_2026-06-04.md
+Archive/Progress
+# Their pre-M1 locations:
+02_Kickoff_Output_2026-05-30.md
+05_Dashboard_Design.md
+06_Lift_Recommendations_2026-05-30.md
+07_WhatsApp_Group_Summarizer_Spec.md
+Progress
+Setup/00_Runbook.md
+Setup/07_Maccabi_Passport_Forwarders.md
+# Personal-data paths that never moved to Archive:
+Briefings
+Dashboard/config.js
+Setup/08_Israeli_Reminders_Seed.csv
+Setup/09_Vaccine_Schedule_Seed.csv
+Setup/10_Dashboard_Goals_Seed.csv
+Setup/12_WhatsApp_Group_Config_Seed.csv
+Setup/code
+Automation/vaccines_due.csv
