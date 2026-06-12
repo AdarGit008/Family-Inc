@@ -46,6 +46,7 @@
 - ⬜ Sender→role roster seeded (makes hard rules 2–3 reliable)
 - ⬜ Phase F weekly accuracy review surface (false-positive purge)
 - ⬜ PO call (joint): do family-group criticals override digest-only routing?
+- ⬜ PO call (joint): quiet-day digest goes to Adar only (pre-M1 heartbeat behavior preserved) — Shanee gets nothing on days without her fires, incl. the WhatsApp-groups section. Partner-symmetric? (noticed at go-live 2026-06-12)
 - ⬜ PO call (joint): LLM provider — Anthropic (as spec'd, §8.7) vs DeepSeek (cheaper; PRC data-handling tradeoff for group plaintext + Sheet data). v1 went live **keyless** by design (2026-06-12): keyword classification + template briefing until this lands; if DeepSeek wins, `lib/llm.py` gains an OpenAI-compatible backend (~30 lines + tests)
 - ⬜ WhatsApp_Inbox hot-tab rolloff against the live Sheet (SPEC §6.2; deferred from M2 — nothing to roll off before ~3 months of live rows; also resolve the 90-day-spec vs 30-day-config disagreement, D-025)
 - ⬜ Milestone review (external model) on the live system
