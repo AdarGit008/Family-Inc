@@ -198,10 +198,11 @@ class TestSectionGoals:
 
 
 # ---------------------------------------------------------------------------
-# section_hygiene
+# section_hygiene (tmp_runtime: hygiene reads the schema-drift + engine-flag
+# files — on the appliance those exist for real, tests must not see them)
 # ---------------------------------------------------------------------------
 class TestSectionHygiene:
-    def test_all_clean(self):
+    def test_all_clean(self, tmp_runtime):
         wb = _make_wb({
             "Reminders": [["OK", "", "", date(2026, 6, 15)]],
             "Finance-Accts": [["Bank", "", "", "", "", "", date(2026, 6, 1)]],
@@ -211,7 +212,32 @@ class TestSectionHygiene:
         result = section_hygiene(wb, today)
         assert "All clean" in result
 
-    def test_missing_due_date(self):
+    def test_schema_drift_flag_surfaces(self, tmp_runtime):
+        """ENGINEERING §8: the briefing is where humans hear about drift."""
+        import json
+        from automation.lib import config
+        config.SCHEMA_DRIFT_FLAG.parent.mkdir(parents=True, exist_ok=True)
+        config.SCHEMA_DRIFT_FLAG.write_text(json.dumps(
+            {"at": "2026-06-10T07:25:00", "tab": "Reminders",
+             "problems": ["col 5: expected 'Lead Times', found 'Lead Tymes'"]}),
+            encoding="utf-8")
+        wb = _make_wb({"Reminders": [], "Finance-Accts": [], "People": []})
+        result = section_hygiene(wb, date(2026, 6, 10))
+        assert "schema drift" in result
+        assert "Lead Tymes" in result
+
+    def test_engine_flags_surface(self, tmp_runtime):
+        from automation.lib import config
+        config.ENGINE_FLAGS.parent.mkdir(parents=True, exist_ok=True)
+        config.ENGINE_FLAGS.write_text(
+            '{"at": "2026-06-10T07:25:00", "reason": "recurrence_clamped_to_month_end", '
+            '"row": 7, "title": "Lease anniversary"}\n', encoding="utf-8")
+        wb = _make_wb({"Reminders": [], "Finance-Accts": [], "People": []})
+        result = section_hygiene(wb, date(2026, 6, 10))
+        assert "recurrence_clamped_to_month_end" in result
+        assert "Lease anniversary" in result
+
+    def test_missing_due_date(self, tmp_runtime):
         wb = _make_wb({
             "Reminders": [["Missing due", "", "", None]],
             "Finance-Accts": [],
@@ -221,7 +247,7 @@ class TestSectionHygiene:
         result = section_hygiene(wb, today)
         assert "missing a due date" in result.lower()
 
-    def test_stale_account(self):
+    def test_stale_account(self, tmp_runtime):
         wb = _make_wb({
             "Reminders": [],
             "Finance-Accts": [["Old Bank", "", "", "", "", "", date(2026, 1, 1)]],
@@ -231,7 +257,7 @@ class TestSectionHygiene:
         result = section_hygiene(wb, today)
         assert "not imported in" in result
 
-    def test_placeholder_people(self):
+    def test_placeholder_people(self, tmp_runtime):
         wb = _make_wb({
             "Reminders": [],
             "Finance-Accts": [],
@@ -246,7 +272,7 @@ class TestSectionHygiene:
 # render_briefing (integration smoke)
 # ---------------------------------------------------------------------------
 class TestRenderBriefing:
-    def test_renders_all_sections(self):
+    def test_renders_all_sections(self, tmp_runtime):
         wb = _make_wb({
             "Calendar-Events": [[date(2026, 6, 12), "10:00", "11:00", "Dentist", "Adar"]],
             "Reminders": [["Upcoming", "Health", "Adar", date(2026, 6, 14), "7", "One-off", "Pending"]],

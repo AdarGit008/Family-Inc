@@ -1,5 +1,3 @@
-🏠 Family inc. — 2026-06-12
-🟠 Tipat Halav visit  ·  due in 1 days (2026-06-13)
+🏠 Family inc. · יום ו׳ 12/6
+🟠 Tipat Halav visit — מחר
 Bring the pinkas
-
-Reply:  ✅ done    📆 +N days    🤐 mute 30d

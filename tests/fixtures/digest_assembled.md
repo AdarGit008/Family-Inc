@@ -1,18 +1,11 @@
-🏠 Family inc. — 2026-06-12
-You have 2 reminders today:
-1. 🔴 Car annual test — overdue by 3 days
-2. 🟠 Kid dentist appointment — due today
+🏠 Family inc. · יום ו׳ 12/6
+🔴 Car annual test — באיחור 3 ימים
+🟠 Kid dentist appointment — היום
 
-Reply N ✅ to mark done, or N +D to snooze D days.
+נשמרו מאתמול (מכסת הודעות):
+• ועד: תיקון מעלית מחר
 
-Held by yesterday's alert budget:
-• ועד הבית: תיקון מעלית מחר
-
-WhatsApp groups (last 24h)
-──────────────────────────
-DAYCARE
-  • מחר יום פירות, להביא פרי חתוך (הגננת, 22:14)
-
-1 alerts fired today · 1 messages digested
+קבוצות (24ש׳):
+גן — מחר יום פירות, להביא פרי חתוך (הגננת, 22:14)
 
 🕯 הדלקת נרות 19:26 · צאת שבת 20:37

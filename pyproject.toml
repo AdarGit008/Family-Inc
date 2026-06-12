@@ -8,8 +8,10 @@ description = "Household operating system — reminders, briefings, WhatsApp sum
 requires-python = ">=3.12"
 dependencies = [
     "requests>=2.32",   # hebcal + review providers (bundles certifi)
-    "openpyxl>=3.1",    # seed-xlsx read layer until the M2 gspread port
+    "openpyxl>=3.1",    # seed-xlsx backend of lib/sheet.py (tests + creds-less dev)
     "anthropic>=0.109", # lib/llm.py only; optional at runtime (deterministic fallbacks)
+    "gspread>=6.1",     # lib/sheet.py live backend (M2 port, D-016)
+    "google-auth>=2.30",# service-account creds for gspread (SPEC §8.6)
 ]
 # Dropped at M1: beautifulsoup4 + python-dateutil (only consumers live in attic/).
 

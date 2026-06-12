@@ -9,8 +9,8 @@ Family inc. — THE outbox chokepoint (SPEC.md §7.5). The only path to a human.
       all      → idempotent by (id, target); ledger + queue are durable on disk
 
 The ledger is shared across ALL senders (D-015) — engine and summarizer can no
-longer each spend 2/day. M1 ships the chokepoint + tests; M2 rewires every
-sender through `queue()` and deletes the legacy `queue_message()` shim.
+longer each spend 2/day. Every sender goes through `queue()`; the pre-M1
+`queue_message()` shim was deleted in M2. Do not add side doors.
 
 Delivery is the bridge's job: it polls the outbox JSONL, refuses targets not in
 its machine-local recipients.json, dedups per (id, target) against the sent
@@ -218,24 +218,6 @@ def queue(to: str, body: str, kind: str = "alert", *, source: str = "unknown",
     _append_outbox(row)
     result.queued.append(row)
     return result
-
-
-# ---------------------------------------------------------------------------
-# Legacy shim — exact pre-M1 wa_outbox.queue_message behavior (no kinds, no
-# budget; callers still enforce their own). M2 rewires summarizer/reply_handler
-# through queue() and DELETES this. Do not add new callers.
-# ---------------------------------------------------------------------------
-def queue_message(to: str, body: str, source: str = "unknown") -> str:
-    if to not in VALID_RECIPIENTS:
-        raise ValueError(f"recipient must be one of {VALID_RECIPIENTS}, got {to!r}")
-    if not body or not body.strip():
-        raise ValueError("empty message body")
-    msg_id = str(uuid.uuid4())
-    _append_outbox({
-        "id": msg_id, "to": to, "body": body.strip(), "source": source,
-        "queued_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-    })
-    return msg_id
 
 
 # ---------------------------------------------------------------------------

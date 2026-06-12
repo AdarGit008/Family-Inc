@@ -5,6 +5,13 @@ PARKED until v1.1 (BACKLOG.md: reply parsing — needs the bridge's 1:1 read
 guard lifted for exactly the two adult JIDs, plus tests). Not wired to any
 timer. Reinstatement also ports the sheet writes to lib/sheet (gspread).
 
+Outbox posture (M2, D-015): everything goes through lib/outbox.queue() with
+stable ids wa-{msg_id} (idempotent per inbound reply). Kinds as wired today:
+acks/errors = "alert", digest re-send = "briefing". OPEN for the v1.1
+reinstatement PO call: a solicited reply-ack arguably shouldn't consume the
+2/day unsolicited budget or hold for quiet hours — that likely wants a new
+outbox kind, which is a SPEC §7.5 contract change and a milestone review.
+
 Reads bridge/state/inbox/replies.jsonl (written by the Baileys bridge when
 Adar/Shanee reply to reminder digests), applies the commands to the
 Reminders tab, and sends follow-up responses via the outbox queue.
@@ -42,7 +49,7 @@ from typing import Optional
 from openpyxl import load_workbook
 
 from automation.lib import config
-from automation.lib.outbox import queue_message
+from automation.lib.outbox import queue
 
 SHEET_PATH = config.SHEET_PATH
 REPLIES_FILE = config.BRIDGE_STATE_DIR / "inbox" / "replies.jsonl"
@@ -206,11 +213,12 @@ def process_replies(dry_run: bool = False) -> dict:
             if index is not None:
                 row_idx = _find_reminder_row(ws, index)
                 if row_idx is None:
-                    queue_message(
+                    queue(
                         "both",
                         f"❓ Couldn't find reminder #{index} in today's list. "
                         "Reply ? to see the current list.",
-                        source="reply_handler",
+                        "alert",
+                        source="reply_handler", msg_id=f"wa-{msg_id}",
                     )
                     _mark_processed(msg_id, cmd, f"index {index} not found")
                     processed_count += 1
@@ -220,10 +228,11 @@ def process_replies(dry_run: bool = False) -> dict:
                 # today's digest order
                 row_idx = _find_reminder_row(ws, 1)
                 if row_idx is None:
-                    queue_message(
+                    queue(
                         "both",
                         "❓ No active reminders found. Reply ? to check.",
-                        source="reply_handler",
+                        "alert",
+                        source="reply_handler", msg_id=f"wa-{msg_id}",
                     )
                     _mark_processed(msg_id, cmd, "no active reminders")
                     processed_count += 1
@@ -233,49 +242,38 @@ def process_replies(dry_run: bool = False) -> dict:
                 detail = apply_done(ws, row_idx)
                 actions.append(detail)
                 if not dry_run:
-                    queue_message(
-                        "both",
-                        f"✅ {detail}",
-                        source="reply_handler",
-                    )
+                    queue("both", f"✅ {detail}", "alert",
+                          source="reply_handler", msg_id=f"wa-{msg_id}")
             elif cmd == "snooze":
                 detail = apply_snooze(ws, row_idx, n or 7)
                 actions.append(detail)
                 if not dry_run:
-                    queue_message(
-                        "both",
-                        f"📆 {detail}",
-                        source="reply_handler",
-                    )
+                    queue("both", f"📆 {detail}", "alert",
+                          source="reply_handler", msg_id=f"wa-{msg_id}")
             elif cmd == "mute":
                 detail = apply_mute(ws, row_idx, n or 30)
                 actions.append(detail)
                 if not dry_run:
-                    queue_message(
-                        "both",
-                        f"🤐 {detail}",
-                        source="reply_handler",
-                    )
+                    queue("both", f"🤐 {detail}", "alert",
+                          source="reply_handler", msg_id=f"wa-{msg_id}")
 
         elif cmd in ("list", "today", "?"):
             digest = read_digest_for_today()
             if digest:
                 actions.append("Sent today's digest on request")
                 if not dry_run:
-                    queue_message(
-                        "both",
-                        digest,
-                        source="reply_handler",
-                    )
+                    # A solicited re-send of the briefing — kind=briefing
+                    # (budget-exempt; SPEC §7.5).
+                    queue("both", digest, "briefing",
+                          source="reply_handler", msg_id=f"wa-{msg_id}")
             else:
                 actions.append("No digest available for today")
                 if not dry_run:
-                    queue_message(
-                        "both",
-                        "📋 No reminders digest for today yet. "
-                        "The engine runs at 07:00 daily.",
-                        source="reply_handler",
-                    )
+                    queue("both",
+                          "📋 No reminders digest for today yet. "
+                          "The engine runs at 07:30 daily.",
+                          "alert",
+                          source="reply_handler", msg_id=f"wa-{msg_id}")
 
         elif cmd == "help":
             # Bridge already sent help; nothing more to do

@@ -10,10 +10,14 @@ morning message.
 
 Pipeline:
   inbox JSONL  ->  classify (hard rules -> lib/llm.py Haiku -> deterministic)
-              ->  per-group routing + 2/day budget  ->  dispatch ALERTs
-              ->  append WhatsApp_Inbox.csv + WhatsApp_Archive.csv (staging
-                  until the M2 gspread port)
-              ->  build digest markdown
+              ->  per-group routing -> dispatch ALERTs via lib/outbox.queue()
+                  (kind=alert|critical, id=wa-{msg_id}; the outbox ledger is
+                  the ONLY budget enforcement — D-015. Over-budget alerts are
+                  deferred to tomorrow's digest by the outbox itself.)
+              ->  append WhatsApp_Inbox + WhatsApp_Archive tabs via lib/sheet
+                  (live Sheet when configured; skipped loudly otherwise —
+                  rolloff of old hot-tab rows lands in M4)
+              ->  build digest markdown (Hebrew, DESIGN §6)
 
 Config: seeds/12_WhatsApp_Group_Config_Seed.csv (group routing + keywords;
 gitignored — group names are personal). List columns are ';'-separated.
@@ -24,9 +28,6 @@ sample of Hebrew group messages and prints "RUNNING IN MOCK MODE".
 Run:
   python3 automation/whatsapp_summarizer.py [--inbox path.jsonl] [--config path.csv]
                                             [--as-of YYYY-MM-DD] [--dry-run]
-
-M2 note: alert dispatch still keeps its own budget counter here; M2 moves
-enforcement into lib/outbox.queue() so all senders share one ledger (D-015).
 """
 from __future__ import annotations
 
@@ -45,18 +46,14 @@ from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Optional
 
+from automation import templates as T
 from automation.lib import config as cfg
-from automation.lib import llm
-from automation.lib.config import (
-    ALERT_BUDGET_PER_DAY, DIGEST_GROUP_LABEL, DIGEST_GROUP_ORDER,
-)
+from automation.lib import llm, sheet
+from automation.lib.config import DIGEST_GROUP_LABEL, DIGEST_GROUP_ORDER
 
 INBOX_DEFAULT = cfg.INBOX_FILE
 CONFIG_DEFAULT = cfg.WA_GROUP_CONFIG
-INBOX_TAB = cfg.WA_INBOX_TAB
-ARCHIVE_TAB = cfg.WA_ARCHIVE_TAB
 BRIEFINGS_DIR = cfg.BRIEFINGS_DIR
-DATA_DIR = cfg.DATA_DIR
 
 log = logging.getLogger("wa")
 
@@ -298,172 +295,81 @@ def classify(msg: dict, cfg: dict, recent: list[dict], use_llm: bool) -> dict:
     return result
 
 # ---------------------------------------------------------------------------
-# Per-group routing + alert dispatch (budget-aware)
+# Per-group routing + alert dispatch (budget enforced ONLY by the outbox
+# ledger — D-015; this script keeps no counter of its own)
 # ---------------------------------------------------------------------------
 def owner_from_recipients(recipients: str) -> str:
     return {"both": "both", "adar": "adar", "shanee": "shanee"}.get(recipients, "none")
 
-def dispatch_alert(msg: dict, one_liner: str, recipients: str, dry_run: bool,
-                   critical: bool = False) -> None:
-    """Queue to the Baileys outbox via lib/outbox.py (D-010: Baileys-first).
-    Dry-run prints only; non-dry-run also logs + queues. Uses the legacy
-    queue_message shim until M2 consolidates budget enforcement in queue()."""
+
+def alert_body(msg: dict, one_liner: str, group_type: str, critical: bool) -> str:
+    """DESIGN §6 single-line shape: Hebrew type label, sender, HH:MM."""
+    tpl = T.CRITICAL_LINE if critical else T.ALERT_LINE
+    return tpl.format(
+        group=DIGEST_GROUP_LABEL.get(group_type, msg["group_name"]),
+        one_liner=one_liner,
+        sender=msg.get("sender_name", "?"),
+        time=f"{_parse_dt(msg.get('received_at', '')):%H:%M}",
+    )
+
+
+def dispatch_alert(msg: dict, one_liner: str, recipients: str, group_type: str,
+                   dry_run: bool, critical: bool = False) -> bool:
+    """Queue toward the phones via lib/outbox.queue() (D-010: Baileys-first).
+    kind=critical bypasses budget + quiet hours; kind=alert is subject to the
+    shared 2/day ledger — over-budget targets are deferred by the OUTBOX into
+    tomorrow's digest (SPEC §7.5), not downgraded here. Stable id wa-{msg_id}
+    keeps reruns idempotent. Returns True if at least one target was queued."""
     tag = "CRITICAL " if critical else ""
     line = f"[{tag}ALERT → {recipients}] {msg['group_name']}: {one_liner}"
     print("  " + line)
     if dry_run:
-        return
+        return False
     BRIEFINGS_DIR.mkdir(exist_ok=True)
     log_path = BRIEFINGS_DIR / f"whatsapp_alerts_{date.today().isoformat()}.md"
     with log_path.open("a", encoding="utf-8") as fh:
         fh.write(f"- {datetime.now():%H:%M} {line}\n")
-    from automation.lib.outbox import bridge_alive, queue_message
-    body = f"{'🚨 ' if critical else ''}{msg['group_name']}: {one_liner}"
+    from automation.lib.outbox import bridge_alive, queue
     to = recipients if recipients in ("adar", "shanee", "both") else "both"
-    queue_message(to, body, source="whatsapp_summarizer")
-    if not bridge_alive():
+    res = queue(to, alert_body(msg, one_liner, group_type, critical),
+                "critical" if critical else "alert",
+                source="whatsapp_summarizer", msg_id=f"wa-{msg.get('msg_id', '')}")
+    if res.deferred:
+        print(f"  (budget: deferred to tomorrow's digest for {res.deferred})")
+    if res.queued and not bridge_alive():
         print("  [warn] bridge heartbeat stale — alert queued, delivery waits for reconnect")
+    return bool(res.queued)
 
 # ---------------------------------------------------------------------------
-# Persistence — local CSV STAGING for the two Family_OS tabs
-#
-# Source-of-truth note (Gemini review 2026-06-02, defended): Family_OS (Google
-# Sheets) remains the master DB. These CSVs are an interim staging buffer —
-# the same pre-credentials posture as reminders_engine.py's email fallback.
-# TODO(gspread): when FAMILY_INC_SHEET creds are wired, _append_csv becomes a
-# Sheets append to the WhatsApp_Inbox / WhatsApp_Archive tabs and these files
-# go away. Until then nothing else reads them, so no second source of truth.
+# Persistence — WhatsApp_Inbox + WhatsApp_Archive tabs of the master Sheet
+# (lib/sheet.py; the CSV staging buffer is gone since M2). Without a live
+# backend (mock/dev) appends are skipped loudly — never written to the seed
+# template. Rolloff of old hot-tab rows (SPEC §6.2) lands in M4: there is
+# nothing to roll off before ~3 months of live data.
 # ---------------------------------------------------------------------------
-INBOX_COLS = ["msg_id", "group_name", "group_type", "sender_name", "sender_role",
-              "received_at", "text", "has_media", "classification", "one_liner",
-              "action_required", "action_owner", "critical", "dispatched",
-              "dispatched_at", "digested_at"]
-ARCHIVE_COLS = ["msg_id", "group_name", "sender_name", "received_at", "text", "one_liner"]
-
-def _processed_ids(path: Path) -> set[str]:
-    """msg_ids already written to the inbox tab, so reruns don't double-process.
-    Only reads recent rows (≤30 days old) to keep memory bounded — older rows
-    are archived separately by archive_old_inbox_rows()."""
-    if not path.exists():
-        return set()
-    ids: set[str] = set()
-    cutoff = datetime.now() - timedelta(days=30)
-    with path.open(encoding="utf-8") as fh:
-        for row in csv.DictReader(fh):
-            mid = (row.get("msg_id") or "").strip()
-            if not mid:
-                continue
-            # Only consider recent rows for dedup purposes
-            received = row.get("received_at", "")
-            if received:
-                try:
-                    if _parse_dt(received) < cutoff:
-                        continue  # old row — already archived, skip
-                except Exception:
-                    pass
-            ids.add(mid)
-    return ids
+INBOX_COLS = sheet.WA_INBOX_COLUMNS
+ARCHIVE_COLS = sheet.WA_ARCHIVE_COLUMNS
 
 
-def archive_old_inbox_rows(
-    inbox_path: Path,
-    archive_dir: Path,
-    retention_days: int = cfg.WA_INBOX_RETENTION_DAYS,
-    dry_run: bool = False,
-) -> int:
-    """Move rows older than `retention_days` from the inbox CSV into a monthly
-    archive CSV (one file per year-month, e.g. WhatsApp_Inbox_2026-05.csv).
-    Keeps the inbox CSV bounded — only recent rows remain.
+def _processed_ids(sheet_path: Optional[Path] = None) -> set[str]:
+    """msg_ids already written to the WhatsApp_Inbox tab, so reruns don't
+    double-process (exactly-once together with the outbox wa-{msg_id} dedup)."""
+    return {str(v).strip()
+            for v in sheet.read_column(cfg.WA_INBOX_SHEET_TAB, "msg_id", sheet_path)}
 
-    Returns the number of rows archived."""
-    if not inbox_path.exists():
-        return 0
 
-    cutoff = datetime.now() - timedelta(days=retention_days)
-    recent_rows: list[dict] = []
-    archive_buckets: dict[str, list[dict]] = {}  # month_key -> rows
-    archived_count = 0
-
-    # Read all rows, split into recent vs archive buckets
-    with inbox_path.open(encoding="utf-8") as fh:
-        reader = csv.DictReader(fh)
-        fieldnames = reader.fieldnames or []
-        for row in reader:
-            received = row.get("received_at", "")
-            try:
-                dt = _parse_dt(received)
-            except Exception:
-                recent_rows.append(row)
-                continue
-
-            if dt < cutoff:
-                month_key = dt.strftime("%Y-%m")
-                archive_buckets.setdefault(month_key, []).append(row)
-                archived_count += 1
-            else:
-                recent_rows.append(row)
-
-    if archived_count == 0:
-        return 0
-
-    if dry_run:
-        print(f"  [dry-run] would archive {archived_count} rows across {len(archive_buckets)} month(s)")
-        return archived_count
-
-    # Write archive files
-    archive_dir.mkdir(exist_ok=True)
-    for month_key, rows in archive_buckets.items():
-        archive_path = archive_dir / f"WhatsApp_Inbox_{month_key}.csv"
-        write_header = not archive_path.exists() or archive_path.stat().st_size == 0
-        with archive_path.open("a", encoding="utf-8", newline="") as fh:
-            writer = csv.DictWriter(fh, fieldnames=fieldnames or INBOX_COLS)
-            if write_header:
-                writer.writeheader()
-            for r in rows:
-                writer.writerow(r)
-
-    # Rewrite inbox CSV with only recent rows
-    tmp_path = inbox_path.with_suffix(".csv.tmp")
-    with tmp_path.open("w", encoding="utf-8", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=fieldnames or INBOX_COLS)
-        writer.writeheader()
-        for r in recent_rows:
-            writer.writerow(r)
-    tmp_path.replace(inbox_path)
-
-    print(f"  archived {archived_count} row(s) to {len(archive_buckets)} monthly file(s) "
-          f"in {archive_dir}")
-    return archived_count
-
-def alerts_dispatched_today(path: Path, today: date) -> int:
-    """Count ALERTs actually *sent* today (keyed on dispatch time, not message
-    receipt) so the hourly run honors the daily budget across runs — and so a
-    late-night message processed after midnight counts against the right day."""
-    if not path.exists():
-        return 0
-    n = 0
-    with path.open(encoding="utf-8") as fh:
-        for row in csv.DictReader(fh):
-            if str(row.get("dispatched", "")).strip().lower() != "true":
-                continue
-            if str(row.get("critical", "")).strip().lower() == "true":
-                continue  # critical alerts are budget-exempt
-            try:
-                if _parse_dt(row.get("dispatched_at", "")).date() == today:
-                    n += 1
-            except Exception:
-                continue
-    return n
-
-def _append_csv(path: Path, cols: list[str], rows: list[dict]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    new = not path.exists() or path.stat().st_size == 0
-    with path.open("a", encoding="utf-8", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=cols)
-        if new:
-            w.writeheader()
-        for r in rows:
-            w.writerow({k: r.get(k, "") for k in cols})
+def persist_rows(processed: list[dict], sheet_path: Optional[Path] = None,
+                 live_override: Optional[bool] = None) -> bool:
+    """Append this run's rows to the Inbox (full row) + Archive (text-forever
+    subset) tabs in two batched calls. Returns False when skipped (no live
+    backend and no explicit path)."""
+    live = sheet.is_live() if live_override is None else live_override
+    if sheet_path is None and not live:
+        print("(no live Sheet backend — Inbox/Archive rows NOT appended)")
+        return False
+    sheet.append_rows(cfg.WA_INBOX_SHEET_TAB, INBOX_COLS, processed, sheet_path)
+    sheet.append_rows(cfg.WA_ARCHIVE_SHEET_TAB, ARCHIVE_COLS, processed, sheet_path)
+    return True
 
 # ---------------------------------------------------------------------------
 # Bridge health (applied from Gemini review 2026-06-02)
@@ -480,68 +386,61 @@ def bridge_staleness_warning(inbox_path: Path) -> Optional[str]:
         return None  # mock mode / bridge never started — nothing to judge
     age_h = (datetime.now() - datetime.fromtimestamp(ref.stat().st_mtime)).total_seconds() / 3600
     if age_h > BRIDGE_STALE_HOURS:
-        return (f"⚠ BRIDGE SILENT {age_h:.0f}h — baileys_listener may be down "
-                f"(check the always-on machine / re-pair QR)")
+        return T.BRIDGE_SILENT.format(hours=age_h)
     return None
 
 # ---------------------------------------------------------------------------
-# Digest builder (Phase E)
+# Digest builder — the קבוצות section of the morning message (DESIGN §6:
+# flat list, Hebrew type label inline, ordered by group type then time;
+# warnings prepend, never replace; counts live in console/logs, not copy)
 # ---------------------------------------------------------------------------
 def build_digest(processed: list[dict], today: date, warning: Optional[str] = None) -> str:
-    """Grouped 'WhatsApp groups (last 24h)' digest, spec format."""
     window_start = datetime.combine(today, time.min) - timedelta(hours=24)
     shown = [p for p in processed
              if p["classification"] in ("DIGEST", "ALERT")
              and _parse_dt(p["received_at"]) >= window_start]
 
-    by_type: dict[str, list[dict]] = {}
-    for p in shown:
-        by_type.setdefault(p["group_type"], []).append(p)
-
-    lines = ["WhatsApp groups (last 24h)", "─" * 26]
+    lines = []
     if warning:
         lines += [warning, ""]
-    # Flag any ALERT that had nobody to route to (digest_only groups) up top
+    # ALERTs with nobody to route to (digest_only groups) float to the top
     floated = [p for p in shown if p["classification"] == "ALERT" and p["action_owner"] == "none"]
     if floated:
-        lines.append("⚠ NEEDS A LOOK")
+        lines.append(T.WA_NEEDS_A_LOOK)
         for p in floated:
-            lines.append(f"  • {p['one_liner']} ({p['sender_name']}, {_parse_dt(p['received_at']):%H:%M})")
+            lines.append(T.WA_NEEDS_A_LOOK_ITEM.format(
+                one_liner=p["one_liner"], sender=p["sender_name"],
+                time=f"{_parse_dt(p['received_at']):%H:%M}"))
         lines.append("")
-    for gtype in DIGEST_GROUP_ORDER:
-        items = by_type.get(gtype)
-        if not items:
-            continue
-        lines.append(DIGEST_GROUP_LABEL.get(gtype, gtype.upper()))
-        for p in sorted(items, key=lambda x: _parse_dt(x["received_at"])):
-            tag = "" if p["classification"] != "ALERT" else " [alert]"
-            lines.append(f"  • {p['one_liner']} ({p['sender_name']}, {_parse_dt(p['received_at']):%H:%M}){tag}")
-        lines.append("")
-    alerts_fired = sum(1 for p in processed if p.get("dispatched"))
-    digested = len(shown)
-    lines.append(f"{alerts_fired} alerts fired today · {digested} messages digested")
-    return "\n".join(lines).rstrip() + "\n"
+    body = [p for p in shown if p not in floated]
+    if body:
+        lines.append(T.WA_SECTION_HEAD)
+        order = {g: i for i, g in enumerate(DIGEST_GROUP_ORDER)}
+        body.sort(key=lambda p: (order.get(p["group_type"], len(order)),
+                                 _parse_dt(p["received_at"])))
+        for p in body:
+            lines.append(T.WA_ITEM.format(
+                group=DIGEST_GROUP_LABEL.get(p["group_type"], p["group_type"]),
+                one_liner=p["one_liner"], sender=p["sender_name"],
+                time=f"{_parse_dt(p['received_at']):%H:%M}"))
+    return "\n".join(lines).rstrip() + ("\n" if lines else "")
 
 # ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
-def run(inbox_path: Path, config_path: Path, today: date, dry_run: bool) -> Path:
-    cfg = load_config(config_path)
+def run(inbox_path: Path, config_path: Path, today: date, dry_run: bool,
+        sheet_path: Optional[Path] = None) -> Path:
+    cfg_groups = load_config(config_path)
     messages, is_mock = load_inbox(inbox_path)
     use_llm = llm.available()
     if not use_llm:
         print("(no ANTHROPIC_API_KEY — using deterministic classifier; hard rules still fire)")
 
-    # Archive old inbox rows (>30 days) to monthly CSV files to prevent
-    # unbounded inbox growth. Only runs in non-mock mode (mock data is tiny).
-    if not is_mock:
-        archive_old_inbox_rows(INBOX_TAB, DATA_DIR, dry_run=dry_run)
-
     # process in chronological order so 'recent context' is correct
     messages = sorted(messages, key=lambda m: _parse_dt(m.get("received_at", "")))
 
-    # skip messages already processed in a previous run (avoids re-alerting)
-    already = _processed_ids(INBOX_TAB)
+    # skip messages already in the Inbox tab (avoids re-alerting on rerun)
+    already = _processed_ids(sheet_path) if (sheet_path or sheet.is_live()) else set()
     if already:
         before = len(messages)
         messages = [m for m in messages if m.get("msg_id") not in already]
@@ -549,17 +448,14 @@ def run(inbox_path: Path, config_path: Path, today: date, dry_run: bool) -> Path
             print(f"(skipping {before - len(messages)} already-processed messages)")
 
     seen_by_group: dict[str, list[dict]] = {}
-    # seed today's alert budget from what's already been dispatched today
-    budget_used = alerts_dispatched_today(INBOX_TAB, today)
-    if budget_used:
-        print(f"(already dispatched {budget_used} alert(s) today — {ALERT_BUDGET_PER_DAY - budget_used} left in budget)")
     processed: list[dict] = []
+    alerts_queued = 0
 
     for msg in messages:
         gname = msg["group_name"]
-        c = group_cfg(cfg, gname)
+        c = group_cfg(cfg_groups, gname)
         recent = seen_by_group.get(gname, [])
-        result = classify(msg, cfg, recent, use_llm)
+        result = classify(msg, cfg_groups, recent, use_llm)
         seen_by_group.setdefault(gname, []).append(msg)
 
         recipients = c["alert_recipients"]
@@ -570,20 +466,19 @@ def run(inbox_path: Path, config_path: Path, today: date, dry_run: bool) -> Path
         if result["classification"] == "ALERT":
             if recipients == "none":
                 action_owner = "none"  # float to digest "needs a look"
-            elif not critical and budget_used >= ALERT_BUDGET_PER_DAY:
-                # tiered budget: standard alerts capped at 2/day; critical bypasses
-                result["classification"] = "DIGEST"
-                result["reason"] = (result.get("reason", "") + "; alert suppressed by budget").strip("; ")
-                log.info("alert suppressed by budget: %s", result["one_liner"])
             else:
                 action_owner = owner_from_recipients(recipients)
-                dispatch_alert(msg, result["one_liner"], recipients, dry_run,
-                               critical=critical)
-                if not critical:
-                    budget_used += 1  # critical alerts don't consume the budget
-                dispatched = True
-                # pin to the run's calendar day so budget is keyed on send-day
-                dispatched_at = datetime.combine(today, datetime.now().time()).isoformat(timespec="seconds")
+                # The outbox is the only budget authority (D-015): in-budget →
+                # queued now; over-budget → it defers the body to tomorrow's
+                # digest and logs alert_suppressed_by_budget. Either way the
+                # row stays classified ALERT here — what happened to it is the
+                # outbox ledger's record, not a reclassification.
+                dispatched = dispatch_alert(msg, result["one_liner"], recipients,
+                                            c["group_type"], dry_run, critical=critical)
+                if dispatched:
+                    alerts_queued += 1
+                    dispatched_at = datetime.combine(
+                        today, datetime.now().time()).isoformat(timespec="seconds")
 
         row = {
             "msg_id": msg.get("msg_id", ""), "group_name": gname,
@@ -599,9 +494,9 @@ def run(inbox_path: Path, config_path: Path, today: date, dry_run: bool) -> Path
         }
         processed.append(row)
 
-    # console summary
+    # console summary (budget state lives in the outbox ledger, logs/outbox_ledger/)
     print(f"\nProcessed {len(processed)} messages "
-          f"({'MOCK' if is_mock else 'live'}) · alerts fired: {budget_used}/{ALERT_BUDGET_PER_DAY}")
+          f"({'MOCK' if is_mock else 'live'}) · alerts queued this run: {alerts_queued}")
     counts = {k: sum(1 for p in processed if p["classification"] == k) for k in CLASSES}
     print(f"  ROUTINE={counts['ROUTINE']} DIGEST={counts['DIGEST']} ALERT={counts['ALERT']}")
 
@@ -618,10 +513,10 @@ def run(inbox_path: Path, config_path: Path, today: date, dry_run: bool) -> Path
         for p in processed:
             if p["classification"] in ("DIGEST", "ALERT"):
                 p["digested_at"] = datetime.now().isoformat(timespec="seconds")
-        _append_csv(INBOX_TAB, INBOX_COLS, processed)
-        _append_csv(ARCHIVE_TAB, ARCHIVE_COLS, processed)  # text+summary, never rolls off
+        if persist_rows(processed, sheet_path):
+            print(f"appended {len(processed)} row(s) to "
+                  f"{cfg.WA_INBOX_SHEET_TAB} + {cfg.WA_ARCHIVE_SHEET_TAB}")
         print(f"wrote {digest_path}")
-        print(f"appended {INBOX_TAB} and {ARCHIVE_TAB}")
     else:
         print("(dry-run — no files written)")
     return digest_path

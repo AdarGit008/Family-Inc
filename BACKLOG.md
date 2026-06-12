@@ -3,7 +3,7 @@
 *The only live backlog. Status legend: ⬜ todo · 🔵 in progress · ✅ done · 🧊 frozen.*
 *v1 definition and acceptance criteria live in `SPEC.md` §11. Migration session plan lives in `ENGINEERING.md` §9.*
 
-**Now:** next milestone = **M2** (not started) · open via `NEXT_SESSION_PROMPT.md` · last session: 2026-06-12 (M1 closed: restructure + lib chokepoints + 115 tests + D-024 privacy purge)
+**Now:** next milestone = **M3** (go-live; needs the PO at the VPS ~1h) · open via `NEXT_SESSION_PROMPT.md` · last session: 2026-06-12 (M2 closed: gspread port + write-backs + outbox consolidation + Hebrew templates + 172 tests + D-025)
 
 ## v1 — to first real message on both phones
 
@@ -21,20 +21,20 @@
 - ✅ uv conversion: `pyproject.toml` + `uv.lock` committed; dropped beautifulsoup4 + python-dateutil (consumers live in attic); `requirements*.txt` deleted
 - ✅ D-024 privacy purge: `seeds/` gitignored (CSVs moved from `Setup/`), `Dashboard/config.js` untracked (+`config.example.js`), kid names/birthdates scrubbed from attic + review prompt
 
-### M2 — One source of truth (1 session)
+### M2 — One source of truth (1 session) — ✅ closed 2026-06-12
 
-- ⬜ gspread port: engine, briefings, summarizer all read/write the live Google Sheet via service account (behind `lib/sheet.py`; add the §7.1 header-validation schema-drift guard while in there)
-- ⬜ Engine write-backs on send success: `Last Sent`/`Status` stamping from `daily_digest`, recurrence bump on Done incl. Feb-29 + Last-Sent idempotency tests (ENGINEERING §7 rows deferred from M1 — no write path existed against the seed xlsx)
-- ⬜ Dashboard writes `DoneAt` + `LastDoneBy` + `WriteQueue_Tombstone` in every write-back batch (closes the spec'd-but-missing race guard)
-- ⬜ `Settings` tab: `UserMap` (email → display name) + `lang`
-- ⬜ Outbox consolidation: summarizer + reply paths move from `queue_message()` (legacy shim) to `queue()` with kinds + stable `wa-{msg_id}` ids; delete the shim and the summarizer's local budget counter (the `lib/outbox.py` ledger from M1 becomes the only enforcement — D-015)
-- ⬜ Strip reply-command footers from message templates (D-014; reinstate in v1.1 with reply parsing) — deliberate golden-file regen (`tests/test_render_golden.py --regen`), DESIGN §6 Hebrew templates land here too
-- ⬜ Golden-file tests for briefing + digest rendering — *base goldens shipped in M1; M2 re-cuts them with the template swap*
+- ✅ gspread port: `lib/sheet.py` = two backends behind one surface (gspread+service-account when `FAMILY_INC_SHEET_ID` set, seed xlsx otherwise); engine/digest/briefing/summarizer all route through it; §7.1 header-validation guard on every Reminders read AND write (abort + `logs/schema_drift.flag`, healed by a clean read, surfaced by the weekly briefing); seed xlsx headers aligned to SPEC §6.1 (cols M–P added)
+- ✅ Engine write-backs: `daily_digest --send` stamps `Last Sent`/`Status` (Sent|Overdue) only for rows actually queued; recurrence bump on Done (`Due+period`, `Status→Pending`, `Last Sent` cleared; Feb-29-class → month-end clamp + review flag; Custom → flagged, never guessed; tombstoned rows wait a run); classify gained the same-day Last-Sent guard — rerun is a no-op at every layer; creds-less runs never write the seed
+- ✅ Dashboard write contract: stopped writing engine-owned col H (clears it on bump per §7.1); `bumpDate()` now mirrors `lib/dates.bump_due` (clamp, no Daily, Custom→null); DoneAt/Tombstone are full ISO-T datetimes (date-only tombstones had killed the 6h window); **tombstones re-stamped at flush time** (§8.3) — the actually-missing race guard
+- ✅ `Settings` tab (Key|Value): UserMap + lang; `lib/sheet.read_settings()`; dashboard identity = userinfo.email scope → `Settings.UserMap` → display name (cfg.USERS demoted to fallback); Settings in the batchGet; sheet `lang` = cross-device default, local toggle wins; seed + mock get the tab (placeholder emails, D-024)
+- ✅ Outbox consolidation: summarizer + reply paths on `queue()` with kinds (`critical` keyword → kind=critical) + stable `wa-{msg_id}` ids; shim + summarizer's local budget counter deleted (ledger = only enforcement, D-015); over-budget alerts now deferred by the outbox into tomorrow's digest instead of silently downgraded; `weekly_briefing --send` queues kind=briefing (`brief-weekly-{date}`)
+- ✅ Reply footers stripped (D-014) + DESIGN §6 Hebrew templates: digest header `🏠 Family inc. · יום ו׳ 12/6`, uniform item lines, Hebrew due phrases (dual forms mirror the dashboard), קבוצות section with Hebrew type labels, `⚠ דורש מבט`, Hebrew bridge warning; summarizer CSVs gone — Inbox/Archive append to Sheet tabs
+- ✅ Goldens re-cut deliberately (`--regen` made hermetic against a real reminders log); suite 115 → **172 green**
 
 ### M3 — Appliance live = go-live (1 session + ~1h on the VPS)
 
 - ⬜ Provision VPS per `ENGINEERING.md` §5 (user, TZ=Asia/Jerusalem, uv, Node LTS, systemd units)
-- ⬜ Pair Baileys (one QR scan); place `recipients.json` + service-account JSON + `ANTHROPIC_API_KEY` in `/etc/family-inc/`
+- ⬜ Pair Baileys (one QR scan); place `recipients.json` + service-account JSON + `ANTHROPIC_API_KEY` **+ `FAMILY_INC_SHEET_ID`** in `/etc/family-inc/` (the sheet id is what flips `lib/sheet.py` to the live backend — without it everything keeps running dry against the seed)
 - ⬜ Enable timers: engine 07:25 · digest 07:30 · summarizer hourly (24h) · weekly briefing Sat 21:00 · backup Sun 03:00
 - ⬜ Seed ≥20 real reminders across Car/Health/Education/Contracts (from `Setup/08` seed + kickoff backlog)
 - ⬜ **Acceptance: both phones receive the morning digest 3 consecutive days; one full done→recur cycle visible in the log**
@@ -45,11 +45,12 @@
 - ⬜ Sender→role roster seeded (makes hard rules 2–3 reliable)
 - ⬜ Phase F weekly accuracy review surface (false-positive purge)
 - ⬜ PO call (joint): do family-group criticals override digest-only routing?
+- ⬜ WhatsApp_Inbox hot-tab rolloff against the live Sheet (SPEC §6.2; deferred from M2 — nothing to roll off before ~3 months of live rows; also resolve the 90-day-spec vs 30-day-config disagreement, D-025)
 - ⬜ Milestone review (external model) on the live system
 
 ## v1.1 candidates (unordered — pick after v1 is boring)
 
-- Reply parsing (done/snooze via WhatsApp) — *code exists (`Automation/reply_handler.py`, Hermes C4); remaining: lift the bridge's 1:1 read guard for exactly the two adult JIDs, tests, then reinstate reply footers*
+- Reply parsing (done/snooze via WhatsApp) — *code exists (`automation/reply_handler.py`, Hermes C4; on `queue()` with `wa-{msg_id}` ids since M2); remaining: lift the bridge's 1:1 read guard for exactly the two adult JIDs, port its sheet writes to `lib/sheet`, tests, reinstate reply footers, and a PO call on kinds — solicited acks currently ride kind=alert, i.e. they'd consume the unsolicited budget and hold in quiet hours (D-025)*
 - Inbox-append trigger for the classifier (inotify on `inbox.jsonl`) — sub-hour critical latency without changing the hourly digest cadence *(review suggestion, 2026-06-12)*
 - Google Calendar connector → Calendar-Events auto-populated
 - iCloud → GCal ICS subscribe (15 min, `Setup/05`)

@@ -462,8 +462,17 @@ def read_changes(source: str) -> str:
     path = Path(source)
     if not path.is_absolute():
         path = (ROOT / source).resolve()
-    if not path.exists():
-        raise SystemExit(f"changes file not found: {source}")
+    try:
+        found = path.exists()
+    except OSError:
+        # e.g. the bullet list itself was passed inline — too long to be a
+        # filename (ENAMETOOLONG). Same exit, clearer than a traceback.
+        found = False
+    if not found:
+        raise SystemExit(
+            f"changes file not found: {source[:120]}{'…' if len(source) > 120 else ''}\n"
+            "(--changes takes a PATH to a markdown bullet list, or '-' for stdin "
+            "— see reviews/session_changes_*.md for the pattern)")
     return path.read_text(encoding="utf-8").strip()
 
 

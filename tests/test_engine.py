@@ -1,16 +1,23 @@
 """Tests for automation/reminders_engine.py — classify, route, apply_budget,
-is_tombstoned (the SPEC §7.1 fire matrix + §8.3 tombstone window)."""
+is_tombstoned (the SPEC §7.1 fire matrix + §8.3 tombstone window), and the M2
+write path: recurrence bumps incl. Feb-29, send-success stamping, Last-Sent
+idempotency (ENGINEERING §7)."""
 
-from datetime import timedelta
+import json
+from datetime import date, datetime, timedelta
 
-from automation.lib.sheet import Reminder
+from automation.lib import config, outbox
+from automation.lib.sheet import Reminder, read_reminders
 from automation.reminders_engine import (
     Digest,
     Fire,
     apply_budget,
+    apply_recurrence,
     classify,
     is_tombstoned,
+    recurrence_writes,
     route,
+    stamp_writes,
 )
 
 
@@ -105,6 +112,25 @@ class TestClassify:
             "lead_times": [7, 1],
         })
         assert classify(r, today) is None
+
+    def test_last_sent_today_never_refires(self, today, sample_reminder_kwargs):
+        """SPEC §8.4: engine re-runs on the same day are no-ops (Last Sent
+        guard) — even a due-today row stays quiet once stamped."""
+        r = Reminder(**{**sample_reminder_kwargs, "due": today, "last_sent": today})
+        assert classify(r, today) is None
+
+    def test_sent_status_keeps_later_lead_times_alive(self, today, sample_reminder_kwargs):
+        """Status=Sent (stamped at an earlier lead) must not kill the chain:
+        a 30,7,1 reminder stamped at lead-30 still fires at lead-7."""
+        r = Reminder(**{
+            **sample_reminder_kwargs,
+            "due": today + timedelta(days=7),
+            "lead_times": [30, 7, 1],
+            "status": "Sent",
+            "last_sent": today - timedelta(days=23),
+        })
+        f = classify(r, today)
+        assert f is not None and f.reason == "WEEK OUT"
 
 
 # ---------------------------------------------------------------------------
@@ -240,3 +266,158 @@ class TestIsTombstoned:
             "write_queue_tombstone": now - timedelta(hours=6),
         })
         assert not is_tombstoned(r, now)
+
+
+# ---------------------------------------------------------------------------
+# stamp_writes — on send success: Last Sent = now, Status = Sent | Overdue
+# ---------------------------------------------------------------------------
+class TestStampWrites:
+    def test_future_fire_stamps_sent(self, now, sample_reminder_kwargs):
+        r = Reminder(**sample_reminder_kwargs)
+        writes = stamp_writes([Fire(r, "WEEK OUT", 5)], now)
+        by_field = {w.field: w.value for w in writes}
+        assert by_field["Status"] == "Sent"
+        assert by_field["Last Sent"] == now
+
+    def test_overdue_fire_stamps_overdue(self, now, sample_reminder_kwargs):
+        r = Reminder(**sample_reminder_kwargs)
+        writes = stamp_writes([Fire(r, "OVERDUE", -3)], now)
+        assert {w.value for w in writes if w.field == "Status"} == {"Overdue"}
+
+    def test_both_owner_row_stamped_once(self, now, sample_reminder_kwargs):
+        """An Owner=Both fire reaches two digests but is ONE sheet row."""
+        r = Reminder(**sample_reminder_kwargs)
+        f = Fire(r, "FIRE TODAY", 0)
+        writes = stamp_writes([f, f], now)
+        assert len(writes) == 2  # one Last Sent + one Status
+
+
+# ---------------------------------------------------------------------------
+# recurrence_writes / apply_recurrence — SPEC §7.1 recurrence on Done
+# ---------------------------------------------------------------------------
+class TestRecurrence:
+    def _done(self, kw, **overrides):
+        base = {**kw, "status": "Done", "recurrence": "Yearly",
+                "due": date(2026, 6, 1), "last_sent": date(2026, 5, 31)}
+        base.update(overrides)
+        return Reminder(**base)
+
+    def test_done_yearly_bumps(self, now, sample_reminder_kwargs):
+        writes = recurrence_writes([self._done(sample_reminder_kwargs)], now)
+        by_field = {w.field: w.value for w in writes}
+        assert by_field["Due Date"] == date(2027, 6, 1)
+        assert by_field["Status"] == "Pending"
+        assert by_field["Last Sent"] is None  # cleared per §7.1
+
+    def test_one_off_done_left_alone(self, now, sample_reminder_kwargs):
+        r = self._done(sample_reminder_kwargs, recurrence="One-off")
+        assert recurrence_writes([r], now) == []
+
+    def test_pending_recurring_left_alone(self, now, sample_reminder_kwargs):
+        r = self._done(sample_reminder_kwargs, status="Pending")
+        assert recurrence_writes([r], now) == []
+
+    def test_fresh_tombstone_defers_the_bump(self, now, sample_reminder_kwargs):
+        """Same race guard as fires: the dashboard may still be writing."""
+        r = self._done(sample_reminder_kwargs,
+                       write_queue_tombstone=now - timedelta(minutes=30))
+        assert recurrence_writes([r], now) == []
+
+    def test_stale_tombstone_allows_the_bump(self, now, sample_reminder_kwargs):
+        r = self._done(sample_reminder_kwargs,
+                       write_queue_tombstone=now - timedelta(hours=9))
+        assert len(recurrence_writes([r], now)) == 3
+
+    def test_custom_recurrence_flagged_not_guessed(self, tmp_runtime, now,
+                                                   sample_reminder_kwargs):
+        r = self._done(sample_reminder_kwargs, recurrence="Custom")
+        assert recurrence_writes([r], now) == []
+        flags = [json.loads(ln) for ln in
+                 config.ENGINE_FLAGS.read_text(encoding="utf-8").splitlines()]
+        assert flags[0]["reason"] == "unbumpable_recurrence"
+
+    def test_feb29_clamps_and_flags(self, tmp_runtime, now, sample_reminder_kwargs):
+        r = self._done(sample_reminder_kwargs, due=date(2028, 2, 29))
+        writes = recurrence_writes([r], now)
+        assert {w.value for w in writes if w.field == "Due Date"} == {date(2029, 2, 28)}
+        flags = [json.loads(ln) for ln in
+                 config.ENGINE_FLAGS.read_text(encoding="utf-8").splitlines()]
+        assert flags[0]["reason"] == "recurrence_clamped_to_month_end"
+
+    def test_apply_recurrence_end_to_end(self, tmp_runtime, make_sheet):
+        """Dashboard marked it Done last night; the 07:25 engine run bumps it
+        on the sheet — DoneAt/LastDoneBy survive for the arc + ticker."""
+        p = make_sheet([[
+            "Renew lease", "Contracts", "Both", date(2026, 6, 1), "30,7",
+            "Yearly", "Done", datetime(2026, 5, 2, 7, 30), "WhatsApp", "",
+            "", "", "Shanee", datetime(2026, 6, 11, 21, 4),
+            datetime(2026, 6, 11, 21, 4),
+        ]])
+        bumped = apply_recurrence(date(2026, 6, 12),
+                                  now=datetime(2026, 6, 12, 7, 25), sheet_path=p)
+        assert bumped == 1
+        r = read_reminders(p)[0]
+        assert r.due == date(2027, 6, 1)
+        assert r.status == "Pending"
+        assert r.last_sent is None
+        assert r.last_done_by == "Shanee"          # ticker attribution intact
+        assert r.done_at is not None               # arc data intact
+
+
+# ---------------------------------------------------------------------------
+# Send-success stamping, end to end (daily_digest --send against a tmp sheet):
+# queue → stamp → rerun is a no-op at every layer (ENGINEERING §7 Last-Sent
+# idempotency)
+# ---------------------------------------------------------------------------
+class TestSendStamping:
+    def test_send_stamps_then_rerun_is_noop(self, tmp_runtime, make_sheet):
+        from automation import daily_digest
+
+        day = date(2026, 6, 10)  # Wednesday — no Hebcal fetch in assemble()
+        p = make_sheet([
+            ["Car test", "Car", "Adar", day, "7,1", "One-off", "Pending"],
+        ])
+        messages = daily_digest.run(day, send=True, sheet_path=p)
+        assert "Car test" in messages["adar"]
+
+        r = read_reminders(p)[0]
+        assert r.status == "Sent"
+        assert r.last_sent == day
+        first_queue = config.OUTBOX_FILE.read_text(encoding="utf-8").splitlines()
+        assert len(first_queue) == 1
+
+        # Rerun the same morning: the row is stamped (classify guard) and the
+        # message id is spent (outbox dedup) — nothing moves anywhere.
+        messages2 = daily_digest.run(day, send=True, sheet_path=p)
+        assert "Car test" not in messages2["adar"]  # quiet heartbeat digest
+        assert config.OUTBOX_FILE.read_text(encoding="utf-8").splitlines() == first_queue
+        assert read_reminders(p)[0].last_sent == day
+
+    def test_overdue_send_stamps_overdue_status(self, tmp_runtime, make_sheet):
+        from automation import daily_digest
+
+        day = date(2026, 6, 10)
+        p = make_sheet([
+            ["Late thing", "Other", "Adar", day - timedelta(days=4), "7,1",
+             "One-off", "Pending"],
+        ])
+        daily_digest.run(day, send=True, sheet_path=p)
+        r = read_reminders(p)[0]
+        assert r.status == "Overdue"
+        assert r.last_sent == day
+
+    def test_send_without_queue_success_does_not_stamp(self, tmp_runtime, make_sheet):
+        """If the outbox dedup (or budget) kept the message from queuing,
+        the rows must stay eligible — stamping only follows real sends."""
+        from automation import daily_digest
+
+        day = date(2026, 6, 10)
+        # Spend the digest's message id in advance for both recipients.
+        outbox.queue("both", "placeholder", "alert", source="test",
+                     msg_id=f"brief-daily-{day.isoformat()}",
+                     now=datetime(2026, 6, 10, 7, 0))
+        p = make_sheet([
+            ["Car test", "Car", "Adar", day, "7,1", "One-off", "Pending"],
+        ])
+        daily_digest.run(day, send=True, sheet_path=p)
+        assert read_reminders(p)[0].last_sent is None

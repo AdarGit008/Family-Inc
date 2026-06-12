@@ -5,14 +5,18 @@
       "Domain",
       "Owner",
       "Due Date",
-      "Lead Times (days)",
+      "Lead Times",
       "Recurrence",
       "Status",
       "Last Sent",
       "Channel",
       "Notes",
-      "Days until",
-      "Auto-flag"
+      "Days Until",
+      "Auto-flag",
+      "LastDoneBy",
+      "DoneAt",
+      "WriteQueue_Tombstone",
+      "Guide URL"
     ],
     [
       "Car annual test (Test Rishui)",
@@ -43,7 +47,7 @@
       ""
     ],
     [
-      "Dentist \u2014 Adar",
+      "Dentist — Adar",
       "Health",
       "Adar",
       "2026-05-26",
@@ -57,7 +61,7 @@
       "OVERDUE"
     ],
     [
-      "Dentist \u2014 Child 1",
+      "Dentist — Child 1",
       "Health",
       "Partner",
       "2026-09-10",
@@ -108,7 +112,7 @@
       "Pending",
       "",
       "WhatsApp",
-      "\u20aa5000 \u2192 savings",
+      "₪5000 → savings",
       "33",
       ""
     ],
@@ -355,7 +359,7 @@
     ],
     [
       "2026-05-12",
-      "[Visa Cal \u2014 Adar]",
+      "[Visa Cal — Adar]",
       "PAZ GAS STATION",
       "-280",
       "Transport",
@@ -376,7 +380,7 @@
     [
       "2026-05-20",
       "[Joint Checking]",
-      "SALARY \u2014 ADAR",
+      "SALARY — ADAR",
       "28500",
       "Income",
       "Salary",
@@ -401,18 +405,18 @@
       "Both",
       "3 years",
       "2029-05-01",
-      "Open dedicated savings account + 30k\u20aa in",
+      "Open dedicated savings account + 30k₪ in",
       "5",
       "2026-05-25",
       "On track",
       "Need partner alignment on neighborhood"
     ],
     [
-      "[60k\u20aa emergency fund]",
+      "[60k₪ emergency fund]",
       "Adar",
       "1 year",
       "2027-05-01",
-      "Reach 20k\u20aa",
+      "Reach 20k₪",
       "20",
       "2026-05-25",
       "On track"
@@ -442,7 +446,7 @@
     ],
     [
       "[Adar]",
-      "Dr. Cohen \u2014 Clalit",
+      "Dr. Cohen — Clalit",
       "Family doctor",
       "2026-01-10",
       "2027-01-10",
@@ -462,7 +466,7 @@
     ],
     [
       "[Partner]",
-      "Dr. Levi \u2014 Maccabi",
+      "Dr. Levi — Maccabi",
       "Family doctor",
       "2025-11-05",
       "2026-11-05",
@@ -472,7 +476,7 @@
     ],
     [
       "[Child 1]",
-      "Dr. Cohen \u2014 Clalit",
+      "Dr. Cohen — Clalit",
       "Pediatrician",
       "2026-03-20",
       "2026-09-20",
@@ -558,7 +562,7 @@
       "Notes"
     ],
     [
-      "[Make/Model \u2014 Year]",
+      "[Make/Model — Year]",
       "[XX-XXX-XX]",
       "Adar",
       "2026-10-15",
@@ -586,7 +590,7 @@
       "Bank Hapoalim",
       "Mortgage",
       "2024-06-01",
-      "\u2014",
+      "—",
       "6800",
       "81600",
       "Yes",
@@ -617,8 +621,8 @@
       "[Electricity]",
       "IEC",
       "Utility",
-      "\u2014",
-      "\u2014",
+      "—",
+      "—",
       "550",
       "6600",
       "Yes",
@@ -635,14 +639,32 @@
       "Yes"
     ],
     [
-      "[Mobile \u2014 Adar]",
+      "[Mobile — Adar]",
       "Pelephone",
       "Utility",
-      "\u2014",
-      "\u2014",
+      "—",
+      "—",
       "49",
       "588",
       "Yes"
+    ]
+  ],
+  "settings": [
+    [
+      "Key",
+      "Value"
+    ],
+    [
+      "you@example.com",
+      "Adar"
+    ],
+    [
+      "partner@example.com",
+      "Shanee"
+    ],
+    [
+      "lang",
+      "he"
     ]
   ]
 }

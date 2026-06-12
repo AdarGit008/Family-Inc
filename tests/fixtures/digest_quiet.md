@@ -1,2 +1,2 @@
-🏠 Family inc. — 2026-06-12
-(no reminders today — quiet day.)
+🏠 Family inc. · יום ו׳ 12/6
+אין תזכורות להיום — יום שקט.

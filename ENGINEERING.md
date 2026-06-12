@@ -113,15 +113,15 @@ Dashboard deploys are just `git push` (Pages rebuilds in ~30s). The PWA on both 
 
 ## 7. Testing policy
 
-Base: M1 delivered the rename + extension (55 → 115 green, 2026-06-12). Minimum bar — these exist and stay green:
+Base: M1 delivered the rename + extension (55 → 115); M2 added the write path (115 → 172, 2026-06-12). Minimum bar — these exist and stay green:
 
 | Suite | Covers |
 |---|---|
-| `test_engine.py` | fire-reason matrix (overdue/lead/due-today), tombstone skip window incl. future-skew *(recurrence bumps incl. Feb-29 + Last-Sent idempotency land with the M2 write path — no write-back exists against the seed xlsx)* |
+| `test_engine.py` | fire-reason matrix (overdue/lead/due-today), tombstone skip window incl. future-skew, recurrence bumps incl. Feb-29 clamp + Custom flagging, send-success stamping (Sent/Overdue), Last-Sent rerun idempotency end-to-end |
 | `test_outbox.py` | budget ledger: 2-cap, critical bypass, briefing exemption, shared-ledger across two sender sources, (id,target) dedup, quiet-hours hold |
-| `test_summarizer.py` | the 5 hard rules, per-group routing incl. `none`→NEEDS-A-LOOK, keyword fallback without API key |
+| `test_summarizer.py` | the 5 hard rules, per-group routing incl. `none`→NEEDS-A-LOOK, keyword fallback without API key, dispatch through the outbox (kinds, `wa-{msg_id}` ids, over-budget deferral), Sheet-tab persistence + rerun dedup |
 | `test_render_golden.py` | weekly briefing + daily digest rendered against `tests/fixtures/*.md` golden files (byte-exact; update goldens deliberately) |
-| `test_sheet.py` | row parsing tolerance: missing columns, bad dates → skipped + reported, never raised |
+| `test_sheet.py` | row parsing tolerance (missing columns, bad dates → skipped + reported, never raised), §7.1 schema-drift guard both directions + flag heal, batched write path incl. formula survival, value encoding, Settings/UserMap |
 
 LLM calls are never made in tests — `lib/llm.py` has a fake injected via env. The dashboard gets a manual smoke checklist in `DESIGN.md` §9 (no JS test harness — boring tech; revisit if app.js exceeds ~2,000 lines).
 
@@ -160,7 +160,7 @@ Rollback at any point = `git revert` + redeploy; the Sheet schema only ever gain
 
 Reviews fire on **milestones**, not every session: new spec, architecture change, anything touching delivery/budget/privacy guarantees, and each M-milestone close. Mechanism: `automation/review.py` builds the prompt + attachment list; reviewer = best available external model (Gemini default; substitutions logged). Output is resolved in-session as Apply / Defend (reason appended to the affected doc §History) / Open (PO question), and the resolution lands in `DECISIONS.md` if directional. Tiny edits never trigger review. On milestone-closing sessions the gate runs **blocking inside the handoff chain** (`… && review gate && git commit && git push` — Porto pattern, D-023): a MAJOR finding stops the commit until resolved or explicitly overridden by the PO.
 
-**review.py contract:** inputs = `--lane` (drives default attachments; `milestone` attaches all five canon docs), `--changes` (markdown bullet list of what the session changed), optional `--extra-files`, `--provider ollama|deepseek`; output = the assembled prompt (`--dry-run`) or the model's review, always saved under `reviews/review_*.md` as the audit trail (tracked). Failure behavior: a failed or truncated review never blocks a milestone — log the failure, proceed, and note it in `BACKLOG.md`. DeepSeek is a built-in provider since M1 (folded in from `run_review_deepseek.py`): plain + `--chunk` modes, key from `DEEPSEEK_API_KEY` env only. Without any provider key the script writes a clearly-marked MOCK audit file — that is not a review; rerun with a key.
+**review.py contract:** inputs = `--lane` (drives default attachments; `milestone` attaches all five canon docs), `--changes` (a PATH to a markdown bullet list of what the session changed — conventionally `reviews/session_changes_<date>_<M>.md`, tracked — or `-` for stdin; never the bullets inline), optional `--extra-files`, `--provider ollama|deepseek`; output = the assembled prompt (`--dry-run`) or the model's review, always saved under `reviews/review_*.md` as the audit trail (tracked). Failure behavior: a failed or truncated review never blocks a milestone — log the failure, proceed, and note it in `BACKLOG.md`. DeepSeek is a built-in provider since M1 (folded in from `run_review_deepseek.py`): plain + `--chunk` modes, key from `DEEPSEEK_API_KEY` env only. Without any provider key the script writes a clearly-marked MOCK audit file — that is not a review; rerun with a key.
 
 ## 12. Definition of done (any work item)
 

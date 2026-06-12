@@ -42,6 +42,7 @@ logs/*
 # them; the repo is public-portfolio-safe by construction (CLAUDE.md guardrail)
 seeds/*.csv
 
-# Local caches / staging (summarizer CSVs go away at the M2 gspread port)
+# Local caches (the summarizer staging CSVs were deleted at the M2 gspread port;
+# automation/data/ stays ignored so stale copies on dev machines never get tracked)
 automation/cache/
 automation/data/

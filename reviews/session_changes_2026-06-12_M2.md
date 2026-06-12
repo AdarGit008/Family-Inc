@@ -1,0 +1,17 @@
+# What this session changed — M2 close (2026-06-12)
+
+- gspread port: `lib/sheet.py` dual backend (live Google Sheet via `FAMILY_INC_SHEET_ID` + service account, seed xlsx otherwise); SPEC §7.1 schema-drift guard on Reminders reads AND writes (abort + `logs/schema_drift.flag`, weekly briefing surfaces it, clean read heals); seed xlsx headers aligned to §6.1 (cols M–P added, Settings/WhatsApp tabs created)
+- Engine write-backs: `daily_digest --send` stamps Last Sent/Status (Sent|Overdue) for queued-only rows; recurrence bump on Done (Due+period, Status→Pending, Last Sent cleared; month-end clamp + review flag; Custom flagged, never guessed; tombstone-guarded); classify gained the same-day Last-Sent guard — reruns are no-ops at every layer; SPEC §7.1 errata: read Status ∉ {Done, Skipped} so multi-lead-time chains survive the first Sent stamp; creds-less runs never write the seed
+- Dashboard write contract: col H (Last Sent) is engine-owned — dashboard stopped writing it (clears it on bump only); `bumpDate()` now mirrors `lib/dates.bump_due` (clamp to month-end, no Daily, Custom→null); DoneAt/Tombstone are full ISO-T datetimes (date-only tombstones had disabled the §8.3 6h window); tombstones re-stamped at flush time — the spec'd-but-missing race guard
+- Settings tab (Key|Value): UserMap (email→display name) + lang, read by both surfaces (`lib/sheet.read_settings()`, dashboard batchGet); dashboard identity = `userinfo.email` scope → Settings.UserMap → display name; `cfg.USERS` demoted to fallback; sheet `lang` = cross-device default, local toggle wins
+- Outbox consolidation complete (D-015): `queue_message()` shim deleted; summarizer + reply_handler on `queue()` with kinds (critical keyword → kind=critical) + stable `wa-{msg_id}` ids; summarizer's local budget counter deleted — the outbox ledger is the only enforcement; over-budget alerts now deferred by the outbox into tomorrow's digest instead of silently downgraded; `weekly_briefing --send` queues kind=briefing (`brief-weekly-{date}`)
+- D-014: reply footers stripped; DESIGN §6 Hebrew templates landed (digest header `🏠 Family inc. · יום ו׳ 12/6`, uniform item lines, Hebrew due phrases with dual forms mirroring the dashboard, קבוצות section with Hebrew type labels, `⚠ דורש מבט`, Hebrew bridge warning); summarizer staging CSVs deleted — WhatsApp_Inbox/Archive rows append to Sheet tabs (live-gated); hot-tab rolloff deferred to M4
+- Goldens re-cut deliberately (`--regen` made hermetic against a real reminders log); test suite 115 → 172 green; D-025 logged (contract resolutions); deps added: gspread + google-auth (lib/sheet.py live backend, D-016/SPEC §8.6)
+- review.py: `--changes` now fails cleanly (with usage hint) when handed inline text instead of a path; ENGINEERING §11 contract line clarified
+
+## Open questions deliberately left for the POs
+
+- Reply-ack outbox kind at v1.1 reinstatement: solicited acks currently ride kind=alert (consume the unsolicited budget, hold in quiet hours) — likely wants a new kind, which is a SPEC §7.5 change
+- WhatsApp_Inbox rolloff horizon: SPEC §6.2 says 90 days, config says 30 (resolve at M4 with the live-Sheet rolloff)
+- Daily digest rides kind=alert per SPEC §7.1 — two pre-dawn summarizer alerts could defer the morning digest itself; spec'd behavior, flagged as an edge
+- Weekly briefing LLM five-scene narrative (SPEC §7.2) + Hebrew pass: still the deterministic English fallback; lane unscheduled

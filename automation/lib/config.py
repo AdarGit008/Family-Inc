@@ -20,9 +20,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 AUTOMATION_DIR = ROOT / "automation"
 
-# Master data. The local xlsx is a SEED TEMPLATE only (D-016) — the gspread
-# port (M2) replaces these reads with the live Google Sheet.
+# Master data (D-016). When FAMILY_INC_SHEET_ID is set (the appliance), every
+# read/write goes to the live Google Sheet via lib/sheet.py's gspread backend.
+# Without it (tests, creds-less dev) lib/sheet.py falls back to the local seed
+# xlsx — a TEMPLATE, never a source of truth, and never written by default.
 SHEET_PATH = ROOT / "Family_OS.xlsx"
+SHEET_ID_ENV = "FAMILY_INC_SHEET_ID"              # spreadsheet id → live backend on
+SA_JSON_ENV = "FAMILY_INC_SA_JSON"                # optional override of the path below
+SA_JSON_DEFAULT = Path("/etc/family-inc/service-account.json")
+
+# Tab names with code contracts (SPEC §6) — one definition, both backends.
+REMINDERS_TAB = "Reminders"
+SETTINGS_TAB = "Settings"
+WA_INBOX_SHEET_TAB = "WhatsApp_Inbox"
+WA_ARCHIVE_SHEET_TAB = "WhatsApp_Archive"
 
 # Runtime output (gitignored)
 BRIEFINGS_DIR = ROOT / "Briefings"
@@ -30,6 +41,11 @@ LOGS_DIR = ROOT / "logs"
 REMINDERS_LOG = LOGS_DIR / "reminders_log.csv"
 LLM_COSTS_LOG = LOGS_DIR / "llm_costs.csv"
 OUTBOX_LEDGER_DIR = LOGS_DIR / "outbox_ledger"
+SCHEMA_DRIFT_FLAG = LOGS_DIR / "schema_drift.flag"   # written on §7.1 header mismatch;
+                                                     # cleared by the next clean read;
+                                                     # surfaced by the weekly briefing
+ENGINE_FLAGS = LOGS_DIR / "engine_flags.jsonl"       # rows needing human review
+                                                     # (Feb-29 clamps, Custom recurrence)
 
 # Bridge state (gitignored; the Node listener shares these paths)
 BRIDGE_DIR = AUTOMATION_DIR / "bridge"
@@ -39,11 +55,6 @@ SENT_FILE = BRIDGE_STATE_DIR / "outbox" / "whatsapp_sent.jsonl"
 DEFERRED_FILE = BRIDGE_STATE_DIR / "outbox" / "deferred.jsonl"
 INBOX_FILE = BRIDGE_STATE_DIR / "inbox" / "whatsapp_inbox.jsonl"
 HEARTBEAT_FILE = BRIDGE_STATE_DIR / "inbox" / "heartbeat.txt"
-
-# Summarizer staging CSVs (interim until the M2 gspread port; gitignored)
-DATA_DIR = AUTOMATION_DIR / "data"
-WA_INBOX_TAB = DATA_DIR / "WhatsApp_Inbox.csv"
-WA_ARCHIVE_TAB = DATA_DIR / "WhatsApp_Archive.csv"
 
 # Seeds (personal values → gitignored, stay on the machines that need them)
 SEEDS_DIR = ROOT / "seeds"
@@ -66,6 +77,7 @@ BATCH_WINDOW_MINUTES = 5     # rerun-within-window fires are deduplicated
 DIGEST_MAX_ITEMS = 5                  # keep the morning message short
 DROP_FIRST_DOMAINS = {"Goals"}        # de-prioritised — covered by the weekly briefing
 ALWAYS_INCLUDE_DOMAINS = {"Health"}   # never trimmed
+NOTES_MAX_CHARS = 120                 # DESIGN §6: notes ride along only when short
 
 # ---------------------------------------------------------------------------
 # Weekly briefing
@@ -79,11 +91,15 @@ STALE_GOAL_UPDATE_DAYS = 21     # warn if goal Last Update older than 3 weeks
 # ---------------------------------------------------------------------------
 BRIDGE_STALE_HOURS = 12          # group silence this long is suspect
 HEARTBEAT_STALE_MINUTES = 45     # bridge heartbeat is written at least every 15m
-WA_INBOX_RETENTION_DAYS = 30     # inbox CSV rows roll to monthly archives
+WA_INBOX_RETENTION_DAYS = 30     # hot-tab rolloff horizon (SPEC §6.2 says 90 —
+                                 # flagged 2026-06-12, PO call pending; rolloff
+                                 # against the live Sheet itself lands in M4)
 DIGEST_GROUP_ORDER = ["daycare", "building", "family", "neighborhood", "student", "other"]
+# Hebrew short labels, used inline per digest item (DESIGN §6: "גן — מחר יום פרי…").
+# Real group names stay in the gitignored seed; these label the TYPE.
 DIGEST_GROUP_LABEL = {
-    "daycare": "DAYCARE", "building": "BUILDING", "family": "FAMILY",
-    "neighborhood": "NEIGHBORHOOD", "student": "STUDENT", "other": "OTHER",
+    "daycare": "גן", "building": "ועד", "family": "משפחה",
+    "neighborhood": "שכונה", "student": "לימודים", "other": "אחר",
 }
 
 # ---------------------------------------------------------------------------

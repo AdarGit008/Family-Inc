@@ -5,7 +5,9 @@
   'use strict';
 
   const cfg = window.FAMILY_INC_CONFIG;
-  const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+  // spreadsheets: data; userinfo.email: who is tapping, so write-backs are
+  // attributed via Settings.UserMap (SPEC §7.6) instead of a config guess.
+  const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email';
   const DISCOVERY = 'https://sheets.googleapis.com/$discovery/rest?version=v4';
   const CACHE_KEY = 'family_inc_cache_v1';
   const QUEUE_KEY = 'family_inc_writequeue_v1';
@@ -353,6 +355,16 @@
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   }
+  // Full local ISO datetime (with T, no timezone — naive local, matching the
+  // engine). Used for the machine stamps DoneAt + WriteQueue_Tombstone: the
+  // T-form stays a TEXT cell in Sheets, so it round-trips byte-exact and the
+  // 6h tombstone window keeps hour resolution (a date-only tombstone looks
+  // hours old the moment it's written — that race guard was dead, SPEC §8.3).
+  function fmtISOts(d) {
+    if (!(d instanceof Date) || isNaN(d)) return '';
+    const p = (n) => String(n).padStart(2, '0');
+    return `${fmtISO(d)}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
   function parseDate(v) {
     if (!v) return null;
     if (v instanceof Date) return isNaN(v) ? null : v;
@@ -496,22 +508,38 @@
   }
 
   async function afterSignIn() {
-    // Identify the user via Sheets API meta — cheap & uses the same scope.
+    // Who signed in? userinfo.email scope → email; the display name comes
+    // from Settings.UserMap once the Sheet loads (SPEC §7.6: Google sign-in
+    // → Settings.UserMap → display name). cfg.USERS stays as the offline /
+    // pre-Settings fallback.
     try {
-      const meta = await gapi.client.sheets.spreadsheets.get({
-        spreadsheetId: cfg.SHEET_ID,
-        fields: 'properties.title',
+      const token = gapi.client.getToken()?.access_token;
+      const resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      // We don't get the email from Sheets directly — use the token's id_token
-      // approach would require an extra scope. Instead, we just default to the
-      // first email in cfg.USERS for attribution. User can override in Settings.
-      const emails = Object.keys(cfg.USERS);
-      state.user = { email: emails[0] || 'unknown', name: cfg.USERS[emails[0]] || 'You' };
+      const info = resp.ok ? await resp.json() : {};
+      const email = (info.email || '').toLowerCase();
+      state.user = { email: email || 'unknown', name: resolveDisplayName(email) };
     } catch (e) {
-      console.warn('Could not load Sheet meta', e);
+      console.warn('Could not resolve signed-in identity', e);
+      const emails = Object.keys(cfg.USERS || {});
+      state.user = { email: emails[0] || 'unknown', name: (cfg.USERS || {})[emails[0]] || 'You' };
     }
     showApp();
     await loadAll();
+    // Settings tab is loaded now — upgrade the display name if UserMap knows us.
+    if (state.user) state.user.name = resolveDisplayName(state.user.email);
+  }
+
+  // Settings.UserMap (email → display name) → cfg.USERS fallback → 'You'.
+  function resolveDisplayName(email) {
+    const fromSheet = state.data?.settings?.userMap?.[email];
+    if (fromSheet) return fromSheet;
+    const fromCfg = (cfg.USERS || {})[email];
+    if (fromCfg) return fromCfg;
+    // Unknown signer: fall back to the first configured user (pre-M2 behavior)
+    const emails = Object.keys(cfg.USERS || {});
+    return (cfg.USERS || {})[emails[0]] || 'You';
   }
 
   // ---------------- Data load ----------------
@@ -526,6 +554,7 @@
     }
     try {
       const tabs = cfg.TABS;
+      // Order matters — keep in sync with `named` below.
       const ranges = [
         `${tabs.reminders}!A:O`,
         `${tabs.calendarEvents}!A:H`,
@@ -537,6 +566,7 @@
         `${tabs.education}!A:I`,
         `${tabs.car}!A:I`,
         `${tabs.contracts}!A:I`,
+        `${tabs.settings || 'Settings'}!A:B`,
       ];
       const resp = await gapi.client.sheets.spreadsheets.values.batchGet({
         spreadsheetId: cfg.SHEET_ID,
@@ -544,11 +574,6 @@
         valueRenderOption: 'UNFORMATTED_VALUE',
         dateTimeRenderOption: 'FORMATTED_STRING',
       });
-      const byRange = {};
-      resp.result.valueRanges.forEach((vr, i) => {
-        byRange[Object.keys(tabs)[['reminders','calendarEvents','people','finance_bdgt','finance_txns','goals','health','education','car','contracts'][i]]] = vr.values || [];
-      });
-      // Re-key by canonical names used by parseAll:
       const named = {
         reminders: resp.result.valueRanges[0].values || [],
         calendarEvents: resp.result.valueRanges[1].values || [],
@@ -560,10 +585,12 @@
         education: resp.result.valueRanges[7].values || [],
         car: resp.result.valueRanges[8].values || [],
         contracts: resp.result.valueRanges[9].values || [],
+        settings: resp.result.valueRanges[10]?.values || [],
       };
       state.data = parseAll(named);
       state.cachedAt = new Date();
       localStorage.setItem(CACHE_KEY, JSON.stringify({ raw: named, at: state.cachedAt.toISOString() }));
+      applySheetLang();
       renderAll();
       await flushQueue();
     } catch (e) {
@@ -579,6 +606,20 @@
       } else {
         toast(t('toast.loadFailed'));
       }
+    }
+  }
+
+  // Settings.lang is the cross-device DEFAULT chrome language; an explicit
+  // local toggle (localStorage.familyinc.lang) always wins (DESIGN §7).
+  function applySheetLang() {
+    let saved = null;
+    try { saved = localStorage.getItem('familyinc.lang'); } catch {}
+    if (saved) return; // personal preference wins
+    const sheetLang = state.data?.settings?.lang;
+    if ((sheetLang === 'en' || sheetLang === 'he') && sheetLang !== currentLang()) {
+      document.documentElement.setAttribute('lang', sheetLang);
+      document.documentElement.setAttribute('dir', sheetLang === 'en' ? 'ltr' : 'rtl');
+      applyChromeStrings();
     }
   }
 
@@ -607,7 +648,7 @@
         domain: r['Domain'] || '',
         owner: r['Owner'] || '',
         due,
-        leads: (r['Lead Times (days)'] || '').toString().split(',').map(x => parseInt(x, 10)).filter(x => !isNaN(x)),
+        leads: (r['Lead Times'] ?? r['Lead Times (days)'] ?? '').toString().split(',').map(x => parseInt(x, 10)).filter(x => !isNaN(x)),
         recurrence: r['Recurrence'] || 'One-off',
         status,
         lastSent: parseDate(r['Last Sent']),
@@ -633,6 +674,16 @@
       notes: r['Notes'] || '',
     }));
     const people = rowsToObjects(named.people);
+    // Settings tab (SPEC §6.4): Key|Value rows — keys containing '@' build
+    // UserMap (email → display name); key 'lang' is the chrome default.
+    const settings = { userMap: {}, lang: null };
+    (named.settings || []).slice(1).forEach(row => {
+      const key = String(row?.[0] ?? '').trim();
+      const value = String(row?.[1] ?? '').trim();
+      if (!key || !value) return;
+      if (key.includes('@')) settings.userMap[key.toLowerCase()] = value;
+      else if (key.toLowerCase() === 'lang') settings.lang = value;
+    });
     const budget = rowsToObjects(named.finance_bdgt).map(r => ({
       category: r['Category'],
       target: parseFloat(r['Monthly Target (ILS)']) || 0,
@@ -685,7 +736,7 @@
       monthly: parseFloat(r['Monthly Cost (ILS)']) || 0,
     })).filter(c => c.contract);
 
-    return { reminders, calendarEvents, people, budget, txns, goals, health, education, car, contracts };
+    return { reminders, calendarEvents, people, budget, txns, goals, health, education, car, contracts, settings };
   }
 
   // ---------------- Render ----------------
@@ -1170,7 +1221,7 @@
     r.status = 'Done';
     r.flag = '';
     const now = new Date();
-    const iso = fmtISO(now);
+    const ts = fmtISOts(now);
     const userName = (state.user && state.user.name) || 'Dashboard';
     r.lastDoneBy = userName;
     r.doneAt = now;
@@ -1178,23 +1229,28 @@
     const colM = colLetter(13);  // LastDoneBy
     const colN = colLetter(14);  // DoneAt
     const colO = colLetter(15);  // WriteQueue_Tombstone
+    // SPEC §6.1 write contract: intent columns + M, N (completion) + always O.
+    // Col H (Last Sent) is ENGINE-owned — the dashboard never writes it,
+    // except clearing it as part of the §7.1 recurrence bump below.
     const writes = [
       { range: `${cfg.TABS.reminders}!G${rowNum}`, value: 'Done' },
-      { range: `${cfg.TABS.reminders}!H${rowNum}`, value: iso },
       { range: `${cfg.TABS.reminders}!${colM}${rowNum}`, value: userName },
-      { range: `${cfg.TABS.reminders}!${colN}${rowNum}`, value: iso },
-      { range: `${cfg.TABS.reminders}!${colO}${rowNum}`, value: iso },
+      { range: `${cfg.TABS.reminders}!${colN}${rowNum}`, value: ts },
+      { range: `${cfg.TABS.reminders}!${colO}${rowNum}`, value: ts },
     ];
-    // Bump recurring
+    // Bump recurring (mirror of automation/lib/dates.bump_due — keep in sync)
     if (r.recurrence && r.recurrence !== 'One-off' && r.due) {
       const bumped = bumpDate(r.due, r.recurrence);
       if (bumped) {
         writes.push({ range: `${cfg.TABS.reminders}!D${rowNum}`, value: fmtISO(bumped) });
         writes.push({ range: `${cfg.TABS.reminders}!G${rowNum}`, value: 'Pending' });
+        writes.push({ range: `${cfg.TABS.reminders}!H${rowNum}`, value: '' }); // Last Sent cleared (§7.1)
         r.due = bumped; r.status = 'Pending';
         r.daysUntil = daysBetween(bumped, state.today);
         r.flag = flagFor(r.daysUntil, r.status);
       }
+      // Unbumpable period (Custom/unknown): row stays Done; the engine flags
+      // it for review (logs/engine_flags.jsonl) instead of either side guessing.
     }
     await applyWrites(writes, t('action.markedDone', { title: r.title }));
     renderAll();
@@ -1212,7 +1268,7 @@
     await applyWrites([
       { range: `${cfg.TABS.reminders}!D${rowNum}`, value: fmtISO(newDate) },
       { range: `${cfg.TABS.reminders}!G${rowNum}`, value: 'Snoozed' },
-      { range: `${cfg.TABS.reminders}!O${rowNum}`, value: fmtISO(new Date()) },
+      { range: `${cfg.TABS.reminders}!O${rowNum}`, value: fmtISOts(new Date()) },
     ], t('action.snoozed', { title: r.title, days }));
     renderAll();
   }
@@ -1227,21 +1283,27 @@
     r.notes = newNotes;
     await applyWrites([
       { range: `${cfg.TABS.reminders}!J${rowNum}`, value: newNotes },
-      { range: `${cfg.TABS.reminders}!O${rowNum}`, value: fmtISO(new Date()) },
+      { range: `${cfg.TABS.reminders}!O${rowNum}`, value: fmtISOts(new Date()) },
     ], t('action.noteAdded'));
     renderAll();
   }
 
+  // Mirror of automation/lib/dates.bump_due (SPEC §7.1) — same periods, same
+  // clamp-to-month-end rule (Feb-29 → Feb-28, Jan-31 +1mo → Feb-28/29). JS
+  // setMonth() overflows instead of clamping, so we clamp by hand. Unknown
+  // periods (incl. Custom) return null: no bump, engine flags for review.
   function bumpDate(d, recurrence) {
-    const x = new Date(d);
-    switch (recurrence) {
-      case 'Daily': x.setDate(x.getDate() + 1); return x;
-      case 'Weekly': x.setDate(x.getDate() + 7); return x;
-      case 'Monthly': x.setMonth(x.getMonth() + 1); return x;
-      case 'Quarterly': x.setMonth(x.getMonth() + 3); return x;
-      case 'Yearly': x.setFullYear(x.getFullYear() + 1); return x;
-      default: return null;
+    const months = { Monthly: 1, Quarterly: 3, Yearly: 12 }[recurrence];
+    if (recurrence === 'Weekly') {
+      const x = new Date(d);
+      x.setDate(x.getDate() + 7);
+      return x;
     }
+    if (!months) return null;
+    const total = d.getFullYear() * 12 + d.getMonth() + months;
+    const y = Math.floor(total / 12), m = total % 12;
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    return new Date(y, m, Math.min(d.getDate(), lastDay));
   }
 
   async function applyWrites(writes, label) {
@@ -1276,12 +1338,21 @@
   async function flushQueue() {
     if (!state.pendingWrites.length || cfg.DEMO_MODE) return;
     const queue = state.pendingWrites.slice();
+    // SPEC §8.3: the tombstone is written AT FLUSH — the engine's 6h race
+    // window starts when the write lands on the Sheet, not when the offline
+    // tap happened. Refresh every col-O value to now; everything else flushes
+    // as queued (in tap order).
+    const flushTs = fmtISOts(new Date());
+    const isTombstone = (range) => /!O\d+$/.test(range);
     try {
       await gapi.client.sheets.spreadsheets.values.batchUpdate({
         spreadsheetId: cfg.SHEET_ID,
         resource: {
           valueInputOption: 'USER_ENTERED',
-          data: queue.map(w => ({ range: w.range, values: [[w.value]] })),
+          data: queue.map(w => ({
+            range: w.range,
+            values: [[isTombstone(w.range) ? flushTs : w.value]],
+          })),
         },
       });
       state.pendingWrites = [];

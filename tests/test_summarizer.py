@@ -5,6 +5,7 @@ that keeps classification working with the API key revoked."""
 import re
 from datetime import date
 
+from automation import templates as T
 from automation.whatsapp_summarizer import (
     build_digest,
     classify,
@@ -162,7 +163,8 @@ class TestRouting:
 
 
 # ---------------------------------------------------------------------------
-# Digest builder — none-routed ALERTs float to NEEDS A LOOK (SPEC §7.3)
+# Digest builder — DESIGN §6 Hebrew section: ⚠ דורש מבט floats first, then
+# קבוצות (24ש׳) with Hebrew type labels in fixed group order
 # ---------------------------------------------------------------------------
 class TestBuildDigest:
     def _row(self, **overrides):
@@ -182,25 +184,138 @@ class TestBuildDigest:
         rows = [self._row(classification="ALERT", action_owner="none",
                           one_liner="משהו דחוף בקבוצה משפחתית")]
         digest = build_digest(rows, date(2026, 6, 10))
-        assert "⚠ NEEDS A LOOK" in digest
+        assert T.WA_NEEDS_A_LOOK in digest
         assert "משהו דחוף" in digest
+        # the float happens INSTEAD of a regular listing, not in addition
+        assert digest.count("משהו דחוף") == 1
 
-    def test_groups_render_in_fixed_order(self):
+    def test_groups_render_in_fixed_order_with_hebrew_labels(self):
         rows = [
             self._row(msg_id="m1", group_type="building", one_liner="מעלית מושבתת"),
             self._row(msg_id="m2", group_type="daycare", one_liner="יום פירות"),
         ]
         digest = build_digest(rows, date(2026, 6, 10))
-        assert digest.index("DAYCARE") < digest.index("BUILDING")
+        assert digest.index(T.WA_SECTION_HEAD) < digest.index("גן —")
+        assert digest.index("גן — יום פירות") < digest.index("ועד — מעלית מושבתת")
+        assert "(הגננת, 08:00)" in digest
 
     def test_routine_rows_not_shown(self):
         rows = [self._row(classification="ROUTINE", one_liner="")]
         digest = build_digest(rows, date(2026, 6, 10))
-        assert "0 alerts fired" in digest
+        assert digest.strip() == ""  # nothing to say → empty section, omitted upstream
 
     def test_warning_prepends(self):
-        digest = build_digest([], date(2026, 6, 10), warning="⚠ BRIDGE SILENT 14h")
-        assert "BRIDGE SILENT" in digest.splitlines()[2]
+        digest = build_digest([self._row()], date(2026, 6, 10),
+                              warning="⚠ הגשר שקט 14 שעות — ייתכן שפספסנו הודעות")
+        assert digest.splitlines()[0].startswith("⚠ הגשר שקט")
+        assert T.WA_SECTION_HEAD in digest
+
+    def test_no_reply_footers_anywhere(self):
+        """D-014: messages end with content, not instructions."""
+        rows = [self._row(), self._row(msg_id="m9", classification="ALERT",
+                                       action_owner="none", one_liner="עוד משהו")]
+        digest = build_digest(rows, date(2026, 6, 10))
+        assert "Reply" not in digest and "השב" not in digest
+
+
+# ---------------------------------------------------------------------------
+# Dispatch — the outbox ledger is the ONLY budget enforcement (D-015), ids
+# are stable wa-{msg_id} (SPEC §8.4)
+# ---------------------------------------------------------------------------
+class TestDispatch:
+    def _outbox_rows(self):
+        import json
+        from automation.lib import config
+        if not config.OUTBOX_FILE.exists():
+            return []
+        return [json.loads(ln) for ln in
+                config.OUTBOX_FILE.read_text(encoding="utf-8").splitlines()]
+
+    def _patch_briefings(self, monkeypatch, tmp_path):
+        import automation.whatsapp_summarizer as was
+        monkeypatch.setattr(was, "BRIEFINGS_DIR", tmp_path / "Briefings")
+
+    def test_alert_queues_with_wa_id_and_kind(self, tmp_runtime, monkeypatch, tmp_path):
+        from automation.whatsapp_summarizer import dispatch_alert
+        self._patch_briefings(monkeypatch, tmp_path)
+        ok = dispatch_alert(_msg(msg_id="m77", text="ביטול חוגים"), "ביטול חוגים היום",
+                            "both", "daycare", dry_run=False, critical=False)
+        assert ok
+        rows = self._outbox_rows()
+        assert rows[-1]["id"] == "wa-m77"
+        assert rows[-1]["kind"] == "alert"
+        assert rows[-1]["body"].startswith("גן: ")
+
+    def test_critical_bypasses_exhausted_budget(self, tmp_runtime, monkeypatch, tmp_path):
+        from datetime import datetime
+        from automation.lib import outbox
+        from automation.whatsapp_summarizer import dispatch_alert
+        self._patch_briefings(monkeypatch, tmp_path)
+        now = datetime.now()  # same (real) ledger day as dispatch_alert's clock
+        outbox.queue("both", "a1", "alert", source="t", msg_id="x1", now=now)
+        outbox.queue("both", "a2", "alert", source="t", msg_id="x2", now=now)
+        ok = dispatch_alert(_msg(msg_id="m11", text="חירום"), "הגן סגור מחר",
+                            "both", "daycare", dry_run=False, critical=True)
+        assert ok
+        rows = self._outbox_rows()
+        assert rows[-1]["kind"] == "critical"
+        assert rows[-1]["body"].startswith("⚠ גן: ")
+
+    def test_standard_alert_over_budget_defers_not_queues(self, tmp_runtime,
+                                                          monkeypatch, tmp_path):
+        from datetime import datetime
+        from automation.lib import config, outbox
+        from automation.whatsapp_summarizer import dispatch_alert
+        self._patch_briefings(monkeypatch, tmp_path)
+        # dispatch_alert queues with the real clock — exhaust the budget on
+        # the same (real) ledger day.
+        now = datetime.now()
+        outbox.queue("both", "a1", "alert", source="t", msg_id="x1", now=now)
+        outbox.queue("both", "a2", "alert", source="t", msg_id="x2", now=now)
+        before = len(self._outbox_rows())
+        ok = dispatch_alert(_msg(msg_id="m78", text="עוד משהו"), "עוד אחד",
+                            "both", "daycare", dry_run=False, critical=False)
+        assert not ok
+        assert len(self._outbox_rows()) == before  # nothing queued today
+        assert config.DEFERRED_FILE.exists()       # …it rides tomorrow's digest
+
+    def test_dry_run_queues_nothing(self, tmp_runtime, monkeypatch, tmp_path):
+        from automation.whatsapp_summarizer import dispatch_alert
+        self._patch_briefings(monkeypatch, tmp_path)
+        ok = dispatch_alert(_msg(msg_id="m79"), "אחד", "both", "daycare",
+                            dry_run=True, critical=False)
+        assert not ok and self._outbox_rows() == []
+
+
+# ---------------------------------------------------------------------------
+# Persistence — Inbox/Archive tabs via lib/sheet (no CSVs since M2)
+# ---------------------------------------------------------------------------
+class TestPersistence:
+    def _rows(self):
+        return [{
+            "msg_id": "m1", "group_name": "הגן", "group_type": "daycare",
+            "sender_name": "הגננת", "sender_role": "teacher",
+            "received_at": "2026-06-10T08:00:00", "text": "מחר טיול",
+            "has_media": False, "classification": "DIGEST",
+            "one_liner": "מחר טיול", "action_required": True,
+            "action_owner": "both", "critical": False, "dispatched": False,
+            "dispatched_at": "", "digested_at": "",
+        }]
+
+    def test_persist_and_dedup_roundtrip(self, tmp_path):
+        from openpyxl import Workbook
+        from automation.whatsapp_summarizer import _processed_ids, persist_rows
+        p = tmp_path / "s.xlsx"
+        wb = Workbook()
+        wb.active.title = "README"
+        wb.save(p)
+        assert persist_rows(self._rows(), sheet_path=p)
+        assert _processed_ids(sheet_path=p) == {"m1"}
+
+    def test_no_live_backend_skips_loudly(self, capsys):
+        from automation.whatsapp_summarizer import persist_rows
+        assert not persist_rows(self._rows(), sheet_path=None, live_override=False)
+        assert "NOT appended" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------

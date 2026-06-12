@@ -128,7 +128,7 @@ Authoritative tab list. Column-level schema for the three tabs with code contrac
 
 ### 6.2 `WhatsApp_Inbox` (hot, 90-day rolloff) + `WhatsApp_Archive` (text-only, forever)
 
-As built: msg_id, group_name, group_type, sender_name, sender_role, received_at, text, has_media, classification, one_liner, action_required, action_owner, digested_at. Archive keeps msg_id/group/sender/received_at/text/one_liner only. Media is never stored — only the fact it existed.
+As built: msg_id, group_name, group_type, sender_name, sender_role, received_at, text, has_media, classification, one_liner, action_required, action_owner, critical, dispatched, dispatched_at, digested_at. Archive keeps msg_id/group/sender/received_at/text/one_liner only. Media is never stored — only the fact it existed. (critical/dispatched/dispatched_at are the outbox outcome record; budget enforcement itself lives only in the outbox ledger, §7.5.)
 
 ### 6.3 `WhatsApp_Group_Config`
 
@@ -136,7 +136,7 @@ group_name · group_type · importance_default (alert_eligible/digest_only/mute)
 
 ### 6.4 Other tabs
 
-`People`, `Calendar-Events`, `Finance-Budget`, `Goals`, `Health`, `Education`, `Car`, `Contracts`, `Contacts`, `Settings` (UserMap email→display-name, lang), `Reminders-Archive` (one-offs roll here monthly). Money values are **ILS only**; legacy USD figures from the kickoff are restated in ILS in the Sheet.
+`People`, `Calendar-Events`, `Finance-Budget`, `Goals`, `Health`, `Education`, `Car`, `Contracts`, `Contacts`, `Settings` (Key|Value rows: keys containing `@` are UserMap entries email→display-name; key `lang` is the chrome default), `Reminders-Archive` (one-offs roll here monthly). Money values are **ILS only**; legacy USD figures from the kickoff are restated in ILS in the Sheet.
 
 ## 7. Component contracts
 
@@ -145,8 +145,12 @@ group_name · group_type · importance_default (alert_eligible/digest_only/mute)
 ```
 validate header row against the §6.1 column map; on mismatch: abort the run,
   log schema_drift, surface it in the next briefing (guards the dual write-path:
-  dashboard and engine must agree on columns before anything fires)
-read Reminders where Status ∈ {Pending, Snoozed, Overdue}
+  dashboard and engine must agree on columns before anything fires; write-backs
+  validate BEFORE the batch is issued — a drifted sheet is never partially
+  written by position)
+read Reminders where Status ∉ {Done, Skipped} — Sent rows stay eligible, or a
+  60,30,7,1 lead-time chain would die at its first fire (errata 2026-06-12;
+  same-day re-fires are blocked by the Last-Sent guard, §8.4)
   skip if WriteQueue_Tombstone within 6h        → log skipped_due_to_tombstone + age
   fire if: days_until < 0 AND last sent ≥3d ago → OVERDUE
         or days_until ∈ Lead Times              → LEAD-TIME
@@ -200,7 +204,7 @@ Read: `batchGet` all bound ranges (DESIGN.md carries the UI contract). Write: pe
 
 ### 8.3 Offline write / engine race (tombstone)
 
-Dashboard stamps `WriteQueue_Tombstone` on every write; engine skips rows tombstoned <6h. Residual accepted race: phone offline >6h with a queued tap (tombstone is written at flush) → at most one duplicate alert; the flush itself is idempotent. **Tuning is data-driven, not anecdotal:** every skip is logged with tombstone age, and the weekly briefing reports "N tombstone skips · max age seen" — widen the window when the age distribution approaches 6h, not when someone remembers a duplicate.
+Dashboard stamps `WriteQueue_Tombstone` (ISO-T datetime) on every write — queued offline writes re-stamp it at flush, so the cell always carries the moment the write *landed* on the Sheet. The engine compares that cell value against its own `now()` and skips the row while `cell + 6h > now()` (one clock semantics: the window starts at flush, not at the tap). Residual accepted race: phone offline with a queued tap that flushes inside the same minute the engine reads → at most one duplicate alert; the flush itself is idempotent. **Tuning is data-driven, not anecdotal:** every skip is logged with tombstone age, and the weekly briefing reports "N tombstone skips · max age seen" — widen the window when the age distribution approaches 6h, not when someone remembers a duplicate.
 
 ### 8.4 Idempotency & dedup
 
@@ -208,7 +212,7 @@ Outbox messages carry stable ids: engine = `rem-{row}-{date}`, summarizer = `wa-
 
 ### 8.5 Time & locale
 
-All schedules in Asia/Jerusalem (DST-correct via system TZ, never UTC offsets). Dates DD/MM/YYYY; week starts Sunday; money `Intl.NumberFormat('he-IL', ILS)` / `₪{n:,}` in Python. Chrome strings Hebrew-default with English fallback; data values stay Hebrew always.
+All schedules in Asia/Jerusalem (DST-correct via system TZ, never UTC offsets). Dates DD/MM/YYYY; week starts Sunday; money `Intl.NumberFormat('he-IL', ILS)` / `₪{n:,}` in Python. Chrome strings Hebrew-default with English fallback; data values stay Hebrew always. Machine-written datetime stamps (Last Sent, DoneAt, WriteQueue_Tombstone) are ISO-8601 `T`-form text in both surfaces — the T keeps Sheets from coercing them into locale-formatted date cells, so they round-trip byte-exact and keep the hour resolution the 6h tombstone window needs.
 
 ### 8.6 Privacy & security
 

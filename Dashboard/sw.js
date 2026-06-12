@@ -1,7 +1,7 @@
 // Family inc. dashboard — minimal service worker.
 // Caches the app shell so the dashboard opens offline; data still tries network first.
 
-const SHELL_CACHE = 'family-inc-shell-v1';
+const SHELL_CACHE = 'family-inc-shell-v2'; // v2: M2 — Settings/UserMap identity, write-contract fixes
 const SHELL_FILES = [
   './',
   './index.html',

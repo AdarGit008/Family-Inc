@@ -27,9 +27,12 @@ window.FAMILY_INC_CONFIG = {
     education: "Education",
     car: "Car",
     contracts: "Contracts",
+    settings: "Settings",
   },
 
-  // Signed-in email → display name. Write-backs are attributed from this.
+  // FALLBACK identity map (email → display name), used only until the Sheet's
+  // Settings tab loads or when it has no UserMap rows. The live mapping is
+  // Settings.UserMap in Family_OS (SPEC §7.6) — edit it there, not here.
   USERS: {
     "you@example.com": "Adar",
     "partner@example.com": "Shanee",

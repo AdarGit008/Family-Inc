@@ -2,19 +2,25 @@
 Family inc. — Weekly Briefing (SPEC.md §7.2: Sat 21:00, D-011)
 
 Renamed from sunday_briefing.py in M1 — it runs Saturday evening. Generates
-the cross-domain weekly briefing from the master workbook (via lib/sheet.py;
-gspread at M2) and writes Briefings/{date}_weekly_briefing.md.
+the cross-domain weekly briefing from the master workbook (lib/sheet.py — the
+live Google Sheet when configured) and writes
+Briefings/{date}_weekly_briefing.md; with --send it also queues through
+lib/outbox.py (kind=briefing: budget-exempt, quiet-hours held; SPEC §7.2,
+id=brief-weekly-{date}).
 
 Sections (in order): week ahead · reminders firing this week · overdue ·
-money · goals · data hygiene.
+money · goals · data hygiene (which also surfaces schema-drift flags and
+engine review flags — ENGINEERING §8 self-reporting: humans never read logs
+unless the briefing says to).
 
 The SPEC §7.2 LLM-written five-scene narrative (DESIGN.md §6) with this
-deterministic template as its fallback is wired at M2 via lib/llm.py — what
-follows IS the fallback path, shipping first.
+deterministic template as its fallback is still an open lane — what follows
+IS the fallback path.
 
 Run modes:
   python3 automation/weekly_briefing.py             # today's date, writes file
   python3 automation/weekly_briefing.py --dry-run   # print only
+  python3 automation/weekly_briefing.py --send      # also queue to the outbox (M3)
   python3 automation/weekly_briefing.py --as-of 2026-05-31
 """
 from __future__ import annotations
@@ -25,14 +31,14 @@ if __package__ in (None, ""):  # direct `python3 automation/weekly_briefing.py`
     _sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
 
 import argparse
+import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from automation import templates as T
-from automation.lib import config
+from automation.lib import config, outbox, sheet
 from automation.lib.dates import fmt_date, to_date
 from automation.lib.money import fmt_money, pct
-from automation.lib.sheet import load_workbook_data
 
 
 # ---------------------------------------------------------------------------
@@ -199,8 +205,29 @@ def section_goals(wb, today: date) -> str:
     return "\n".join(lines)
 
 
-def section_hygiene(wb, today: date) -> str:
+def _system_flags() -> list[str]:
+    """Fail-loud surfacing (ENGINEERING §8): schema drift aborts engine runs
+    silently from the humans' perspective — the briefing is where they hear
+    about it. Engine review flags (Feb-29 clamps, Custom recurrence) ride
+    along until someone clears the file."""
     issues = []
+    drift = sheet.schema_drift_flag()
+    if drift:
+        issues.append("- ⚠ **schema drift**: Reminders header no longer matches "
+                      f"SPEC §6.1 — engine runs are aborting ({'; '.join(drift.get('problems', []))})")
+    if config.ENGINE_FLAGS.exists():
+        flags = [json.loads(ln) for ln in
+                 config.ENGINE_FLAGS.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        for f in flags[-5:]:
+            issues.append(f"- ⚠ engine flag: {f.get('reason', '?')} — row {f.get('row', '?')} "
+                          f"`{f.get('title', '')}`")
+        if len(flags) > 5:
+            issues.append(f"- (+{len(flags) - 5} older engine flags in logs/engine_flags.jsonl)")
+    return issues
+
+
+def section_hygiene(wb, today: date) -> str:
+    issues = _system_flags()
     # Reminders missing due date
     r_ws = wb["Reminders"]
     missing = 0
@@ -263,8 +290,9 @@ def render_briefing(wb, today: date) -> str:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-def run(today: date, dry_run: bool = False) -> Path | None:
-    wb = load_workbook_data(config.SHEET_PATH)
+def run(today: date, dry_run: bool = False, send: bool = False,
+        sheet_path: Path | None = None) -> Path | None:
+    wb = sheet.workbook(sheet_path)  # live Sheet when configured (D-016)
     body = render_briefing(wb, today)
     if dry_run:
         print(body)
@@ -273,6 +301,11 @@ def run(today: date, dry_run: bool = False) -> Path | None:
     out = config.BRIEFINGS_DIR / f"{today.isoformat()}_weekly_briefing.md"
     out.write_text(body, encoding="utf-8")
     print(f"wrote {out}")
+    if send:
+        res = outbox.queue("both", body, "briefing", source="weekly_briefing",
+                           msg_id=f"brief-weekly-{today.isoformat()}")
+        print(f"queued briefing → both: {len(res.queued)} row(s)"
+              + (f", duplicate {res.duplicates}" if res.duplicates else ""))
     return out
 
 
@@ -280,9 +313,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--as-of", help="YYYY-MM-DD; defaults to today")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--send", action="store_true",
+                    help="queue to the bridge outbox (M3 timers use this)")
     args = ap.parse_args()
     today = datetime.strptime(args.as_of, "%Y-%m-%d").date() if args.as_of else date.today()
-    run(today, dry_run=args.dry_run)
+    run(today, dry_run=args.dry_run, send=args.send)
 
 
 if __name__ == "__main__":

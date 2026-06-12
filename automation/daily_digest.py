@@ -12,8 +12,10 @@ lib/outbox.py (kind=alert per SPEC §7.1, id=brief-daily-{date}).
 Until M3 go-live, run WITHOUT --send: files are written, nobody is messaged,
 and nothing accumulates in the bridge outbox.
 
-On-send-success Sheet stamping (Last Sent / Status per §7.1) arrives with the
-M2 gspread port — there is no write-back against the seed xlsx.
+On send success (--send, rows actually queued this run) the digest stamps each
+fired row back to the Sheet: Last Sent = now, Status = Sent | Overdue (SPEC
+§7.1/§7.2). Stamping is skipped — loudly — when no live backend is configured,
+so a dev-machine --send can never mutate the committed seed xlsx.
 
 Run modes:
   python3 automation/daily_digest.py             # write Briefings/ files
@@ -30,47 +32,52 @@ if __package__ in (None, ""):  # direct `python3 automation/daily_digest.py`
 
 import argparse
 import csv
+from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Callable, Optional
 
 from automation import templates as T
 from automation import reminders_engine as engine
-from automation.lib import config, outbox
+from automation.lib import config, outbox, sheet
+from automation.lib.dates import fmt_date_he
 
 # ---------------------------------------------------------------------------
-# Reminders section (renderer moved verbatim from the pre-M1 engine;
-# byte-stability is locked by tests/test_render_golden.py)
+# Reminders section (DESIGN §6 v1: one line per item — flag emoji · title ·
+# due phrase; notes ride along only when ≤120 chars; no reply footers, D-014.
+# Byte-stability is locked by tests/test_render_golden.py)
 # ---------------------------------------------------------------------------
 def due_phrase(f: engine.Fire) -> str:
-    if f.days_until < 0:
-        return T.DUE_OVERDUE.format(n=-f.days_until, s="s" if f.days_until != -1 else "")
-    if f.days_until == 0:
+    n = f.days_until
+    if n < 0:
+        if n == -1:
+            return T.DUE_OVERDUE_1
+        if n == -2:
+            return T.DUE_OVERDUE_2
+        return T.DUE_OVERDUE_N.format(n=-n)
+    if n == 0:
         return T.DUE_TODAY
-    return T.DUE_FUTURE.format(n=f.days_until, date=f.reminder.due.isoformat())
+    if n == 1:
+        return T.DUE_TOMORROW
+    if n == 2:
+        return T.DUE_IN_2
+    return T.DUE_IN_N.format(n=n)
 
 
 def render_digest(d: engine.Digest, today: date) -> str:
-    head = T.DIGEST_HEAD.format(date=today.isoformat())
+    head = T.DIGEST_HEAD.format(date=fmt_date_he(today))
     if not d.fires:
         return f"{head}\n{T.DIGEST_QUIET_DAY}"
-    if len(d.fires) == 1:
-        f = d.fires[0]
-        emoji = T.FLAG_EMOJI.get(f.reason, "•")
-        body = f"{head}\n" + T.DIGEST_SINGLE_ITEM.format(
-            emoji=emoji, title=f.reminder.title, due_phrase=due_phrase(f))
-        if f.reminder.notes:
-            body += f"\n{f.reminder.notes}"
-        body += T.DIGEST_FOOTER_SINGLE
-        return body
-    lines = [head, T.DIGEST_MULTI_INTRO.format(n=len(d.fires))]
-    for i, f in enumerate(d.fires, 1):
-        emoji = T.FLAG_EMOJI.get(f.reason, "•")
+    lines = [head]
+    for f in d.fires:
         lines.append(T.DIGEST_ITEM.format(
-            i=i, emoji=emoji, title=f.reminder.title, due_phrase=due_phrase(f)))
+            emoji=T.FLAG_EMOJI.get(f.reason, "•"),
+            title=f.reminder.title, due_phrase=due_phrase(f)))
+        notes = f.reminder.notes.strip()
+        if notes and len(notes) <= config.NOTES_MAX_CHARS:
+            lines.append(notes)
     if d.dropped:
-        lines.append("\n" + T.DIGEST_MORE_IN_DASHBOARD.format(n=len(d.dropped)))
-    lines.append(T.DIGEST_FOOTER_MULTI)
+        lines.append(T.DIGEST_MORE_IN_DASHBOARD.format(n=len(d.dropped)))
     return "\n".join(lines)
 
 
@@ -149,11 +156,19 @@ def _hebcal_line(today: date, shabbat_times: Optional[Callable]) -> str:
 _DEFAULT = object()  # sentinel: "use the real hebcal client"
 
 
+@dataclass
+class Assembly:
+    """Rendered messages plus the digests they were rendered from — the send
+    path stamps Last Sent/Status for exactly the fires that went out."""
+    messages: dict[str, str] = field(default_factory=dict)
+    digests: dict[str, engine.Digest] = field(default_factory=dict)
+
+
 def assemble(today: date, now: Optional[datetime] = None,
              sheet_path: Optional[Path] = None,
              briefings_dir: Optional[Path] = None,
              shabbat_times: Optional[Callable] = _DEFAULT,
-             deferred: Optional[list[dict]] = None) -> dict[str, str]:
+             deferred: Optional[list[dict]] = None) -> Assembly:
     """One rendered message per recipient. Pure given its inputs (the Hebcal
     fetcher and the deferred list are injectable so tests stay deterministic
     and dry runs never consume the deferred queue)."""
@@ -190,7 +205,7 @@ def assemble(today: date, now: Optional[datetime] = None,
         if hebcal:
             parts.append(hebcal)
         messages[rcpt] = "\n\n".join(parts) + "\n"
-    return messages
+    return Assembly(messages=messages, digests=digests)
 
 
 # ---------------------------------------------------------------------------
@@ -208,10 +223,34 @@ def write_briefing_files(messages: dict[str, str], today: date,
     return out
 
 
-def run(today: date, dry_run: bool = False, send: bool = False) -> dict[str, str]:
+def stamp_sent(assembly: Assembly, queued_for: set[str], now: datetime,
+               sheet_path: Optional[Path] = None) -> int:
+    """Write Last Sent/Status for every row that reached at least one phone
+    this run (SPEC §7.1 'on send success'). Returns rows stamped. Deferred or
+    duplicate targets don't count as sent — their rows stay eligible."""
+    fires = [f for rcpt in queued_for
+             for f in assembly.digests.get(rcpt, engine.Digest(rcpt)).fires]
+    writes = engine.stamp_writes(fires, now)
+    if not writes:
+        return 0
+    if sheet_path is None and not sheet.is_live():
+        print("[warn] no live Sheet backend — Last Sent/Status NOT stamped "
+              "(refusing to write the seed xlsx)")
+        return 0
+    sheet.update_reminders(writes, sheet_path)
+    return len({w.row for w in writes})
+
+
+def run(today: date, dry_run: bool = False, send: bool = False,
+        sheet_path: Optional[Path] = None) -> dict[str, str]:
+    # The run's clock: wall time normally, 07:30 of the simulated day under
+    # --as-of — stamps must carry the day they speak about, or the Last-Sent
+    # rerun guard can't see them.
+    now = datetime.now() if today == date.today() else datetime.combine(today, time(7, 30))
     # Real runs consume the deferred queue; dry runs only peek.
     deferred = outbox.read_deferred(today) if dry_run else outbox.pop_deferred(today)
-    messages = assemble(today, deferred=deferred)
+    assembly = assemble(today, now=now, deferred=deferred, sheet_path=sheet_path)
+    messages = assembly.messages
     if dry_run:
         for rcpt, body in messages.items():
             print(f"\n=== to {rcpt} ===\n{body}")
@@ -221,12 +260,18 @@ def run(today: date, dry_run: bool = False, send: bool = False) -> dict[str, str
     if send:
         if not outbox.bridge_alive():
             print("[warn] bridge heartbeat stale — digest queued, delivery waits for reconnect")
+        queued_for: set[str] = set()
         for rcpt, body in messages.items():
             res = outbox.queue(rcpt, body, "alert", source="daily_digest",
                                msg_id=f"brief-daily-{today.isoformat()}")
+            if res.queued:
+                queued_for.add(rcpt)
             print(f"queued → {rcpt}: {len(res.queued)} row(s)"
                   + (f", deferred {res.deferred}" if res.deferred else "")
                   + (f", duplicate {res.duplicates}" if res.duplicates else ""))
+        stamped = stamp_sent(assembly, queued_for, now, sheet_path)
+        if stamped:
+            print(f"stamped Last Sent/Status on {stamped} row(s)")
     return messages
 
 

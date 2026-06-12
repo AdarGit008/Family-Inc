@@ -1,9 +1,10 @@
 """Golden-file tests — daily digest + weekly briefing rendered byte-exact
 against tests/fixtures/*.md (ENGINEERING §7).
 
-The goldens freeze the as-built M1 copy (English, reply footers). The M2
-template swap (DESIGN §6 Hebrew, D-014 footer removal) updates them
-DELIBERATELY: review the diff, then regenerate with
+The goldens freeze the M2 copy: DESIGN §6 Hebrew daily digest, D-014 footer
+removal (messages end with content, not instructions), Hebrew קבוצות section.
+The weekly briefing fallback is still the as-built English markdown. Copy
+changes update goldens DELIBERATELY: review the diff, then regenerate with
 
     python3 tests/test_render_golden.py --regen
 """
@@ -63,7 +64,9 @@ def _assembled_inputs(tmp_path):
     wb = Workbook()
     ws = wb.active
     ws.title = "Reminders"
-    ws.append(["Title", "Domain", "Owner", "Due Date", "Lead Times", "Recurrence", "Status"])
+    ws.append(["Title", "Domain", "Owner", "Due Date", "Lead Times", "Recurrence",
+               "Status", "Last Sent", "Channel", "Notes", "Days Until", "Auto-flag",
+               "LastDoneBy", "DoneAt", "WriteQueue_Tombstone", "Guide URL"])
     ws.append(["Car annual test", "Car", "Adar", date(2026, 6, 9), "7,1", "Yearly", "Pending"])
     ws.append(["Kid dentist appointment", "Health", "Adar", TODAY, "7,1", "One-off", "Pending"])
     sheet = tmp_path / "sheet.xlsx"
@@ -72,14 +75,11 @@ def _assembled_inputs(tmp_path):
     briefings = tmp_path / "Briefings"
     briefings.mkdir()
     (briefings / f"whatsapp_digest_{TODAY.isoformat()}.md").write_text(
-        "WhatsApp groups (last 24h)\n"
-        "──────────────────────────\n"
-        "DAYCARE\n"
-        "  • מחר יום פירות, להביא פרי חתוך (הגננת, 22:14)\n\n"
-        "1 alerts fired today · 1 messages digested\n",
+        "קבוצות (24ש׳):\n"
+        "גן — מחר יום פירות, להביא פרי חתוך (הגננת, 22:14)\n",
         encoding="utf-8")
 
-    deferred = [{"id": "wa-9", "to": "adar", "body": "ועד הבית: תיקון מעלית מחר",
+    deferred = [{"id": "wa-9", "to": "adar", "body": "ועד: תיקון מעלית מחר",
                  "source": "whatsapp_summarizer", "deferred_on": "2026-06-11"}]
 
     def fake_shabbat(d):
@@ -91,10 +91,10 @@ def _assembled_inputs(tmp_path):
 
 def digest_assembled(tmp_path) -> str:
     sheet, briefings, deferred, fake_shabbat = _assembled_inputs(tmp_path)
-    messages = daily_digest.assemble(
+    assembly = daily_digest.assemble(
         TODAY, now=datetime(2026, 6, 12, 7, 30), sheet_path=sheet,
         briefings_dir=briefings, shabbat_times=fake_shabbat, deferred=deferred)
-    return messages["adar"]
+    return assembly.messages["adar"]
 
 
 def weekly() -> str:
@@ -165,8 +165,13 @@ def test_weekly_briefing_golden(tmp_runtime):
 if __name__ == "__main__" and "--regen" in sys.argv:
     import tempfile
 
+    from automation.lib import config as _config
+
     FIXTURES.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory() as td:
+        # Hermetic regen: a real logs/reminders_log.csv on this machine must
+        # not leak batch-window dedup into the goldens.
+        _config.REMINDERS_LOG = Path(td) / "reminders_log.csv"
         outputs = {
             "digest_multi.md": digest_multi(),
             "digest_single.md": digest_single(),

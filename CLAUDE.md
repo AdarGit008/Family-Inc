@@ -35,7 +35,7 @@ One source of truth per domain · boring tech · alert budget 2/day enforced at 
 
 ## Current state (flip when M3 acceptance passes)
 
-**Not live yet.** v1 = keystone (reminders → WhatsApp + weekly briefing + dashboard write-back) + group summarizer. Migration sessions M1–M4 per `ENGINEERING.md` §9; checklists in `BACKLOG.md`. Until M3, scripts run dry/mock and nothing messages anyone (`daily_digest.py` only queues with `--send`). Repo layout reached the `ENGINEERING.md` §1 shape in M1 (2026-06-12): `automation/lib/` chokepoints, `attic/`, `seeds/` (gitignored, personal), `reviews/`, uv. Still pending: `deploy/` (M3) and the `Dashboard/`→`dashboard/` case rename (deferred to M3 Pages wiring).
+**Not live yet — M3 (go-live) is next.** v1 = keystone (reminders → WhatsApp + weekly briefing + dashboard write-back) + group summarizer. M1 (restructure) and M2 (one source of truth) closed 2026-06-12: `lib/sheet.py` is the only workbook access — live gspread when `FAMILY_INC_SHEET_ID` is set, seed xlsx otherwise, schema-drift guard on Reminders reads/writes; engine + dashboard write-backs per SPEC §7.1/§6.1; budget enforced only in the outbox ledger; DESIGN §6 Hebrew templates, no reply footers. Until M3 wires creds on the VPS, scripts run dry against the seed and nothing messages anyone (write-backs and `--send` are live-backend-gated). Still pending: `deploy/` + the `Dashboard/`→`dashboard/` case rename (M3, with Pages wiring).
 
 ## Session protocol
 

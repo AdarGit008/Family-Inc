@@ -46,6 +46,35 @@ def sample_reminder_kwargs():
     }
 
 
+# SPEC §6.1 header — the one the schema guard enforces.
+REMINDERS_HEADER = [
+    "Title", "Domain", "Owner", "Due Date", "Lead Times", "Recurrence",
+    "Status", "Last Sent", "Channel", "Notes", "Days Until", "Auto-flag",
+    "LastDoneBy", "DoneAt", "WriteQueue_Tombstone", "Guide URL",
+]
+
+
+@pytest.fixture
+def make_sheet(tmp_path):
+    """Factory: rows (lists laid into Reminders!A2:P…) → tmp xlsx path with a
+    conformant §6.1 header. The write-path tests mutate these copies — never
+    the committed seed."""
+    from openpyxl import Workbook
+
+    def _make(rows, name="sheet.xlsx"):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Reminders"
+        ws.append(REMINDERS_HEADER)
+        for row in rows:
+            ws.append(row)
+        p = tmp_path / name
+        wb.save(p)
+        return p
+
+    return _make
+
+
 @pytest.fixture
 def tmp_runtime(tmp_path, monkeypatch):
     """Redirect every runtime path in lib/config to a tmp sandbox, so tests
@@ -61,7 +90,6 @@ def tmp_runtime(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DEFERRED_FILE", tmp_path / "state" / "outbox" / "deferred.jsonl")
     monkeypatch.setattr(config, "INBOX_FILE", tmp_path / "state" / "inbox" / "whatsapp_inbox.jsonl")
     monkeypatch.setattr(config, "HEARTBEAT_FILE", tmp_path / "state" / "inbox" / "heartbeat.txt")
-    monkeypatch.setattr(config, "DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(config, "WA_INBOX_TAB", tmp_path / "data" / "WhatsApp_Inbox.csv")
-    monkeypatch.setattr(config, "WA_ARCHIVE_TAB", tmp_path / "data" / "WhatsApp_Archive.csv")
+    monkeypatch.setattr(config, "SCHEMA_DRIFT_FLAG", tmp_path / "logs" / "schema_drift.flag")
+    monkeypatch.setattr(config, "ENGINE_FLAGS", tmp_path / "logs" / "engine_flags.jsonl")
     return tmp_path
