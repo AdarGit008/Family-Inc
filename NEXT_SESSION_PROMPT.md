@@ -15,7 +15,8 @@ You are opening a Family Inc working session as Lead Architect. Read `CLAUDE.md`
 
 Open items:
 
-- ⬜ The VPS hour: provision → secrets in `/etc/family-inc/` (incl. `FAMILY_INC_SHEET_ID`, the live-backend flip, + SMTP creds for §10.2) → pair Baileys → verify timers → import seeds → enable Pages (Source=GitHub Actions + the two secrets + OAuth origin) → pin PWA on both phones → one green `backup.sh` run
+- ⬜ The VPS hour: provision (private-repo clone via read-only fine-grained PAT — repo turned out to be private at go-live) → secrets in `/etc/family-inc/` (`FAMILY_INC_SHEET_ID` = the live-backend flip, + SMTP creds for §10.2; **no LLM key — keyless go-live, provider call in M4**) → pair Baileys → verify timers → import seeds → one green `backup.sh` run · *prerequisite step-zero done 2026-06-12: live `Family_OS` Sheet created from the seed xlsx, Settings.UserMap fixed, GCP project + service account + OAuth client created*
+- ⬜ **Publication** (gates Pages + PWA): history rewrite first — `git filter-repo` strips the 8 Archive personal docs + pre-D-024 blobs (kid names, kickoff health/money) from ALL history — then flip repo public (free-plan Pages requires public), enable Pages (Source=GitHub Actions + the two secrets + OAuth origin), pin PWA on both phones, rotate the provision PAT. **Repo stays private until the rewrite — D-027f's deferral is only safe unpublished.** Dashboard-dependent acceptance items (#2, #5) wait for this; digest acceptance (#1) ticks from tonight
 - ⬜ **Acceptance: both phones receive the morning digest 3 consecutive days; one full done→recur cycle visible in the log** → then flip CLAUDE.md "Current state", tag `v1-live`, M4 after ≥1 week
 
 Recent decisions (full log in `DECISIONS.md`):
