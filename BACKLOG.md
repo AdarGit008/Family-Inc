@@ -3,31 +3,33 @@
 *The only live backlog. Status legend: ⬜ todo · 🔵 in progress · ✅ done · 🧊 frozen.*
 *v1 definition and acceptance criteria live in `SPEC.md` §11. Migration session plan lives in `ENGINEERING.md` §9.*
 
-**Now:** next milestone = **M1** (not started) · open via `NEXT_SESSION_PROMPT.md` · last session: 2026-06-12 (remake D-019 + review D-020 + Hermes integration D-022 + workflow port D-023)
+**Now:** next milestone = **M2** (not started) · open via `NEXT_SESSION_PROMPT.md` · last session: 2026-06-12 (M1 closed: restructure + lib chokepoints + 115 tests + D-024 privacy purge)
 
 ## v1 — to first real message on both phones
 
-### M1 — Repo restructure (1 session)
+### M1 — Repo restructure (1 session) — ✅ closed 2026-06-12
 
-*2026-06-12 head start: the integrated Hermes sprint already delivered `Automation/config.py` (shared constants), a 55-test pytest suite (`tests/`), `requirements*.txt`, and `reply_handler.py` — several items below start from that base instead of zero.*
+*2026-06-12 head start: the integrated Hermes sprint already delivered `Automation/config.py` (shared constants), a 55-test pytest suite (`tests/`), `requirements*.txt`, and `reply_handler.py` — several items below started from that base instead of zero.*
 
-- ⬜ Create `automation/lib/` (`sheet.py`, `llm.py`, `outbox.py`, `dates.py`, `money.py`, `config.py`) — single implementations, scripts import from lib. `Automation/config.py` exists; move + absorb remaining script-level constants
-- ⬜ Delete root-level `reminders_engine.py` + `sunday_briefing.py` (canonical copies live in `automation/`)
-- ⬜ Move frozen scripts → `attic/` (see Frozen lanes below); archive `Progress/` status page (status lives only here)
-- ⬜ Purge Twilio references from code + runbooks (fallback documented only in `SPEC.md` §10)
-- ⬜ Update `review.py` lane defaults + always-attach list to the new canon docs (it still references archived paths); fold `run_review_deepseek.py` in as a provider
-- ⬜ Gitignore generated `Briefings/` output (re-apply skipped Hermes commit `556f445` deliberately); move review/audit artifacts to a tracked `reviews/` dir + update `ENGINEERING.md` §11 paths; remove hand-written future-dated files; add `tests/fixtures/`
-- ⬜ Extend the Hermes pytest suite (55 green: engine + briefing) to cover outbox budget ledger, classifier hard rules, golden-file rendering; rename to match target layout
-- ⬜ Convert `requirements*.txt` → uv (`pyproject.toml` + lockfile) per `ENGINEERING.md` §2
+- ✅ Create `automation/lib/` (`sheet.py`, `llm.py`, `outbox.py`, `dates.py`, `money.py`, `config.py`) — single implementations, scripts import from lib; `outbox.queue()` implements the full SPEC §7.5 contract (ledger, kinds, dedup, quiet-hours `not_before`); LLM fake via `FAMILY_INC_LLM_FAKE`
+- ✅ Delete root-level `reminders_engine.py` + `sunday_briefing.py` — engine moved to `automation/` as compute-only, `sunday_briefing` → `weekly_briefing.py`, send path carved into `automation/daily_digest.py` (ENGINEERING §9), copy → `automation/templates.py`
+- ✅ Move frozen scripts → `attic/` (incl. `friday_briefing.py`, `bank-scraper/`, `Setup/code` → `attic/setup_code`); `Progress/` + frozen-lane runbooks + `00_Runbook.md` → `Archive/`
+- ✅ Purge Twilio from code + runbooks (zero refs in code; fallback documented only in `SPEC.md` §10 — acceptance #7 grep is clean)
+- ✅ `review.py`: canon-doc always-attach + lane defaults, new `milestone` lane, DeepSeek provider folded in (`--provider deepseek`, `--chunk`), audit output → `reviews/`
+- ✅ Gitignore `Briefings/` + `logs/` (re-applied 556f445); review/audit artifacts → tracked `reviews/`; deleted future-dated briefings (06-23, 08-15); `tests/fixtures/` golden files
+- ✅ Tests 55 → **115 green**: `test_outbox.py` (2-cap, critical bypass, briefing exemption, shared ledger, dedup, quiet hours), `test_summarizer.py` (5 hard rules, routing, NEEDS-A-LOOK, fallback, LLM-fake), `test_render_golden.py` (5 goldens), `test_sheet.py` (parsing tolerance), renamed `test_engine.py`/`test_briefing.py`
+- ✅ uv conversion: `pyproject.toml` + `uv.lock` committed; dropped beautifulsoup4 + python-dateutil (consumers live in attic); `requirements*.txt` deleted
+- ✅ D-024 privacy purge: `seeds/` gitignored (CSVs moved from `Setup/`), `Dashboard/config.js` untracked (+`config.example.js`), kid names/birthdates scrubbed from attic + review prompt
 
 ### M2 — One source of truth (1 session)
 
-- ⬜ gspread port: engine, briefings, summarizer all read/write the live Google Sheet via service account
+- ⬜ gspread port: engine, briefings, summarizer all read/write the live Google Sheet via service account (behind `lib/sheet.py`; add the §7.1 header-validation schema-drift guard while in there)
+- ⬜ Engine write-backs on send success: `Last Sent`/`Status` stamping from `daily_digest`, recurrence bump on Done incl. Feb-29 + Last-Sent idempotency tests (ENGINEERING §7 rows deferred from M1 — no write path existed against the seed xlsx)
 - ⬜ Dashboard writes `DoneAt` + `LastDoneBy` + `WriteQueue_Tombstone` in every write-back batch (closes the spec'd-but-missing race guard)
 - ⬜ `Settings` tab: `UserMap` (email → display name) + `lang`
-- ⬜ Outbox budget ledger: all senders queue through `lib/outbox.py`; 2/day cap enforced there; `critical` bypass flag; briefings exempt
-- ⬜ Strip reply-command footers from message templates (reinstate in v1.1 with reply parsing)
-- ⬜ Golden-file tests for briefing + digest rendering
+- ⬜ Outbox consolidation: summarizer + reply paths move from `queue_message()` (legacy shim) to `queue()` with kinds + stable `wa-{msg_id}` ids; delete the shim and the summarizer's local budget counter (the `lib/outbox.py` ledger from M1 becomes the only enforcement — D-015)
+- ⬜ Strip reply-command footers from message templates (D-014; reinstate in v1.1 with reply parsing) — deliberate golden-file regen (`tests/test_render_golden.py --regen`), DESIGN §6 Hebrew templates land here too
+- ⬜ Golden-file tests for briefing + digest rendering — *base goldens shipped in M1; M2 re-cuts them with the template swap*
 
 ### M3 — Appliance live = go-live (1 session + ~1h on the VPS)
 
@@ -36,7 +38,7 @@
 - ⬜ Enable timers: engine 07:25 · digest 07:30 · summarizer hourly (24h) · weekly briefing Sat 21:00 · backup Sun 03:00
 - ⬜ Seed ≥20 real reminders across Car/Health/Education/Contracts (from `Setup/08` seed + kickoff backlog)
 - ⬜ **Acceptance: both phones receive the morning digest 3 consecutive days; one full done→recur cycle visible in the log**
-- ⬜ GitHub Pages live for `Dashboard/`; PWA pinned on both phones
+- ⬜ GitHub Pages live for the dashboard; PWA pinned on both phones (`Dashboard/`→`dashboard/` case rename + `deploy/` scripts land here, with the Pages wiring; copy real `seeds/` + `Dashboard/config.js` to the machines that need them — both untracked since M1/D-024)
 
 ### M4 — Summarizer hardening (1 session, after ≥1 week live)
 

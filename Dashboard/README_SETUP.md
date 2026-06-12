@@ -55,8 +55,8 @@ CLIENT_ID: "1234567890-abc.apps.googleusercontent.com",  // from step 2
 SHEET_ID:  "1AbcDefGhIjKlMnOpQrStUv...",                  // from step 1
 DEMO_MODE: false,                                          // turn off demo
 USERS: {
-  "user@example.com": "Adar",
-  "your-partner@gmail.com": "Partner",
+  "you@example.com": "Adar",
+  "partner@example.com": "Partner",
 }
 ```
 

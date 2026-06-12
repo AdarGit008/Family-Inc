@@ -25,7 +25,7 @@ Household operating system for Adar + Shanee (+ 2 young kids, adult-mediated). M
 | CTO + co-PO | **Adar** — engineering direction, ships code |
 | Chief Design + co-PO | **Shanee** — product direction, UX feel |
 | Lead Architect | **Claude** — design, code, tradeoffs; defers to POs on product, to Adar on engineering detail |
-| Reviewer | External model via `Automation/review.py` (Gemini default) — milestone reviews only |
+| Reviewer | External model via `automation/review.py` (Gemini default) — milestone reviews only |
 
 Either PO can lead a session and take routine calls solo; major directional calls (new feature, principle change, removing shipped behavior) are joint and land in `DECISIONS.md`. Session leader = whoever opened the session; Claude treats them as "the PO" unless they defer.
 
@@ -35,7 +35,7 @@ One source of truth per domain · boring tech · alert budget 2/day enforced at 
 
 ## Current state (flip when M3 acceptance passes)
 
-**Not live yet.** v1 = keystone (reminders → WhatsApp + weekly briefing + dashboard write-back) + group summarizer. Migration sessions M1–M4 per `ENGINEERING.md` §9; checklists in `BACKLOG.md`. Until M3, scripts run dry/mock and nothing messages anyone. Repo layout is still pre-M1 (root-level legacy scripts, `Automation/` not yet `automation/lib/` shape) — `ENGINEERING.md` §1 is the target, M1 closes the gap.
+**Not live yet.** v1 = keystone (reminders → WhatsApp + weekly briefing + dashboard write-back) + group summarizer. Migration sessions M1–M4 per `ENGINEERING.md` §9; checklists in `BACKLOG.md`. Until M3, scripts run dry/mock and nothing messages anyone (`daily_digest.py` only queues with `--send`). Repo layout reached the `ENGINEERING.md` §1 shape in M1 (2026-06-12): `automation/lib/` chokepoints, `attic/`, `seeds/` (gitignored, personal), `reviews/`, uv. Still pending: `deploy/` (M3) and the `Dashboard/`→`dashboard/` case rename (deferred to M3 Pages wiring).
 
 ## Session protocol
 
@@ -43,12 +43,12 @@ One source of truth per domain · boring tech · alert budget 2/day enforced at 
 1. Read `BACKLOG.md` first — it says where we are.
 2. Work the current milestone; don't open new lanes without a PO call logged in `DECISIONS.md`.
 3. Constants go in config, utilities in `automation/lib/`, message copy in templates (reviewable against `DESIGN.md` §6).
-4. Session end: tests green if code moved, `BACKLOG.md` statuses flipped, `python3 Automation/session_kickoff.py` regenerated `NEXT_SESSION_PROMPT.md`, and the PO gets ONE terminal block (stage → review gate if milestone-closing → commit → push) to run on their machine. Next session opens by pasting `NEXT_SESSION_PROMPT.md`.
-5. **Milestone reviews only** (new spec / architecture shift / budget-privacy-delivery changes / each M-close): run `Automation/review.py`, resolve as Apply / Defend / Open, log directional outcomes in `DECISIONS.md`. Tiny edits never trigger review.
+4. Session end: tests green if code moved, `BACKLOG.md` statuses flipped, `python3 automation/session_kickoff.py` regenerated `NEXT_SESSION_PROMPT.md`, and the PO gets ONE terminal block (stage → review gate if milestone-closing → commit → push) to run on their machine. Next session opens by pasting `NEXT_SESSION_PROMPT.md`.
+5. **Milestone reviews only** (new spec / architecture shift / budget-privacy-delivery changes / each M-close): run `automation/review.py`, resolve as Apply / Defend / Open, log directional outcomes in `DECISIONS.md`. Tiny edits never trigger review.
 
 ## Guardrails for Claude in this repo
 
 - Never put names, phone numbers, JIDs, or real finance values in committed files — they belong in the Sheet, `/etc/family-inc/`, or gitignored seeds (repo is public-portfolio-safe by construction).
-- Never add an alert path that bypasses the outbox chokepoint (`lib/outbox.py` post-M1; `Automation/wa_outbox.py` today).
+- Never add an alert path that bypasses the outbox chokepoint (`automation/lib/outbox.py`).
 - Schema changes are additive-only on the Sheet (old rows must keep parsing).
 - If SPEC and code disagree, say so before "fixing" either.

@@ -1,0 +1,25 @@
+# Family inc. — toolchain per ENGINEERING.md §2: Python 3.12 + uv, lockfile
+# committed, `uv sync` on the appliance. Dependency additions need a one-line
+# justification in the commit body.
+[project]
+name = "family-inc"
+version = "1.0.0"
+description = "Household operating system — reminders, briefings, WhatsApp summarizer, one VPS"
+requires-python = ">=3.12"
+dependencies = [
+    "requests>=2.32",   # hebcal + review providers (bundles certifi)
+    "openpyxl>=3.1",    # seed-xlsx read layer until the M2 gspread port
+    "anthropic>=0.109", # lib/llm.py only; optional at runtime (deterministic fallbacks)
+]
+# Dropped at M1: beautifulsoup4 + python-dateutil (only consumers live in attic/).
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv]
+package = false

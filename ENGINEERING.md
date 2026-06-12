@@ -5,7 +5,7 @@
 
 ---
 
-## 1. Repo layout (target — reached at end of M1)
+## 1. Repo layout (current — established in M1, 2026-06-12; two exceptions: `deploy/` lands in M3 with provisioning, and the PWA still lives at `Dashboard/` — the case rename rides along with the M3 Pages wiring)
 
 ```
 family-inc/
@@ -38,7 +38,8 @@ family-inc/
 │   ├── provision.sh      # idempotent VPS setup
 │   └── deploy.sh         # pull + test + restart (the only way code reaches the box)
 ├── tests/                # pytest; fixtures/ holds golden files
-├── seeds/                # CSV seeds (reminders, group config, goals) — values may be personal → gitignored where so
+├── reviews/              # milestone-review audit trail + session_changes inputs (tracked, §11)
+├── seeds/                # CSV seeds (reminders, group config, goals) — personal values → `*.csv` gitignored (D-024), README committed
 ├── Setup/                # live runbooks only (VPS, bridge pairing, OAuth, ICS)
 ├── Archive/              # superseded docs — read-only history
 ├── attic/                # frozen scripts — unmaintained, excluded from tests
@@ -112,11 +113,11 @@ Dashboard deploys are just `git push` (Pages rebuilds in ~30s). The PWA on both 
 
 ## 7. Testing policy
 
-Base: the 2026-06-12 integrated suite (`tests/` — 55 tests over engine + briefing, green) is the starting point; M1 renames it to the target layout and extends it. Minimum bar — these exist and stay green from M1 onward:
+Base: M1 delivered the rename + extension (55 → 115 green, 2026-06-12). Minimum bar — these exist and stay green:
 
 | Suite | Covers |
 |---|---|
-| `test_engine.py` | fire-reason matrix (overdue/lead/due-today), tombstone skip window incl. future-skew, recurrence bumps incl. Feb-29, Last-Sent idempotency |
+| `test_engine.py` | fire-reason matrix (overdue/lead/due-today), tombstone skip window incl. future-skew *(recurrence bumps incl. Feb-29 + Last-Sent idempotency land with the M2 write path — no write-back exists against the seed xlsx)* |
 | `test_outbox.py` | budget ledger: 2-cap, critical bypass, briefing exemption, shared-ledger across two sender sources, (id,target) dedup, quiet-hours hold |
 | `test_summarizer.py` | the 5 hard rules, per-group routing incl. `none`→NEEDS-A-LOOK, keyword fallback without API key |
 | `test_render_golden.py` | weekly briefing + daily digest rendered against `tests/fixtures/*.md` golden files (byte-exact; update goldens deliberately) |
@@ -159,7 +160,7 @@ Rollback at any point = `git revert` + redeploy; the Sheet schema only ever gain
 
 Reviews fire on **milestones**, not every session: new spec, architecture change, anything touching delivery/budget/privacy guarantees, and each M-milestone close. Mechanism: `automation/review.py` builds the prompt + attachment list; reviewer = best available external model (Gemini default; substitutions logged). Output is resolved in-session as Apply / Defend (reason appended to the affected doc §History) / Open (PO question), and the resolution lands in `DECISIONS.md` if directional. Tiny edits never trigger review. On milestone-closing sessions the gate runs **blocking inside the handoff chain** (`… && review gate && git commit && git push` — Porto pattern, D-023): a MAJOR finding stops the commit until resolved or explicitly overridden by the PO.
 
-**review.py contract:** inputs = `--lane` (drives default attachments), `--changes` (markdown bullet list of what the session changed), optional `--extra-files`; output = the assembled prompt (`--dry-run`) or the model's review, always saved under `Briefings/review_*.md` as the audit trail. Failure behavior: a failed or truncated review never blocks a milestone — log the failure, proceed, and note it in `BACKLOG.md`. `run_review_deepseek.py` is the interim DeepSeek sender (plain + chunked modes, key from `DEEPSEEK_API_KEY` env only); it folds into review.py as a provider in M1.
+**review.py contract:** inputs = `--lane` (drives default attachments; `milestone` attaches all five canon docs), `--changes` (markdown bullet list of what the session changed), optional `--extra-files`, `--provider ollama|deepseek`; output = the assembled prompt (`--dry-run`) or the model's review, always saved under `reviews/review_*.md` as the audit trail (tracked). Failure behavior: a failed or truncated review never blocks a milestone — log the failure, proceed, and note it in `BACKLOG.md`. DeepSeek is a built-in provider since M1 (folded in from `run_review_deepseek.py`): plain + `--chunk` modes, key from `DEEPSEEK_API_KEY` env only. Without any provider key the script writes a clearly-marked MOCK audit file — that is not a review; rerun with a key.
 
 ## 12. Definition of done (any work item)
 

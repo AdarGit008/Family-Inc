@@ -7,15 +7,21 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+.pytest_cache/
 
 # Node
 node_modules/
 
 # WhatsApp bridge — credentials & runtime state (NEVER commit)
+automation/bridge/state/
 auth_state/
 auth_info*/
 recipients.json
 *.log
+
+# Dashboard — real config carries Sheet ID, OAuth client id, account emails
+# (config.example.js is the committed template, ENGINEERING §3)
+Dashboard/config.js
 
 # Secrets / env
 .env
@@ -27,5 +33,15 @@ token.json
 *credential*
 *secret*
 
-# Local caches / generated
-Automation/cache/
+# Runtime output — generated, not source (re-applies Hermes 556f445)
+Briefings/
+logs/*
+!logs/.gitkeep
+
+# Seeds — personal values (names, schedules) stay on the machines that need
+# them; the repo is public-portfolio-safe by construction (CLAUDE.md guardrail)
+seeds/*.csv
+
+# Local caches / staging (summarizer CSVs go away at the M2 gspread port)
+automation/cache/
+automation/data/
