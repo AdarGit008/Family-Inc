@@ -48,6 +48,7 @@
 const fs = require('fs');
 const path = require('path');
 const P = require('pino');
+const qrterm = require('qrcode-terminal'); // Baileys ≥6.7.x: printQRInTerminal is gone — we render the QR ourselves
 const {
   default: makeWASocket,
   useMultiFileAuthState,
@@ -332,7 +333,6 @@ async function start() {
     version,
     auth: state,
     logger,
-    printQRInTerminal: true, // scan once with Adar's phone -> Linked devices
     markOnlineOnConnect: false, // stay invisible except when delivering outbox
     syncFullHistory: false,
   });
@@ -340,7 +340,13 @@ async function start() {
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', (u) => {
-    const { connection, lastDisconnect } = u;
+    const { connection, lastDisconnect, qr } = u;
+    if (qr) {
+      // Pairing only (no auth_state yet): scan once with Adar's phone ->
+      // WhatsApp -> Linked devices. Re-renders if the code expires unscanned.
+      qrterm.generate(qr, { small: true });
+      console.log('[pair] scan the QR above: WhatsApp → Settings → Linked devices → Link a device');
+    }
     if (connection === 'open') {
       console.log('[baileys] connected — listening to GROUP messages + 1:1 replies; outbox sender armed');
       beat();
