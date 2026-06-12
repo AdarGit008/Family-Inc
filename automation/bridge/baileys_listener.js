@@ -43,20 +43,29 @@
  * (Adar + Shanee) and are treated as reminder-reply commands. All other 1:1
  * messages are dropped.
  * Media bodies are never stored; only has_media=true is recorded.
+ *
+ * --- Baileys v7 / LID (D-029, 2026-06-12) ---
+ * WhatsApp finalized its LID identity migration; the 6.7.x line predates it
+ * and could no longer encrypt the SELF-SEND leg (companion → own primary, i.e.
+ * bridge → Adar's phone) — Adar's copy of every digest sat as "waiting for
+ * this message" while Shanee's delivered. v7 is LID-aware and fixes this.
+ * Consequences carried here: ESM (v7 dropped CommonJS), auth_state gains new
+ * key types (lid-mapping / device-list / tctoken) — wipe state/auth_state/ and
+ * re-pair when upgrading across this boundary. recipients.json stays PN-form
+ * (@s.whatsapp.net); v7 resolves PN→LID internally on send.
  */
 
-const fs = require('fs');
-const path = require('path');
-const P = require('pino');
-const qrterm = require('qrcode-terminal'); // Baileys ≥6.7.x: printQRInTerminal is gone — we render the QR ourselves
-const {
-  default: makeWASocket,
+import fs from 'fs';
+import path from 'path';
+import P from 'pino';
+import qrterm from 'qrcode-terminal'; // printQRInTerminal is long gone — we render the QR ourselves (connection.update)
+import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
-} = require('@whiskeysockets/baileys');
+} from '@whiskeysockets/baileys';
 
-const ROOT = __dirname;
+const ROOT = import.meta.dirname; // ESM: no __dirname (needs Node ≥20.11)
 const STATE_DIR = path.join(ROOT, 'state'); // gitignored runtime state
 const AUTH_DIR = path.join(STATE_DIR, 'auth_state');
 const INBOX_DIR = path.join(STATE_DIR, 'inbox');
@@ -378,12 +387,16 @@ async function start() {
 
         // --- 1:1 reply handling (reminder commands from Adar/Shanee) ---
         if (!isGroup(jid)) {
+          // LID caveat (v7): inbound 1:1 chats may be addressed @lid while
+          // recipients.json holds PN JIDs, so LID-addressed replies fall
+          // through this guard and are DROPPED. Replies are parked until
+          // v1.1 (SPEC §7.4) — resolve via msg.key.remoteJidAlt when unparking.
           if (!isReplySender(jid)) continue; // drop unknown 1:1 messages
           const text = extractText(msg);
           if (!text) continue; // empty message, skip
           const senderJid = msg.key?.participant || jid;
           const senderName = msg.pushName || senderJid.split('@')[0];
-          const tsSec = Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000);
+          const tsSec = Number(msg.messageTimestamp?.toNumber?.() ?? msg.messageTimestamp) || Math.floor(Date.now() / 1000); // v7 protos may carry Long
 
           const parsed = parseReply(text);
 
@@ -415,9 +428,9 @@ async function start() {
         if (!text && !media) continue;     // nothing to record
 
         const groupName = await resolveGroupName(sock, jid);
-        const senderJid = msg.key?.participant || jid;
+        const senderJid = msg.key?.participant || jid; // may be @lid post-v7 — stored as the opaque id it is
         const senderName = msg.pushName || senderJid.split('@')[0];
-        const tsSec = Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000);
+        const tsSec = Number(msg.messageTimestamp?.toNumber?.() ?? msg.messageTimestamp) || Math.floor(Date.now() / 1000); // v7 protos may carry Long
 
         appendInbox({
           msg_id: msg.key?.id,

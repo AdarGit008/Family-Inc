@@ -44,6 +44,8 @@ systemctl start family-bridge
 
 `state/auth_state/` persists the pairing and rides the weekly backup. **After a VPS rebuild, restore it before considering a re-pair** — a fresh QR is the fallback, not the default.
 
+**Exception — Baileys major upgrades (D-029):** auth_state written by an older Baileys line is not forward-compatible (v7 added lid-mapping/device-list/tctoken key types). When `package.json` crosses such a boundary: `npm ci`, **wipe** `state/auth_state/`, re-pair fresh. Never restore a pre-boundary backup over it.
+
 ## 4. Verify (~5 min)
 
 ```bash
