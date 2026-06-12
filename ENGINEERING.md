@@ -128,7 +128,7 @@ LLM calls are never made in tests — `lib/llm.py` has a fake injected via env. 
 ## 8. Observability
 
 - journald per unit (`journalctl -u family-reminders`).
-- `logs/reminders_log.csv`, `logs/wa_classifier.csv`, `logs/llm_costs.csv`, `logs/outbox_ledger/`.
+- `logs/reminders_log.csv`, `logs/wa_classifier.csv`, `logs/llm_costs.csv`, `logs/outbox_ledger/`, `logs/delivery_log.csv` (digest transport per send-run: baileys | smtp | queued-stale, D-028).
 - Self-reporting: the weekly briefing includes one system line — "7/7 runs green · 41 messages classified · 2 tombstone skips (max age 1.4h) · ₪6.10 LLM spend"; any fail-flag, schema-drift, or stale heartbeat replaces it with a warning. The humans never check logs unless the briefing tells them to.
 - External uptime ping (healthchecks.io free tier) — optional, listed v1.1.
 

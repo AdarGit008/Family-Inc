@@ -253,14 +253,35 @@ def stamp_sent(assembly: Assembly, queued_for: set[str], now: datetime,
     return len({w.row for w in writes})
 
 
-def read_fail_flag() -> list[str]:
-    """Failed unit names from logs/fail.flag — one line per OnFailure= firing
-    ("<iso-ts> <unit>", ENGINEERING §5). Sorted unique; [] when absent."""
+def _read_fail_flag_lines() -> list[str]:
+    """Raw non-empty lines of logs/fail.flag — captured once per run so the
+    clear can remove exactly what was reported (review 2026-06-12 C1, D-028)."""
     try:
-        lines = config.FAIL_FLAG.read_text(encoding="utf-8").splitlines()
+        return [ln for ln in config.FAIL_FLAG.read_text(encoding="utf-8").splitlines()
+                if ln.strip()]
     except OSError:
         return []
-    return sorted({ln.strip().split()[-1] for ln in lines if ln.strip()})
+
+
+def read_fail_flag(lines: Optional[list[str]] = None) -> list[str]:
+    """Failed unit names from logs/fail.flag — one line per OnFailure= firing
+    ("<iso-ts> <unit>", ENGINEERING §5). Sorted unique; [] when absent."""
+    src = _read_fail_flag_lines() if lines is None else lines
+    return sorted({ln.strip().split()[-1] for ln in src})
+
+
+def _log_delivery(today: date, transport: str, recipients: set[str]) -> None:
+    """One line per --send run: baileys | smtp | queued-stale (review
+    2026-06-12 C2, D-028). The weekly briefing reads this to surface
+    email-degraded mornings — a slowly dying bridge must not hide behind a
+    working fallback."""
+    config.DELIVERY_LOG.parent.mkdir(parents=True, exist_ok=True)
+    new = not config.DELIVERY_LOG.exists()
+    with config.DELIVERY_LOG.open("a", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        if new:
+            w.writerow(["date", "transport", "recipients"])
+        w.writerow([today.isoformat(), transport, "|".join(sorted(recipients))])
 
 
 def run(today: date, dry_run: bool = False, send: bool = False,
@@ -271,7 +292,8 @@ def run(today: date, dry_run: bool = False, send: bool = False,
     now = datetime.now() if today == date.today() else datetime.combine(today, time(7, 30))
     # Real runs consume the deferred queue; dry runs only peek.
     deferred = outbox.read_deferred(today) if dry_run else outbox.pop_deferred(today)
-    failed_units = read_fail_flag()
+    fail_lines = _read_fail_flag_lines()
+    failed_units = read_fail_flag(fail_lines)
     assembly = assemble(today, now=now, deferred=deferred, sheet_path=sheet_path,
                         failed_units=failed_units)
     messages = assembly.messages
@@ -293,7 +315,8 @@ def run(today: date, dry_run: bool = False, send: bool = False,
                 stamped = stamp_sent(assembly, set(messages), now, sheet_path)
                 if stamped:
                     print(f"stamped Last Sent/Status on {stamped} row(s)")
-                _clear_fail_flag(failed_units)
+                _log_delivery(today, "smtp", set(messages))
+                _clear_fail_flag(fail_lines)
                 return messages
             # Both transports down: queue anyway (bridge delivers on reconnect),
             # shout, and leave the fail flag for a digest that actually lands.
@@ -319,15 +342,33 @@ def run(today: date, dry_run: bool = False, send: bool = False,
         stamped = stamp_sent(assembly, queued_for, now, sheet_path)
         if stamped:
             print(f"stamped Last Sent/Status on {stamped} row(s)")
+        if queued_for:
+            _log_delivery(today, "baileys" if delivered else "queued-stale", queued_for)
         if delivered and queued_for:
-            _clear_fail_flag(failed_units)
+            _clear_fail_flag(fail_lines)
     return messages
 
 
-def _clear_fail_flag(failed_units: list[str]) -> None:
-    """Reported-in-a-delivered-digest → cleared (ENGINEERING §5). Journald
-    keeps the detail; the flag only exists to get a human to look."""
-    if failed_units:
+def _clear_fail_flag(reported_lines: list[str]) -> None:
+    """Reported-in-a-delivered-digest → cleared (ENGINEERING §5). Removes
+    exactly the lines that were read at run start: a failure appended WHILE
+    this digest was running survives for the next one to report (review
+    2026-06-12 C1, D-028). Journald keeps the detail; the flag only exists
+    to get a human to look."""
+    if not reported_lines:
+        return
+    try:
+        current = [ln for ln in config.FAIL_FLAG.read_text(encoding="utf-8").splitlines()
+                   if ln.strip()]
+    except OSError:
+        return
+    remaining = current.copy()
+    for ln in reported_lines:
+        if ln in remaining:
+            remaining.remove(ln)
+    if remaining:
+        config.FAIL_FLAG.write_text("\n".join(remaining) + "\n", encoding="utf-8")
+    else:
         config.FAIL_FLAG.unlink(missing_ok=True)
 
 

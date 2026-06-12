@@ -205,7 +205,7 @@ def section_goals(wb, today: date) -> str:
     return "\n".join(lines)
 
 
-def _system_flags() -> list[str]:
+def _system_flags(today: "date | None" = None) -> list[str]:
     """Fail-loud surfacing (ENGINEERING §8): schema drift aborts engine runs
     silently from the humans' perspective — the briefing is where they hear
     about it. Engine review flags (Feb-29 clamps, Custom recurrence) ride
@@ -230,11 +230,33 @@ def _system_flags() -> list[str]:
                         config.FAIL_FLAG.read_text(encoding="utf-8").splitlines() if ln.strip()})
         issues.append("- ⚠ **unit failures unreported**: " + ", ".join(units) +
                       " — fail.flag uncleared, are digests being delivered? (journalctl)")
+    # Email-fallback days are DEGRADED, not green (PO call 2026-06-12, D-028):
+    # a slowly dying bridge must not hide behind a working fallback.
+    if today is not None and config.DELIVERY_LOG.exists():
+        smtp_days, queued_days = set(), set()
+        for ln in config.DELIVERY_LOG.read_text(encoding="utf-8").splitlines()[1:]:
+            parts = ln.split(",")
+            if len(parts) < 2:
+                continue
+            d = to_date(parts[0])
+            if d is None or (today - d).days > 7 or (today - d).days < 0:
+                continue
+            if parts[1] == "smtp":
+                smtp_days.add(d)
+            elif parts[1] == "queued-stale":
+                queued_days.add(d)
+        if smtp_days:
+            issues.append(f"- ⚠ **bridge degraded**: {len(smtp_days)} of the last 7 digests "
+                          "arrived by email fallback (bridge down >24h each time, SPEC §10.2) "
+                          "— `journalctl -u family-bridge`, re-pair if logged out")
+        if queued_days:
+            issues.append(f"- ⚠ **delivery lagging**: {len(queued_days)} digest(s) this week "
+                          "queued against a stale bridge and waited for reconnect")
     return issues
 
 
 def section_hygiene(wb, today: date) -> str:
-    issues = _system_flags()
+    issues = _system_flags(today)
     # Reminders missing due date
     r_ws = wb["Reminders"]
     missing = 0

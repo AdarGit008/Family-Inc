@@ -3,7 +3,7 @@
 *The only live backlog. Status legend: ⬜ todo · 🔵 in progress · ✅ done · 🧊 frozen.*
 *v1 definition and acceptance criteria live in `SPEC.md` §11. Migration session plan lives in `ENGINEERING.md` §9.*
 
-**Now:** milestone = **M3** (go-live) — repo side done, remaining work is the PO's ~1h at the VPS (`deploy/README.md`) + the 3-day acceptance watch · open via `NEXT_SESSION_PROMPT.md` · last session: 2026-06-12 (M3 session 1: deploy/ + Pages workflow + §10.2 email fallback + fail-flag + digest kind=briefing + dashboard/ rename + 31-row seed draft + 191 tests + D-027)
+**Now:** milestone = **M3** (go-live) — repo side done + reviewed, remaining work is the PO's ~1h at the VPS (`deploy/README.md`) + the 3-day acceptance watch · open via `NEXT_SESSION_PROMPT.md` · last session: 2026-06-12 (M3 session 1: deploy/ + Pages workflow + §10.2 email fallback + fail-flag + digest kind=briefing + dashboard/ rename + 31-row seed draft + D-027; §11 review resolved same-day: 2 applies (line-precise fail-flag clear, transport log + degraded-day surfacing), 3 evidence-defends, posture call D-028 — 199 tests)
 
 ## v1 — to first real message on both phones
 

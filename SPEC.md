@@ -244,13 +244,13 @@ One wrapper (`lib/llm.py`), model ids in config not call sites, per-call cost lo
 ## 10. Fallback chain (delivery)
 
 1. **Baileys bridge** (primary).
-2. **Email digest** to both adults — automatic, and mechanically specified: the daily-digest task checks the bridge heartbeat before queuing; if stale >24h it sends the identical rendered content via SMTP (app-password in `/etc/family-inc/env`) and notes "delivered by email — bridge down Nh" in the body. No watcher process; the sender itself degrades.
+2. **Email digest** to both adults — automatic, and mechanically specified: the daily-digest task checks the bridge heartbeat before queuing; if stale >24h it sends the identical rendered content via SMTP (app-password in `/etc/family-inc/env`) and notes "delivered by email — bridge down Nh" in the body. No watcher process; the sender itself degrades. Every send-run logs its transport (`logs/delivery_log.csv`); email-fallback days are **degraded, not green** — the weekly briefing surfaces them, so a dying bridge can't hide behind a working fallback (D-028).
 3. **Twilio WhatsApp** — documented fallback, not in code. Adopt only if Baileys proves unworkable (ban recurrence); accepts template-approval constraints.
 4. **Inforu SMS** — deep fallback, Hebrew-capable, ILS billing; revisit only on 2+ failures above.
 
 ## 11. Acceptance criteria (v1 = done when all true)
 
-1. Both phones receive the 07:30 digest **3 consecutive days** — no manual intervention.
+1. Both phones receive the 07:30 digest **3 consecutive days** — no manual intervention, **via WhatsApp** (email-fallback days don't count toward acceptance, D-028).
 2. One reminder completes a full cycle: fires → marked done on the dashboard → recurrence bumps → next year's row visible.
 3. A daycare-group message with an alert keyword reaches the right recipients within 10 minutes; a family-group meme reaches no one.
 4. A critical keyword fires after the daily budget is spent (bypass proven in production, not mock).

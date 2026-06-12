@@ -129,6 +129,10 @@ EMAIL_TO_ENV = "FAMILY_INC_EMAIL_TO"  # comma-separated fallback recipients;
 FAIL_FLAG = LOGS_DIR / "fail.flag"    # appended by family-fail-flag@.service
                                       # (systemd OnFailure=); reported + cleared
                                       # by the next delivered daily digest
+DELIVERY_LOG = LOGS_DIR / "delivery_log.csv"  # one line per digest --send run
+                                      # (date, transport, recipients); weekly
+                                      # briefing surfaces smtp-degraded days
+                                      # (review 2026-06-12, D-028)
 
 # ---------------------------------------------------------------------------
 # Secrets loading (appliance: /etc/family-inc/env, mode 600)

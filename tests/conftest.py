@@ -93,4 +93,5 @@ def tmp_runtime(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "SCHEMA_DRIFT_FLAG", tmp_path / "logs" / "schema_drift.flag")
     monkeypatch.setattr(config, "ENGINE_FLAGS", tmp_path / "logs" / "engine_flags.jsonl")
     monkeypatch.setattr(config, "FAIL_FLAG", tmp_path / "logs" / "fail.flag")
+    monkeypatch.setattr(config, "DELIVERY_LOG", tmp_path / "logs" / "delivery_log.csv")
     return tmp_path

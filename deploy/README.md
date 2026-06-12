@@ -26,6 +26,7 @@ SMTP_USER=…@gmail.com
 SMTP_PASS=…                  # Gmail app password
 FAMILY_INC_EMAIL_TO=adar@…,shanee@…   # fallback recipients (else Settings.UserMap)
 RCLONE_REMOTE=gdrive:family-inc-backups
+BACKUP_KEEP_DAYS=90          # optional — backup.sh prune window (default 90)
 ```
 
 Also: `service-account.json` (Sheet shared with its client_email as Editor) and `recipients.json` (the two adult JIDs — see `automation/bridge/README.md`). `chmod 600 /etc/family-inc/*`.

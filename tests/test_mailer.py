@@ -232,3 +232,74 @@ class TestFailFlag:
         from automation.weekly_briefing import _system_flags
         issues = _system_flags()
         assert any("family-backup.service" in i for i in issues)
+
+
+# ---------------------------------------------------------------------------
+# Review 2026-06-12 applies (D-028): race-safe clear + transport observability
+# ---------------------------------------------------------------------------
+class TestReviewD028:
+    ROW = ["Car test", "Car", "Adar", DAY, "7,1", "One-off", "Pending"]
+
+    def test_clear_preserves_lines_appended_during_run(self, tmp_runtime):
+        """A unit failing WHILE the digest runs must survive to the next one —
+        the clear removes exactly the reported lines, not the whole file."""
+        _write_flag()
+        lines = daily_digest._read_fail_flag_lines()
+        with config.FAIL_FLAG.open("a", encoding="utf-8") as f:
+            f.write("2026-06-10T07:30:01+03:00 family-engine-late.service\n")
+        daily_digest._clear_fail_flag(lines)
+        kept = config.FAIL_FLAG.read_text(encoding="utf-8").strip().splitlines()
+        assert kept == ["2026-06-10T07:30:01+03:00 family-engine-late.service"]
+
+    def test_clear_removes_file_when_all_reported(self, tmp_runtime):
+        _write_flag()
+        daily_digest._clear_fail_flag(daily_digest._read_fail_flag_lines())
+        assert not config.FAIL_FLAG.exists()
+
+    def test_delivery_log_baileys_and_rerun_adds_nothing(self, tmp_runtime,
+                                                         make_sheet, fake_smtp):
+        _beat()
+        p = make_sheet([list(self.ROW)])
+        daily_digest.run(DAY, send=True, sheet_path=p)
+        rows = config.DELIVERY_LOG.read_text(encoding="utf-8").strip().splitlines()
+        assert rows[0] == "date,transport,recipients"
+        assert rows[1].startswith(f"{DAY.isoformat()},baileys,")
+        daily_digest.run(DAY, send=True, sheet_path=p)  # dedup rerun: 0 queued
+        assert len(config.DELIVERY_LOG.read_text(encoding="utf-8").strip().splitlines()) == 2
+
+    def test_delivery_log_smtp_on_fallback(self, tmp_runtime, make_sheet, fake_smtp):
+        _beat(age_hours=30)
+        p = make_sheet([list(self.ROW)])
+        daily_digest.run(DAY, send=True, sheet_path=p)
+        assert f"{DAY.isoformat()},smtp," in config.DELIVERY_LOG.read_text(encoding="utf-8")
+
+    def test_delivery_log_queued_stale_when_both_transports_down(self, tmp_runtime,
+                                                                 make_sheet, fake_smtp):
+        FakeSMTP.fail = True
+        _beat(age_hours=30)
+        p = make_sheet([list(self.ROW)])
+        daily_digest.run(DAY, send=True, sheet_path=p)
+        assert f"{DAY.isoformat()},queued-stale," in config.DELIVERY_LOG.read_text(encoding="utf-8")
+
+    def _seed_log(self, *rows):
+        config.DELIVERY_LOG.parent.mkdir(parents=True, exist_ok=True)
+        config.DELIVERY_LOG.write_text(
+            "date,transport,recipients\n" + "".join(r + "\n" for r in rows),
+            encoding="utf-8")
+
+    def test_weekly_surfaces_smtp_days_as_degraded(self, tmp_runtime):
+        self._seed_log(
+            f"{(DAY - timedelta(days=2)).isoformat()},smtp,adar|shanee",
+            f"{(DAY - timedelta(days=1)).isoformat()},baileys,adar|shanee")
+        from automation.weekly_briefing import _system_flags
+        assert any("bridge degraded" in i for i in _system_flags(DAY))
+
+    def test_weekly_quiet_when_all_baileys(self, tmp_runtime):
+        self._seed_log(f"{(DAY - timedelta(days=1)).isoformat()},baileys,adar|shanee")
+        from automation.weekly_briefing import _system_flags
+        assert not [i for i in _system_flags(DAY) if "degraded" in i or "lagging" in i]
+
+    def test_weekly_ignores_rows_older_than_window(self, tmp_runtime):
+        self._seed_log(f"{(DAY - timedelta(days=30)).isoformat()},smtp,adar|shanee")
+        from automation.weekly_briefing import _system_flags
+        assert not [i for i in _system_flags(DAY) if "degraded" in i]
