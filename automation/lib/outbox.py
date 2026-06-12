@@ -235,6 +235,19 @@ def bridge_alive(now: Optional[datetime] = None) -> bool:
     return (now - ts) <= timedelta(minutes=config.HEARTBEAT_STALE_MINUTES)
 
 
+def heartbeat_age_hours(now: Optional[datetime] = None) -> Optional[float]:
+    """Heartbeat age in hours; None = no heartbeat file (bridge never ran
+    here). Wall-clock by default — infra health is never simulated under
+    --as-of. Past config.EMAIL_FALLBACK_AFTER_HOURS the daily digest degrades
+    to the SPEC §10.2 email fallback."""
+    try:
+        mtime = config.HEARTBEAT_FILE.stat().st_mtime
+    except OSError:
+        return None
+    now = now or datetime.now()
+    return max(0.0, (now - datetime.fromtimestamp(mtime)).total_seconds() / 3600.0)
+
+
 def delivery_status(msg_id: str) -> list[dict]:
     """Sent-ledger rows for one message id (one per target). Empty = pending."""
     return [r for r in _jsonl_rows(config.SENT_FILE) if r.get("id") == msg_id]

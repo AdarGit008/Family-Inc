@@ -1,0 +1,21 @@
+; Family inc. — Baileys WhatsApp bridge (listener + outbox sender).
+; The only process that touches WhatsApp (ENGINEERING §1 rules).
+; Pairing is interactive — see deploy/README.md step 4; until paired this
+; unit restart-loops printing a QR to journald, which is expected.
+[Unit]
+Description=Family inc. WhatsApp bridge (Baileys listener + sender)
+After=network-online.target
+Wants=network-online.target
+OnFailure=family-fail-flag@%n.service
+
+[Service]
+User=familyinc
+WorkingDirectory=/opt/family-inc/automation/bridge
+EnvironmentFile=-/etc/family-inc/env
+ExecStart=/usr/bin/env node baileys_listener.js
+Restart=on-failure
+RestartSec=15
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

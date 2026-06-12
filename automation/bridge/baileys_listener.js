@@ -16,9 +16,10 @@
  *    queued message to Adar/Shanee 1:1 (D-010: Baileys-first delivery).
  *
  * SEND SCOPE GUARD: outbound goes ONLY to the recipients named in
- * ./recipients.json ({"adar": "9725...@s.whatsapp.net", "shanee": ...}).
- * That file lives on the bridge machine and is never committed. Any outbox
- * row addressed to anyone else is refused and logged.
+ * recipients.json ({"adar": "9725...@s.whatsapp.net", "shanee": ...}),
+ * read from /etc/family-inc/ (appliance) or ./ (dev fallback) — never
+ * committed either way. Any outbox row addressed to anyone else is refused
+ * and logged.
  *
  * REPLY SCOPE GUARD: inbound 1:1 replies are accepted ONLY from the JIDs
  * listed in recipients.json. Everything else from @s.whatsapp.net is dropped.
@@ -64,7 +65,12 @@ const HEARTBEAT_FILE = path.join(INBOX_DIR, 'heartbeat.txt');
 const OUTBOX_DIR = path.join(STATE_DIR, 'outbox');
 const OUTBOX_FILE = path.join(OUTBOX_DIR, 'whatsapp_outbox.jsonl');
 const SENT_FILE = path.join(OUTBOX_DIR, 'whatsapp_sent.jsonl');
-const RECIPIENTS_FILE = path.join(ROOT, 'recipients.json'); // never committed
+// Secrets live in /etc/family-inc (ENGINEERING §2, mode 600); a local
+// recipients.json next to this script is the creds-less-dev fallback only.
+const ETC_RECIPIENTS = '/etc/family-inc/recipients.json';
+const RECIPIENTS_FILE = fs.existsSync(ETC_RECIPIENTS)
+  ? ETC_RECIPIENTS
+  : path.join(ROOT, 'recipients.json'); // never committed
 const OUTBOX_POLL_MS = 15 * 1000;
 
 fs.mkdirSync(INBOX_DIR, { recursive: true });

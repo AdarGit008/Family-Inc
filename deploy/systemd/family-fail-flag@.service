@@ -1,0 +1,12 @@
+; Fail-loud hook (ENGINEERING §5): every unit carries
+; OnFailure=family-fail-flag@%n.service. The instance name (%i) is the failing
+; unit; one line lands in logs/fail.flag, which the NEXT DIGEST reports and
+; clears (the humans never check journald unless a briefing tells them to).
+[Unit]
+Description=Family inc. fail flag for %i
+
+[Service]
+Type=oneshot
+User=familyinc
+ExecStart=/bin/sh -c 'echo "$(date -Iseconds) %i" >> /opt/family-inc/logs/fail.flag'
+NoNewPrivileges=true

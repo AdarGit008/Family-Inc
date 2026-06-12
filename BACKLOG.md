@@ -3,7 +3,7 @@
 *The only live backlog. Status legend: ⬜ todo · 🔵 in progress · ✅ done · 🧊 frozen.*
 *v1 definition and acceptance criteria live in `SPEC.md` §11. Migration session plan lives in `ENGINEERING.md` §9.*
 
-**Now:** next milestone = **M3** (go-live; needs the PO at the VPS ~1h) · open via `NEXT_SESSION_PROMPT.md` · last session: 2026-06-12 (M2 closed: gspread port + write-backs + outbox consolidation + Hebrew templates + 172 tests + D-025)
+**Now:** milestone = **M3** (go-live) — repo side done, remaining work is the PO's ~1h at the VPS (`deploy/README.md`) + the 3-day acceptance watch · open via `NEXT_SESSION_PROMPT.md` · last session: 2026-06-12 (M3 session 1: deploy/ + Pages workflow + §10.2 email fallback + fail-flag + digest kind=briefing + dashboard/ rename + 31-row seed draft + 191 tests + D-027)
 
 ## v1 — to first real message on both phones
 
@@ -31,14 +31,14 @@
 - ✅ Reply footers stripped (D-014) + DESIGN §6 Hebrew templates: digest header `🏠 Family inc. · יום ו׳ 12/6`, uniform item lines, Hebrew due phrases (dual forms mirror the dashboard), קבוצות section with Hebrew type labels, `⚠ דורש מבט`, Hebrew bridge warning; summarizer CSVs gone — Inbox/Archive append to Sheet tabs
 - ✅ Goldens re-cut deliberately (`--regen` made hermetic against a real reminders log); suite 115 → **172 green**
 
-### M3 — Appliance live = go-live (1 session + ~1h on the VPS)
+### M3 — Appliance live = go-live (repo side ✅ 2026-06-12 session 1; remaining = PO's ~1h at the VPS, runbook: `deploy/README.md`)
 
-- ⬜ Provision VPS per `ENGINEERING.md` §5 (user, TZ=Asia/Jerusalem, uv, Node LTS, systemd units)
-- ⬜ Pair Baileys (one QR scan); place `recipients.json` + service-account JSON + `ANTHROPIC_API_KEY` **+ `FAMILY_INC_SHEET_ID`** in `/etc/family-inc/` (the sheet id is what flips `lib/sheet.py` to the live backend — without it everything keeps running dry against the seed)
-- ⬜ Enable timers: engine 07:25 · digest 07:30 · summarizer hourly (24h) · weekly briefing Sat 21:00 · backup Sun 03:00
-- ⬜ Seed ≥20 real reminders across Car/Health/Education/Contracts (from `Setup/08` seed + kickoff backlog)
-- ⬜ **Acceptance: both phones receive the morning digest 3 consecutive days; one full done→recur cycle visible in the log**
-- ⬜ GitHub Pages live for the dashboard; PWA pinned on both phones (`Dashboard/`→`dashboard/` case rename + `deploy/` scripts land here, with the Pages wiring; copy real `seeds/` + `Dashboard/config.js` to the machines that need them — both untracked since M1/D-024)
+- ✅ `deploy/` landed: idempotent `provision.sh` (user, TZ=Asia/Jerusalem, uv, Node 22, repo, deps, units, the one sudoers line), `deploy.sh` (pull→sync→test→bridge restart), `backup.sh` (tar bridge/state+logs → rclone, 90d prune), 13 systemd units incl. `family-fail-flag@.service`
+- ✅ Delivery hardening (D-027): SPEC §10.2 email fallback built (`lib/mailer.py`; heartbeat >24h → digest by SMTP, stamps normally, falls back to queue when SMTP is down too); fail-flag wired (OnFailure → `logs/fail.flag` → next delivered digest reports + clears, weekly surfaces stragglers); daily digest queues kind=**briefing** (was alert — consumed budget and was circularly deferrable); `recipients.json` → `/etc/family-inc/` (local file = dev fallback); tests 172 → **191 green**
+- ✅ Pages wiring: `.github/workflows/pages.yml` serves `dashboard/` (branch-mode can't serve subdirs), generates gitignored `config.js` from Actions secrets `DASHBOARD_CLIENT_ID`/`DASHBOARD_SHEET_ID`; `Dashboard/`→`dashboard/` case rename (two-step git mv in the session-1 handoff)
+- 🔵 Seed ≥20 real reminders: `seeds/Reminders_Import_M3.csv` drafted — 31 rows across Car/Health/Education/Contracts/Finance/Other from the 08 seed + the kickoff health backlog — **PO reviews dates/owners, then imports** (instructions in `seeds/README.md`)
+- ⬜ The VPS hour: provision → secrets in `/etc/family-inc/` (incl. `FAMILY_INC_SHEET_ID`, the live-backend flip, + SMTP creds for §10.2) → pair Baileys → verify timers → import seeds → enable Pages (Source=GitHub Actions + the two secrets + OAuth origin) → pin PWA on both phones → one green `backup.sh` run
+- ⬜ **Acceptance: both phones receive the morning digest 3 consecutive days; one full done→recur cycle visible in the log** → then flip CLAUDE.md "Current state", tag `v1-live`, M4 after ≥1 week
 
 ### M4 — Summarizer hardening (1 session, after ≥1 week live)
 

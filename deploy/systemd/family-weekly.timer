@@ -1,0 +1,9 @@
+[Unit]
+Description=Family inc. weekly briefing timer (Sat 21:00 Asia/Jerusalem)
+
+[Timer]
+OnCalendar=Sat *-*-* 21:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

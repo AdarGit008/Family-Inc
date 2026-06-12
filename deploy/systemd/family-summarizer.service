@@ -1,0 +1,13 @@
+; WhatsApp summarizer — hourly, 24h: runs at night so CRITICALS can fire any
+; hour; ordinary alerts are still held 22:00–07:00 by the outbox (SPEC §8.2).
+[Unit]
+Description=Family inc. WhatsApp summarizer (hourly)
+OnFailure=family-fail-flag@%n.service
+
+[Service]
+Type=oneshot
+User=familyinc
+WorkingDirectory=/opt/family-inc
+EnvironmentFile=-/etc/family-inc/env
+ExecStart=/usr/local/bin/uv run --no-sync python automation/whatsapp_summarizer.py
+NoNewPrivileges=true

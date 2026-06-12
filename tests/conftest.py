@@ -92,4 +92,5 @@ def tmp_runtime(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "HEARTBEAT_FILE", tmp_path / "state" / "inbox" / "heartbeat.txt")
     monkeypatch.setattr(config, "SCHEMA_DRIFT_FLAG", tmp_path / "logs" / "schema_drift.flag")
     monkeypatch.setattr(config, "ENGINE_FLAGS", tmp_path / "logs" / "engine_flags.jsonl")
+    monkeypatch.setattr(config, "FAIL_FLAG", tmp_path / "logs" / "fail.flag")
     return tmp_path

@@ -1,0 +1,10 @@
+[Unit]
+Description=Family inc. reminders engine timer (07:25 Asia/Jerusalem)
+
+[Timer]
+OnCalendar=*-*-* 07:25:00
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

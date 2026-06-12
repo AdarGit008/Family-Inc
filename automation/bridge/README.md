@@ -22,7 +22,9 @@ Reply parsing (1:1 commands) is PARKED until v1.1 — see `BACKLOG.md`.
 
 ## recipients.json (required for sending)
 
-Create in this directory on the bridge machine — **never commit**:
+Create at `/etc/family-inc/recipients.json` on the appliance (mode 600 — all
+secrets live there, ENGINEERING §2). A local `recipients.json` in this
+directory still works as the creds-less-dev fallback — **never commit it**:
 
 ```json
 {

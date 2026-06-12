@@ -79,8 +79,8 @@ const GUIDE_URLS = {
   'Documents/Passport': 'https://www.kolzchut.org.il/he/חידוש_דרכון',
   'Documents/License':  'https://www.kolzchut.org.il/he/חידוש_רישיון_נהיגה',
   'Health/Maccabi':   'https://www.kolzchut.org.il/he/זכויות_מבוטחי_מכבי',
-  'Kids/⟨child-1⟩/School': 'https://www.kolzchut.org.il/he/סבסוד_מעון_יום',
-  'Kids/⟨child-2⟩/School': 'https://www.kolzchut.org.il/he/סבסוד_מעון_יום',
+  'Kids/kid-1/School': 'https://www.kolzchut.org.il/he/סבסוד_מעון_יום',
+  'Kids/kid-2/School': 'https://www.kolzchut.org.il/he/סבסוד_מעון_יום',
   'Home/Pesach':      'https://www.kolzchut.org.il/he/ניקיון_פסח',
 };
 ```

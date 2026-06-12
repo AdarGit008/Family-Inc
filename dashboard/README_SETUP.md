@@ -48,7 +48,7 @@ Open `http://localhost:5173/` in a browser. `config.js` ships with `DEMO_MODE: t
 
 ### 3. Paste credentials into `config.js`
 
-Open `Dashboard/config.js` and set:
+Open `dashboard/config.js` (copied from `config.example.js`) and set:
 
 ```js
 CLIENT_ID: "1234567890-abc.apps.googleusercontent.com",  // from step 2
@@ -62,14 +62,17 @@ USERS: {
 
 Reload `http://localhost:5173/`. Click "Sign in with Google", grant access. The dashboard now reads live.
 
-### 4. (Optional) Deploy to GitHub Pages
+### 4. Deploy to GitHub Pages (M3 wiring — `.github/workflows/pages.yml`)
 
-1. Make a new public repo, e.g. `family-inc-dashboard`.
-2. Copy the contents of `Dashboard/` to the repo root.
-3. Settings → Pages → Source: `Deploy from a branch` → `main` → `/ (root)` → Save.
-4. Wait ~1 minute. URL will be `https://<your-user>.github.io/family-inc-dashboard/`.
-5. Go back to your OAuth client (step 2.4) and add that URL to **Authorized JavaScript origins**.
-6. Visit the URL on your iPhone in Safari. Share button → "Add to Home Screen". The icon is there with the right title; tap it and it opens fullscreen, no Safari chrome.
+Pages serves `dashboard/` straight from this repo via the Actions workflow
+(branch-mode Pages can only serve `/` or `/docs`). `config.js` is gitignored —
+the workflow **generates** it at deploy time from two repo Actions secrets.
+
+1. Repo → Settings → Pages → Source: **GitHub Actions**.
+2. Repo → Settings → Secrets and variables → Actions → add `DASHBOARD_CLIENT_ID` and `DASHBOARD_SHEET_ID`.
+3. Push to `main` (or run the `pages` workflow manually). URL: `https://<your-user>.github.io/<repo>/`.
+4. Add that origin to the OAuth client's **Authorized JavaScript origins** (step 2.4).
+5. Visit the URL on each iPhone in Safari. Share → "Add to Home Screen"; it opens fullscreen, no Safari chrome.
 
 Both you and your partner sign in with your own Google accounts. Both have full read/write because both are Editors on the Sheet.
 
@@ -105,7 +108,7 @@ If you're offline (subway), writes are queued in `localStorage.family_inc_writeq
 ## F. File map
 
 ```
-Dashboard/
+dashboard/
 ├── index.html              # app shell + view markup
 ├── styles.css              # all styles (light + dark)
 ├── app.js                  # all logic (~500 lines)

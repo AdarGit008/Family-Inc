@@ -1,0 +1,14 @@
+; Daily digest — assembles ONE morning message and queues it via the outbox
+; (SPEC §7.2). Falls back to email when the bridge heartbeat is stale >24h (SPEC §10.2).
+[Unit]
+Description=Family inc. daily digest (07:30 daily)
+After=family-reminders.service
+OnFailure=family-fail-flag@%n.service
+
+[Service]
+Type=oneshot
+User=familyinc
+WorkingDirectory=/opt/family-inc
+EnvironmentFile=-/etc/family-inc/env
+ExecStart=/usr/local/bin/uv run --no-sync python automation/daily_digest.py --send
+NoNewPrivileges=true

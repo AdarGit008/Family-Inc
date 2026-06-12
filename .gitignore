@@ -20,8 +20,9 @@ recipients.json
 *.log
 
 # Dashboard — real config carries Sheet ID, OAuth client id, account emails
-# (config.example.js is the committed template, ENGINEERING §3)
-Dashboard/config.js
+# (config.example.js is the committed template, ENGINEERING §3; on Pages it is
+# generated from Actions secrets by .github/workflows/pages.yml)
+dashboard/config.js
 
 # Secrets / env
 .env
@@ -41,6 +42,18 @@ logs/*
 # Seeds — personal values (names, schedules) stay on the machines that need
 # them; the repo is public-portfolio-safe by construction (CLAUDE.md guardrail)
 seeds/*.csv
+
+# Archive docs carrying personal data (kid names, health backlog, money
+# baseline) — untracked at M3 session 1 (D-027 follow-up to D-024; files stay
+# on PO machines + backups, the rest of Archive/ remains the public paper trail)
+Archive/00_Runbook.md
+Archive/02_Kickoff_Output_2026-05-30.md
+Archive/05_Dashboard_Design.md
+Archive/06_Lift_Recommendations_2026-05-30.md
+Archive/07_Maccabi_Passport_Forwarders.md
+Archive/07_WhatsApp_Group_Summarizer_Spec.md
+Archive/CLAUDE_2026-06-04.md
+Archive/Progress/index.html
 
 # Local caches (the summarizer staging CSVs were deleted at the M2 gspread port;
 # automation/data/ stays ignored so stale copies on dev machines never get tracked)

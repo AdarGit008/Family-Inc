@@ -1,0 +1,9 @@
+[Unit]
+Description=Family inc. WhatsApp summarizer timer (hourly, 24h)
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

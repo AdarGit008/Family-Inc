@@ -1,0 +1,10 @@
+[Unit]
+Description=Family inc. daily digest timer (07:30 Asia/Jerusalem)
+
+[Timer]
+OnCalendar=*-*-* 07:30:00
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

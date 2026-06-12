@@ -7,7 +7,13 @@ order: reminders fires (engine compute) · alerts held by yesterday's budget ·
 the WhatsApp groups digest (written hourly by whatsapp_summarizer) · a Hebcal
 candle-lighting line on Fridays. Renders with `templates.py` copy and writes
 one file per recipient to Briefings/; with --send it also queues through
-lib/outbox.py (kind=alert per SPEC §7.1, id=brief-daily-{date}).
+lib/outbox.py (kind=briefing per SPEC §7.2 — budget-exempt, never deferrable;
+was kind=alert until D-027 — id=brief-daily-{date}).
+
+Delivery degrades per SPEC §10.2: heartbeat stale >24h → the identical
+rendered content goes by SMTP (lib/mailer.py) instead of queueing rows the
+bridge can't deliver. It also reports + clears logs/fail.flag (the systemd
+OnFailure= hook, ENGINEERING §5) — fail loud, in the message humans read.
 
 Until M3 go-live, run WITHOUT --send: files are written, nobody is messaged,
 and nothing accumulates in the bridge outbox.
@@ -39,7 +45,7 @@ from typing import Callable, Optional
 
 from automation import templates as T
 from automation import reminders_engine as engine
-from automation.lib import config, outbox, sheet
+from automation.lib import config, mailer, outbox, sheet
 from automation.lib.dates import fmt_date_he
 
 # ---------------------------------------------------------------------------
@@ -168,7 +174,8 @@ def assemble(today: date, now: Optional[datetime] = None,
              sheet_path: Optional[Path] = None,
              briefings_dir: Optional[Path] = None,
              shabbat_times: Optional[Callable] = _DEFAULT,
-             deferred: Optional[list[dict]] = None) -> Assembly:
+             deferred: Optional[list[dict]] = None,
+             failed_units: Optional[list[str]] = None) -> Assembly:
     """One rendered message per recipient. Pure given its inputs (the Hebcal
     fetcher and the deferred list are injectable so tests stay deterministic
     and dry runs never consume the deferred queue)."""
@@ -193,9 +200,14 @@ def assemble(today: date, now: Optional[datetime] = None,
     wa_text = _wa_digest_text(today, briefings_dir)
     hebcal = _hebcal_line(today, shabbat_times)
 
+    # Overnight unit failures prepend, never replace (DESIGN §6) — the humans
+    # never check journald unless a message tells them to (ENGINEERING §8).
+    fail_line = (T.FAIL_FLAG_LINE.format(units=", ".join(failed_units))
+                 if failed_units else None)
+
     messages: dict[str, str] = {}
     for rcpt, d in digests.items():
-        parts = [render_digest(d, today)]
+        parts = ([fail_line] if fail_line else []) + [render_digest(d, today)]
         mine = [r for r in deferred if r.get("to") in (rcpt, "both")]
         if mine:
             parts.append("\n".join([T.SECTION_DEFERRED] +
@@ -241,6 +253,16 @@ def stamp_sent(assembly: Assembly, queued_for: set[str], now: datetime,
     return len({w.row for w in writes})
 
 
+def read_fail_flag() -> list[str]:
+    """Failed unit names from logs/fail.flag — one line per OnFailure= firing
+    ("<iso-ts> <unit>", ENGINEERING §5). Sorted unique; [] when absent."""
+    try:
+        lines = config.FAIL_FLAG.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    return sorted({ln.strip().split()[-1] for ln in lines if ln.strip()})
+
+
 def run(today: date, dry_run: bool = False, send: bool = False,
         sheet_path: Optional[Path] = None) -> dict[str, str]:
     # The run's clock: wall time normally, 07:30 of the simulated day under
@@ -249,7 +271,9 @@ def run(today: date, dry_run: bool = False, send: bool = False,
     now = datetime.now() if today == date.today() else datetime.combine(today, time(7, 30))
     # Real runs consume the deferred queue; dry runs only peek.
     deferred = outbox.read_deferred(today) if dry_run else outbox.pop_deferred(today)
-    assembly = assemble(today, now=now, deferred=deferred, sheet_path=sheet_path)
+    failed_units = read_fail_flag()
+    assembly = assemble(today, now=now, deferred=deferred, sheet_path=sheet_path,
+                        failed_units=failed_units)
     messages = assembly.messages
     if dry_run:
         for rcpt, body in messages.items():
@@ -258,11 +282,34 @@ def run(today: date, dry_run: bool = False, send: bool = False,
     for p in write_briefing_files(messages, today):
         print(f"wrote {p}")
     if send:
-        if not outbox.bridge_alive():
+        delivered = False
+        stale = outbox.heartbeat_age_hours()
+        if stale is None or stale > config.EMAIL_FALLBACK_AFTER_HOURS:
+            # SPEC §10.2 layer 2: the sender itself degrades — identical
+            # content by SMTP instead of queueing rows the bridge can't deliver.
+            if mailer.send_digest(messages, stale, today):
+                hours = "?" if stale is None else f"{stale:.0f}"
+                print(f"[email-fallback] bridge down {hours}h — digest delivered by SMTP")
+                stamped = stamp_sent(assembly, set(messages), now, sheet_path)
+                if stamped:
+                    print(f"stamped Last Sent/Status on {stamped} row(s)")
+                _clear_fail_flag(failed_units)
+                return messages
+            # Both transports down: queue anyway (bridge delivers on reconnect),
+            # shout, and leave the fail flag for a digest that actually lands.
+            print("[error] email fallback failed — queueing to the bridge outbox; "
+                  "delivery waits for reconnect")
+        elif not outbox.bridge_alive():
             print("[warn] bridge heartbeat stale — digest queued, delivery waits for reconnect")
+            delivered = True  # <24h blip: queued rows go out on reconnect
+        else:
+            delivered = True
         queued_for: set[str] = set()
         for rcpt, body in messages.items():
-            res = outbox.queue(rcpt, body, "alert", source="daily_digest",
+            # kind=briefing (SPEC §7.2, D-027): budget-exempt, never deferrable —
+            # over-budget alerts defer INTO the digest, so the digest itself
+            # must be undeferrable or the ledger goes circular.
+            res = outbox.queue(rcpt, body, "briefing", source="daily_digest",
                                msg_id=f"brief-daily-{today.isoformat()}")
             if res.queued:
                 queued_for.add(rcpt)
@@ -272,7 +319,16 @@ def run(today: date, dry_run: bool = False, send: bool = False,
         stamped = stamp_sent(assembly, queued_for, now, sheet_path)
         if stamped:
             print(f"stamped Last Sent/Status on {stamped} row(s)")
+        if delivered and queued_for:
+            _clear_fail_flag(failed_units)
     return messages
+
+
+def _clear_fail_flag(failed_units: list[str]) -> None:
+    """Reported-in-a-delivered-digest → cleared (ENGINEERING §5). Journald
+    keeps the detail; the flag only exists to get a human to look."""
+    if failed_units:
+        config.FAIL_FLAG.unlink(missing_ok=True)
 
 
 def main():

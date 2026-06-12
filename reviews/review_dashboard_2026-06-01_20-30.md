@@ -48,7 +48,7 @@ team owners (Adar = CTO, Shanee = Chief Design + PO) value pushback over agreeme
 ## Project one-paragraph context
 Adar's household-automation system. Master DB = Google Sheets. PWA dashboard pinned
 to iPhone, write-back to the Sheet. Briefings via WhatsApp (Twilio). Israeli context
-(ILS, Hebrew, Maccabi healthcare). Family = 2 adults + 2 kids (⟨child-1⟩ 3yr, ⟨child-2⟩ 3mo).
+(ILS, Hebrew, Maccabi healthcare). Family = 2 adults + 2 kids (kid-1 3yr, kid-2 3mo).
 Operating principles: briefings > notifications, alert budget 2/day, no kid-facing UI,
 boring tech, one source of truth per domain.
 
@@ -257,7 +257,7 @@ team owners (Adar = CTO, Shanee = Chief Design + PO) value pushback over agreeme
 ## Project one-paragraph context
 Adar's household-automation system. Master DB = Google Sheets. PWA dashboard pinned
 to iPhone, write-back to the Sheet. Briefings via WhatsApp (Twilio). Israeli context
-(ILS, Hebrew, Maccabi healthcare). Family = 2 adults + 2 kids (⟨child-1⟩ 3yr, ⟨child-2⟩ 3mo).
+(ILS, Hebrew, Maccabi healthcare). Family = 2 adults + 2 kids (kid-1 3yr, kid-2 3mo).
 Operating principles: briefings > notifications, alert budget 2/day, no kid-facing UI,
 boring tech, one source of truth per domain.
 
@@ -379,8 +379,8 @@ Effort: **low (1 hr)**. https://apify.com/swerve/yad2-scraper · https://apify.c
 Mechir LaMishtaken's successor. Up to 20% discount + ₪40-60K periphery grants. Lotteries open in waves. Scrape `dira.moch.gov.il` weekly for Northern district tenders. Direct line into the house goal.
 Effort: **low (2 hrs)**. https://www.dira.moch.gov.il
 
-### 1.5 ✅ Tipat Halav + National Immunization Registry (⟨child-2⟩)
-Vaccination registry is online since March 2025. For ⟨child-2⟩ (3 mo): 4-month vaccines next (DTaP-IPV-Hib-HepB + Rotavirus + PCV), then 6-month. No API — but a once-a-month manual sync into the Health tab + Reminders auto-fires.
+### 1.5 ✅ Tipat Halav + National Immunization Registry (kid-2)
+Vaccination registry is online since March 2025. For kid-2 (3 mo): 4-month vaccines next (DTaP-IPV-Hib-HepB + Rotavirus + PCV), then 6-month. No API — but a once-a-month manual sync into the Health tab + Reminders auto-fires.
 Effort: **low (manual)**. https://me.health.gov.il/en/parenting/raising-children/immunization-schedule/babies-immunization-schedule/
 
 ### 1.6 ✅ Tofes 101 + reservist credits (annual, January)
@@ -392,11 +392,11 @@ Annual test SMS arrives ~6 weeks ahead with a TesTime booking link. Forward to a
 Effort: **low (30 min)**. https://www.gov.il/en/service/car_licence_renewal
 
 ### 1.8 ✅ Maccabi → email/SMS forward + parse (no API)
-Maccabi has no public API. The practical play: forward Maccabi confirmation emails/SMS to a Google Workspace label, parse with Apps Script into Health tab + Reminders. Covers ⟨child-1⟩'s pediatrician slots, ⟨child-2⟩'s DDH ultrasound, blood-test bookings.
+Maccabi has no public API. The practical play: forward Maccabi confirmation emails/SMS to a Google Workspace label, parse with Apps Script into Health tab + Reminders. Covers kid-1's pediatrician slots, kid-2's DDH ultrasound, blood-test bookings.
 Effort: **med (3 hrs)**. https://www.maccabi4u.co.il
 
 ### 1.9 ✅ Misrad HaPnim — passport tracker
-Online status check for ⟨child-2⟩'s Israeli passport; recurring reminders for adults' renewal expiries. Polish citizenship status via Urząd Stanu Cywilnego — manual, but auto-remind every 30 days.
+Online status check for kid-2's Israeli passport; recurring reminders for adults' renewal expiries. Polish citizenship status via Urząd Stanu Cywilnego — manual, but auto-remind every 30 days.
 Effort: **low (1 hr)**. https://www.gov.il/en/departments/population_and_immigration_authority
 
 ### 1.10 ✅ Hebrew/RTL chrome (default) with English fallback toggle
@@ -680,7 +680,7 @@ Home (Today)
 │   ├── Car       (test/insurance/license countdown)
 │   └── Contracts (renewals within 60 days)
 └── Appreciation ticker (Recently completed) — grouped by domain:
-    Health    ✓ Pediatrician ⟨child-2⟩  (Shanee, 2h)
+    Health    ✓ Pediatrician kid-2  (Shanee, 2h)
     Money     ✓ Arnona payment       (Adar, yest.)
     Education ✓ Daycare snack day    (Shanee, yest.)
     Car       ✓ Insurance renewal    (Adar, 2d)
@@ -720,13 +720,13 @@ The progress arc is fixed-height (~56px) so the Today section above the fold doe
 │   — no events —                         │
 │                                         │
 │ NEXT 7 DAYS                             │
-│   🟡 Dentist ⟨child-1⟩    Tue Jun 2 (5d)  │
+│   🟡 Dentist kid-1    Tue Jun 2 (5d)  │
 │   📆 Date night         Fri May 29 19:00│
 │                                         │
 │ ▸ Money · Health · Goals · Car · ...    │
 │                                         │
 │ RECENTLY COMPLETED                      │
-│   Health    ✓ Pediatrician ⟨child-2⟩       │
+│   Health    ✓ Pediatrician kid-2       │
 │              (Shanee, 2h)               │
 │   Money     ✓ Arnona payment            │
 │              (Adar, yesterday)          │
@@ -760,7 +760,7 @@ The screen never feels empty: the arc has yesterday's tick, the ticker shows the
 │      [✓ done]  [+7d]  [mute 30d]        │
 │   🟠 Mortgage payment   due today       │
 │      [✓ done]  [+7d]  [add note]        │
-│   🟠 Dentist ⟨child-1⟩     due today       │
+│   🟠 Dentist kid-1     due today       │
 │      [✓ done]  [+7d]  [add note]        │
 │                                         │
 │ CALENDAR                                │
@@ -774,7 +774,7 @@ The screen never feels empty: the arc has yesterday's tick, the ticker shows the
 │ RECENTLY COMPLETED                      │
 │   Money  ✓ Annual tax form              │
 │           (Adar, this AM)               │
-│   Health ✓ Pediatrician ⟨child-2⟩          │
+│   Health ✓ Pediatrician kid-2          │
 │           (Shanee, yesterday)           │
 │   … 4 more                              │
 └─────────────────────────────────────────┘
@@ -801,7 +801,7 @@ No "behind — 6 to go" nudge; the arc only ever reports what was done, not what
 │      [✓ done]  [+7d]  [mute 30d]        │
 │   🟢 Mortgage payment   ⏳ queued —      │
 │      will sync on reconnect             │
-│   🟢 Dentist ⟨child-1⟩     ⏳ queued —      │
+│   🟢 Dentist kid-1     ⏳ queued —      │
 │      will sync on reconnect             │
 │                                         │
 │ NEXT 7 DAYS                             │

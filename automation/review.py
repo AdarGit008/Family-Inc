@@ -54,7 +54,7 @@ Run:
 
     # Lane-scoped review with extra files:
     python3 automation/review.py --lane dashboard --changes changes.md \\
-        --extra-files Dashboard/index.html,Dashboard/app.js
+        --extra-files dashboard/index.html,dashboard/app.js
 
     # DeepSeek provider (key from env only):
     DEEPSEEK_API_KEY=... python3 automation/review.py --provider deepseek \\
@@ -207,7 +207,7 @@ LANE_DEFAULTS: dict[str, list[str]] = {
     ],
     "dashboard": [
         "DESIGN.md",
-        # Dashboard/{index.html,app.js,styles.css} — pass via --extra-files,
+        # dashboard/{index.html,app.js,styles.css} — pass via --extra-files,
         # since which ones were touched varies session-to-session.
     ],
     "automation": [

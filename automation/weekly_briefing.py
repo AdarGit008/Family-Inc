@@ -223,6 +223,13 @@ def _system_flags() -> list[str]:
                           f"`{f.get('title', '')}`")
         if len(flags) > 5:
             issues.append(f"- (+{len(flags) - 5} older engine flags in logs/engine_flags.jsonl)")
+    if config.FAIL_FLAG.exists():
+        # Normally reported + cleared by the next delivered daily digest; still
+        # present on Saturday means digests aren't landing — say so here too.
+        units = sorted({ln.strip().split()[-1] for ln in
+                        config.FAIL_FLAG.read_text(encoding="utf-8").splitlines() if ln.strip()})
+        issues.append("- ⚠ **unit failures unreported**: " + ", ".join(units) +
+                      " — fail.flag uncleared, are digests being delivered? (journalctl)")
     return issues
 
 

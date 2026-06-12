@@ -118,6 +118,19 @@ HEBCAL_GEONAME_ID = 294801   # nearest metro (Haifa) — same coastal zman as ho
 HEBCAL_TTL_SECONDS = 24 * 60 * 60
 
 # ---------------------------------------------------------------------------
+# Email fallback (SPEC §10.2 — delivery layer 2) + fail-loud flag (ENG §5)
+# ---------------------------------------------------------------------------
+EMAIL_FALLBACK_AFTER_HOURS = 24       # heartbeat staler than this → the daily
+                                      # digest degrades to SMTP (lib/mailer.py)
+SMTP_DEFAULT_HOST = "smtp.gmail.com"  # overridable via SMTP_HOST/SMTP_PORT env;
+SMTP_DEFAULT_PORT = 587               # creds (SMTP_USER/SMTP_PASS) env-only
+EMAIL_TO_ENV = "FAMILY_INC_EMAIL_TO"  # comma-separated fallback recipients;
+                                      # unset → Settings.UserMap emails
+FAIL_FLAG = LOGS_DIR / "fail.flag"    # appended by family-fail-flag@.service
+                                      # (systemd OnFailure=); reported + cleared
+                                      # by the next delivered daily digest
+
+# ---------------------------------------------------------------------------
 # Secrets loading (appliance: /etc/family-inc/env, mode 600)
 # ---------------------------------------------------------------------------
 ENV_FILE = Path("/etc/family-inc/env")

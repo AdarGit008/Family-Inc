@@ -165,7 +165,7 @@ heartbeat: append one line to logs/reminders_log.csv every run (fired/sent/skipp
 
 ### 7.2 Weekly briefing (Sat 21:00) + daily digest assembly (07:30)
 
-Weekly: read all tabs → LLM writes a 5-scene narrative (DESIGN.md §6) → `Briefings/` + outbox(kind=briefing). LLM unavailable → deterministic template. Daily: one short message assembled from engine fires + WhatsApp digest section + Hebcal line (Fridays/erev chag). **One morning message, not several** — assembly happens before queuing; on send success the digest stamps each fired row's Last Sent/Status per §7.1.
+Weekly: read all tabs → LLM writes a 5-scene narrative (DESIGN.md §6) → `Briefings/` + outbox(kind=briefing). LLM unavailable → deterministic template. Daily: one short message assembled from engine fires + WhatsApp digest section + Hebcal line (Fridays/erev chag), queued as outbox(**kind=briefing** — budget-exempt and never deferrable, like every briefing; was kind=alert until D-027, which made the §8.1 deferral circular). **One morning message, not several** — assembly happens before queuing; on send success the digest stamps each fired row's Last Sent/Status per §7.1.
 
 ### 7.3 WhatsApp summarizer (hourly)
 

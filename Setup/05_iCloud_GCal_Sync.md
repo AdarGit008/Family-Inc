@@ -45,7 +45,7 @@ In Adar's GCal, hover the calendar in the left rail → three dots → pick:
 
 - **Adar (primary)** → green (`Basil`)
 - **Shanee (iCloud)** → blue (`Blueberry`)
-- **Kids (⟨child-1⟩/⟨child-2⟩)** → tangerine (`Tangerine`) — if you make one
+- **Kids (kid-1/kid-2)** → tangerine (`Tangerine`) — if you make one
 - **Family inc. system events** (auto-created from Reminders) → graphite (`Graphite`)
 
 The PWA briefing reads the GCal color into the event tile, so this is the only place you need to set it.

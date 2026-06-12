@@ -1,0 +1,14 @@
+; Weekly backup — tars bridge/state (incl. Baileys auth_state) + logs/ to
+; Drive via rclone. After a VPS rebuild, RESTORE auth_state before re-pairing
+; (ENGINEERING §5.5).
+[Unit]
+Description=Family inc. weekly backup (Sun 03:00)
+OnFailure=family-fail-flag@%n.service
+
+[Service]
+Type=oneshot
+User=familyinc
+WorkingDirectory=/opt/family-inc
+EnvironmentFile=-/etc/family-inc/env
+ExecStart=/opt/family-inc/deploy/backup.sh
+NoNewPrivileges=true

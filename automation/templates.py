@@ -56,6 +56,12 @@ CRITICAL_LINE = "⚠ {group}: {one_liner} ({sender}, {time})"
 
 # --- Bridge health (prepends, never replaces — DESIGN §6) --------------------
 BRIDGE_SILENT = "⚠ הגשר שקט {hours:.0f} שעות — ייתכן שפספסנו הודעות"
+FAIL_FLAG_LINE = "⚠ תקלה טכנית הלילה: {units} — נרשם ביומן"   # [Shanee review]
+
+# --- Email fallback (SPEC §10.2 — body note copy is spec'd verbatim) ---------
+EMAIL_FALLBACK_SUBJECT = "Family inc. — digest {date} (bridge down)"
+EMAIL_FALLBACK_NOTE = "delivered by email — bridge down {hours}h"
+EMAIL_SECTION_HEAD = "— {recipient} —"
 
 # --- Weekly briefing ---------------------------------------------------------
 # Deterministic fallback copy (SPEC §7.2); the LLM five-scene narrative and a

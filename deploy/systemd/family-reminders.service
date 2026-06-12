@@ -1,0 +1,12 @@
+; Reminders engine — computes fires + recurrence write-backs, does not send (SPEC §7.1).
+[Unit]
+Description=Family inc. reminders engine (07:25 daily)
+OnFailure=family-fail-flag@%n.service
+
+[Service]
+Type=oneshot
+User=familyinc
+WorkingDirectory=/opt/family-inc
+EnvironmentFile=-/etc/family-inc/env
+ExecStart=/usr/local/bin/uv run --no-sync python automation/reminders_engine.py
+NoNewPrivileges=true

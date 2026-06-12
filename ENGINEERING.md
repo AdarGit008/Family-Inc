@@ -5,7 +5,7 @@
 
 ---
 
-## 1. Repo layout (current — established in M1, 2026-06-12; two exceptions: `deploy/` lands in M3 with provisioning, and the PWA still lives at `Dashboard/` — the case rename rides along with the M3 Pages wiring)
+## 1. Repo layout (current — established in M1, completed in M3 session 1, both 2026-06-12: `deploy/` landed with provisioning and the PWA moved to `dashboard/`)
 
 ```
 family-inc/
@@ -56,7 +56,7 @@ Rules: scripts never define utilities that belong in `lib/` (CI greps for redefi
 | Key deps | gspread, google-auth, anthropic, pytest, requests | additions need a one-line justification in the PR/commit body |
 | Node | LTS, plain npm | bridge only; `npm ci` |
 | Scheduling | **systemd timers** (not crontab) | journald logs, `OnFailure=` hooks, `Persistent=true` catches missed runs after reboots |
-| Hosting (dashboard) | GitHub Pages from `main:/dashboard` | static, zero backend |
+| Hosting (dashboard) | GitHub Pages via Actions (`.github/workflows/pages.yml`) serving `main:/dashboard` | static, zero backend; branch-mode Pages can't serve subdirs — the workflow also generates the gitignored `config.js` from Actions secrets (D-027) |
 | Secrets | `/etc/family-inc/` mode 600 | `service-account.json`, `env` (ANTHROPIC_API_KEY, SMTP app password, review-provider keys), `recipients.json` |
 
 ## 3. Configuration
@@ -94,7 +94,7 @@ Units (schedules are code — change them via PR, not on the box):
 | `family-weekly.timer` | Sat 21:00 | weekly briefing |
 | `family-backup.timer` | Sun 03:00 | tar `bridge/state` + `logs/` → Drive via rclone |
 
-All timers: `Persistent=true`, `OnFailure=family-fail-flag.service` (writes a flag file that the next digest reports — fail loud, §SPEC 3.6).
+All units: `Persistent=true` on timers, `OnFailure=family-fail-flag@%n.service` — appends the failing unit to `logs/fail.flag`; the next **delivered** digest reports it (Hebrew line prepended) and clears the file; a flag still present on Saturday means digests aren't landing, and the weekly briefing says so (fail loud, SPEC §3.6).
 
 ## 6. Deployment
 

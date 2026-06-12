@@ -1,0 +1,52 @@
+# Family inc. — dashboard → GitHub Pages (ENGINEERING §2/§6).
+# Branch-mode Pages can only serve / or /docs, so Actions is the mechanism for
+# serving dashboard/. config.js is gitignored (D-024); it is GENERATED here
+# from Actions secrets at deploy time — Sheet id + OAuth client id reach the
+# live site without ever entering git history.
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["dashboard/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate config.js from secrets
+        env:
+          CLIENT_ID: ${{ secrets.DASHBOARD_CLIENT_ID }}
+          SHEET_ID: ${{ secrets.DASHBOARD_SHEET_ID }}
+        run: |
+          test -n "$CLIENT_ID" || { echo "::error::DASHBOARD_CLIENT_ID secret missing"; exit 1; }
+          test -n "$SHEET_ID"  || { echo "::error::DASHBOARD_SHEET_ID secret missing"; exit 1; }
+          # config.example.js is the template of record; override only the two ids.
+          # USERS fallback stays placeholder — live identity is Settings.UserMap (SPEC §7.6).
+          sed -e "s|PASTE_YOUR_CLIENT_ID_HERE.apps.googleusercontent.com|$CLIENT_ID|" \
+              -e "s|PASTE_YOUR_SHEET_ID_HERE|$SHEET_ID|" \
+              dashboard/config.example.js > dashboard/config.js
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dashboard
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
