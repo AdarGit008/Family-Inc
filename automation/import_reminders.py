@@ -68,11 +68,43 @@ def plan_cells(rows: list[list[str]], clear_through: int) -> list[tuple[int, int
     return cells
 
 
+def fix_view(n_rows: int, clear_through: int) -> None:
+    """One-off live-Sheet view repair (go-live 2026-06-12): the seed template
+    carried column-D date formatting and the K/L formulas only down to its own
+    sample rows. (a) format D as DATE dd/mm/yyyy (§6.1) through clear_through,
+    (b) copyPaste K2:L2 → K3:L{data end} (PASTE_FORMULA — relative refs adjust
+    like a manual ⌘C/⌘V fill-down).
+
+    Reaches into GSheetBackend internals (ws/sh) deliberately: this is a
+    maintenance tool, live-backend-only, and constructing no client of its own
+    (the ENGINEERING §1 rule is about client construction, which stays in
+    lib/sheet)."""
+    be = sheet.backend()
+    ws = be._ws(config.REMINDERS_TAB)
+    ws.format(f"D2:D{clear_through}",
+              {"numberFormat": {"type": "DATE", "pattern": "dd/mm/yyyy"}})
+    last_data_row = 1 + n_rows
+    be.sh.batch_update({"requests": [{
+        "copyPaste": {
+            "source": {"sheetId": ws.id, "startRowIndex": 1, "endRowIndex": 2,
+                       "startColumnIndex": 10, "endColumnIndex": 12},
+            "destination": {"sheetId": ws.id, "startRowIndex": 2,
+                            "endRowIndex": last_data_row,
+                            "startColumnIndex": 10, "endColumnIndex": 12},
+            "pasteType": "PASTE_FORMULA",
+        }}]})
+    print(f"view fixed: D2:D{clear_through} formatted dd/mm/yyyy; "
+          f"K/L formulas filled to row {last_data_row}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv", default=str(config.SEEDS_DIR / "Reminders_Import_M3.csv"))
     ap.add_argument("--clear-through", type=int, default=60,
                     help="clear sample remnants down to this sheet row (default 60)")
+    ap.add_argument("--fix-formats", action="store_true",
+                    help="before writing: format col D as dd/mm/yyyy dates and "
+                         "fill the K/L formulas down over the data rows")
     ap.add_argument("--yes", action="store_true", help="write (default: dry-run plan)")
     args = ap.parse_args()
 
@@ -95,8 +127,11 @@ def main():
     for r in rows[:3]:
         print(f"  e.g. {r[0]} · {r[1]} · {r[2]} · due {r[3]}")
     if not args.yes:
-        print("dry-run — rerun with --yes to write")
+        print("dry-run — rerun with --yes to write"
+              + (" (+--fix-formats requested)" if args.fix_formats else ""))
         return
+    if args.fix_formats:
+        fix_view(len(rows), args.clear_through)  # format BEFORE writing → dates parse
     sheet.backend().batch_update(config.REMINDERS_TAB, cells)
     print(f"written: {len(rows)} reminders. Now eyeball column K in the tab — "
           "numbers mean the dates parsed; errors mean fix File→Settings→Locale "
