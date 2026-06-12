@@ -40,7 +40,9 @@ jobs:
           # USERS fallback stays placeholder — live identity is Settings.UserMap (SPEC §7.6).
           sed -e "s|PASTE_YOUR_CLIENT_ID_HERE.apps.googleusercontent.com|$CLIENT_ID|" \
               -e "s|PASTE_YOUR_SHEET_ID_HERE|$SHEET_ID|" \
+              -e "s|DEMO_MODE: true|DEMO_MODE: false|" \
               dashboard/config.example.js > dashboard/config.js
+          grep -q "DEMO_MODE: false" dashboard/config.js || { echo "::error::DEMO_MODE still true in generated config.js"; exit 1; }
 
       - uses: actions/configure-pages@v5
 
