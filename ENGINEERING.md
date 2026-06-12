@@ -54,7 +54,7 @@ Rules: scripts never define utilities that belong in `lib/` (CI greps for redefi
 |---|---|---|
 | Python | 3.12 + **uv** | `uv sync` on the box; lockfile committed |
 | Key deps | gspread, google-auth, anthropic, pytest, requests | additions need a one-line justification in the PR/commit body |
-| Node | LTS, plain npm | bridge only; `npm ci` |
+| Node | LTS, plain npm | bridge only; `npm ci`; `package-lock.json` committed (found missing at go-live 2026-06-12) |
 | Scheduling | **systemd timers** (not crontab) | journald logs, `OnFailure=` hooks, `Persistent=true` catches missed runs after reboots |
 | Hosting (dashboard) | GitHub Pages via Actions (`.github/workflows/pages.yml`) serving `main:/dashboard` | static, zero backend; branch-mode Pages can't serve subdirs — the workflow also generates the gitignored `config.js` from Actions secrets (D-027) |
 | Secrets | `/etc/family-inc/` mode 600 | `service-account.json`, `env` (ANTHROPIC_API_KEY, SMTP app password, review-provider keys), `recipients.json` |

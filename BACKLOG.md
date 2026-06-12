@@ -37,7 +37,8 @@
 - ✅ Delivery hardening (D-027): SPEC §10.2 email fallback built (`lib/mailer.py`; heartbeat >24h → digest by SMTP, stamps normally, falls back to queue when SMTP is down too); fail-flag wired (OnFailure → `logs/fail.flag` → next delivered digest reports + clears, weekly surfaces stragglers); daily digest queues kind=**briefing** (was alert — consumed budget and was circularly deferrable); `recipients.json` → `/etc/family-inc/` (local file = dev fallback); tests 172 → **191 green**
 - ✅ Pages wiring: `.github/workflows/pages.yml` serves `dashboard/` (branch-mode can't serve subdirs), generates gitignored `config.js` from Actions secrets `DASHBOARD_CLIENT_ID`/`DASHBOARD_SHEET_ID`; `Dashboard/`→`dashboard/` case rename (two-step git mv in the session-1 handoff)
 - 🔵 Seed ≥20 real reminders: `seeds/Reminders_Import_M3.csv` drafted — 31 rows across Car/Health/Education/Contracts/Finance/Other from the 08 seed + the kickoff health backlog — **PO reviews dates/owners, then imports** (instructions in `seeds/README.md`)
-- ⬜ The VPS hour: provision → secrets in `/etc/family-inc/` (incl. `FAMILY_INC_SHEET_ID`, the live-backend flip, + SMTP creds for §10.2) → pair Baileys → verify timers → import seeds → enable Pages (Source=GitHub Actions + the two secrets + OAuth origin) → pin PWA on both phones → one green `backup.sh` run
+- ⬜ The VPS hour: provision (private-repo clone via read-only fine-grained PAT — repo turned out to be private at go-live) → secrets in `/etc/family-inc/` (`FAMILY_INC_SHEET_ID` = the live-backend flip, + SMTP creds for §10.2; **no LLM key — keyless go-live, provider call in M4**) → pair Baileys → verify timers → import seeds → one green `backup.sh` run · *prerequisite step-zero done 2026-06-12: live `Family_OS` Sheet created from the seed xlsx, Settings.UserMap fixed, GCP project + service account + OAuth client created*
+- ⬜ **Publication** (gates Pages + PWA): history rewrite first — `git filter-repo` strips the 8 Archive personal docs + pre-D-024 blobs (kid names, kickoff health/money) from ALL history — then flip repo public (free-plan Pages requires public), enable Pages (Source=GitHub Actions + the two secrets + OAuth origin), pin PWA on both phones, rotate the provision PAT. **Repo stays private until the rewrite — D-027f's deferral is only safe unpublished.** Dashboard-dependent acceptance items (#2, #5) wait for this; digest acceptance (#1) ticks from tonight
 - ⬜ **Acceptance: both phones receive the morning digest 3 consecutive days; one full done→recur cycle visible in the log** → then flip CLAUDE.md "Current state", tag `v1-live`, M4 after ≥1 week
 
 ### M4 — Summarizer hardening (1 session, after ≥1 week live)
@@ -45,6 +46,7 @@
 - ⬜ Sender→role roster seeded (makes hard rules 2–3 reliable)
 - ⬜ Phase F weekly accuracy review surface (false-positive purge)
 - ⬜ PO call (joint): do family-group criticals override digest-only routing?
+- ⬜ PO call (joint): LLM provider — Anthropic (as spec'd, §8.7) vs DeepSeek (cheaper; PRC data-handling tradeoff for group plaintext + Sheet data). v1 went live **keyless** by design (2026-06-12): keyword classification + template briefing until this lands; if DeepSeek wins, `lib/llm.py` gains an OpenAI-compatible backend (~30 lines + tests)
 - ⬜ WhatsApp_Inbox hot-tab rolloff against the live Sheet (SPEC §6.2; deferred from M2 — nothing to roll off before ~3 months of live rows; also resolve the 90-day-spec vs 30-day-config disagreement, D-025)
 - ⬜ Milestone review (external model) on the live system
 
