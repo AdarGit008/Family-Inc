@@ -1090,7 +1090,56 @@
     });
   }
 
-  // ---------------- Appreciation ticker ----------------\n  // Shows up to 7 recently-completed reminders grouped by domain.\n  // Reads DoneAt and LastDoneBy from Phase 6.1 columns.\n  function renderAppreciationTicker() {\n    const el = document.getElementById('appreciation-ticker');\n    if (!el) return;\n    const completed = state.data.reminders\n      .filter(r => r.status === 'Done' && r.doneAt)\n      .sort((a, b) => b.doneAt - a.doneAt)\n      .slice(0, 7);\n    if (!completed.length) {\n      el.innerHTML = `<div class=\"empty\">${escapeHtml(t('ticker.empty'))}</div>`;\n      return;\n    }\n    // Group by domain\n    const byDomain = {};\n    completed.forEach(r => {\n      const dom = r.domain || 'Other';\n      if (!byDomain[dom]) byDomain[dom] = [];\n      byDomain[dom].push(r);\n    });\n    let html = '';\n    const domainOrder = ['Health', 'Money', 'Car', 'Education', 'Contracts', 'Calendar'];\n    const ordered = [...new Set([...domainOrder, ...Object.keys(byDomain)])];\n    ordered.forEach(dom => {\n      const items = byDomain[dom];\n      if (!items) return;\n      html += `<div class=\"ticker-domain\">${escapeHtml(dom)}</div>`;\n      items.forEach(r => {\n        const who = r.lastDoneBy || 'Someone';\n        const when = relativeTime(r.doneAt);\n        html += `<div class=\"ticker-row\"><span>✓ ${escapeHtml(r.title)}</span><span class=\"ticker-attribution\">${escapeHtml(who)}, ${when}</span></div>`;\n      });\n    });\n    el.innerHTML = html;\n  }\n\n  // Relative time helper for the ticker.\n  function relativeTime(d) {\n    if (!d) return '';\n    const min = Math.round((new Date() - d) / 60000);\n    if (min < 1) return 'just now';\n    if (min < 60) return `${min}m ago`;\n    const h = Math.round(min / 60);\n    if (h < 24) return `${h}h ago`;\n    const days = Math.round(h / 24);\n    if (days === 1) return 'yesterday';\n    if (days < 7) return `${days}d ago`;\n    return formatDateHE(d);\n  }
+  // ---------------- Appreciation ticker ----------------
+  // Shows up to 7 recently-completed reminders grouped by domain.
+  // Reads DoneAt and LastDoneBy from Phase 6.1 columns.
+  function renderAppreciationTicker() {
+    const el = document.getElementById('appreciation-ticker');
+    if (!el) return;
+    const completed = state.data.reminders
+      .filter(r => r.status === 'Done' && r.doneAt)
+      .sort((a, b) => b.doneAt - a.doneAt)
+      .slice(0, 7);
+    if (!completed.length) {
+      el.innerHTML = `<div class="empty">${escapeHtml(t('ticker.empty'))}</div>`;
+      return;
+    }
+    // Group by domain
+    const byDomain = {};
+    completed.forEach(r => {
+      const dom = r.domain || 'Other';
+      if (!byDomain[dom]) byDomain[dom] = [];
+      byDomain[dom].push(r);
+    });
+    let html = '';
+    const domainOrder = ['Health', 'Money', 'Car', 'Education', 'Contracts', 'Calendar'];
+    const ordered = [...new Set([...domainOrder, ...Object.keys(byDomain)])];
+    ordered.forEach(dom => {
+      const items = byDomain[dom];
+      if (!items) return;
+      html += `<div class="ticker-domain">${escapeHtml(dom)}</div>`;
+      items.forEach(r => {
+        const who = r.lastDoneBy || 'Someone';
+        const when = relativeTime(r.doneAt);
+        html += `<div class="ticker-row"><span>✓ ${escapeHtml(r.title)}</span><span class="ticker-attribution">${escapeHtml(who)}, ${when}</span></div>`;
+      });
+    });
+    el.innerHTML = html;
+  }
+
+  // Relative time helper for the ticker.
+  function relativeTime(d) {
+    if (!d) return '';
+    const min = Math.round((new Date() - d) / 60000);
+    if (min < 1) return 'just now';
+    if (min < 60) return `${min}m ago`;
+    const h = Math.round(min / 60);
+    if (h < 24) return `${h}h ago`;
+    const days = Math.round(h / 24);
+    if (days === 1) return 'yesterday';
+    if (days < 7) return `${days}d ago`;
+    return formatDateHE(d);
+  }
 
   // Build a last-7-day spending series from transactions (signed-amount sum per day).
   // Falls back to null if no transactions are available.
