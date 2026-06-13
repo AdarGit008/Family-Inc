@@ -3,7 +3,7 @@
 *The only live backlog. Status legend: ⬜ todo · 🔵 in progress · ✅ done · 🧊 frozen.*
 *v1 definition and acceptance criteria live in `SPEC.md` §11. Migration session plan lives in `ENGINEERING.md` §9.*
 
-**Now:** milestone = **M3** (go-live) — **appliance live since 2026-06-12 evening** (paired, live Sheet, 33 reminders, backup green); remaining = bridge v7 re-pair (D-029), **PO runs the publication sequence** (`deploy/README.md` §6–§7), 3-day acceptance watch · open via `NEXT_SESSION_PROMPT.md` · last session: 2026-06-12 (M3 session 3: D-030 publication rewrite kit — `publish.sh` + path list + gitignored redactions, rehearsed clean on a sandbox clone, town/health-phrase scrubs incl. 12 HEAD residuals — 204 tests)
+**Now:** milestone = **M3** (go-live) — **fully live as of 2026-06-13** (Baileys 7 re-paired, publication done, PWA pinned, 3-day acceptance in progress: day 1/3 = 2026-06-13); window closes after 2026-06-15 morning digest → tag `v1-live` · last session: **2026-06-13 (data-fetching planning session, D-031–034)** — finance stack stays frozen, **L2/L3 killed**, **Dira unfrozen → M5** (build after acceptance, ~Jun 16); prior: 2026-06-12 (M3 s3, D-030)
 
 ## v1 — to first real message on both phones
 
@@ -38,10 +38,10 @@
 - ✅ Pages wiring: `.github/workflows/pages.yml` serves `dashboard/` (branch-mode can't serve subdirs), generates gitignored `config.js` from Actions secrets `DASHBOARD_CLIENT_ID`/`DASHBOARD_SHEET_ID`; `Dashboard/`→`dashboard/` case rename (two-step git mv in the session-1 handoff)
 - ✅ Seed ≥20 real reminders: **33 rows imported to the live Sheet 2026-06-12** (import tool grew `--fix-formats` for the template's date-format + K/L formula gaps en route)
 - ✅ The VPS hour — **done 2026-06-12 evening**: provisioned (private-repo clone via read-only fine-grained PAT), secrets in `/etc/family-inc/` (`FAMILY_INC_SHEET_ID` live flip + SMTP; keyless go-live, LLM provider call in M4), Baileys paired, timers verified, seeds imported, one green `backup.sh` run
-- ✅ Day-1 fix (D-029): bridge → **Baileys 7.0.0-rc13 + ESM** — 6.7.x (pre-LID) couldn't encrypt the self-send leg, so every bridge→Adar message sat "waiting for this message" on his phone while Shanee's delivered; **VPS step pending: deploy + wipe `state/auth_state/` + re-pair** (2 min, block in session-2 handoff)
-- 🔵 **Publication** (gates Pages + PWA): **rewrite kit landed + rehearsed 2026-06-12 (D-030)** — `deploy/publish.sh` (fresh mirror clone → filter-repo → grep gauntlet over all refs → confirmed force-push), `deploy/publish_paths.txt` (24 dead paths incl. pre-M1 locations), gitignored `seeds/redact.txt` (names/DOBs/town/email rules — **this machine + backups only**); town + health-phrase scrubs approved incl. 12 HEAD residuals D-024 missed. Sandbox rehearsal: gauntlet + independent Hebrew/Latin sweep clean, 204 green on the rewritten tree. **Remaining (PO, runbook `deploy/README.md` §6):** run `publish.sh` → re-point VPS + fresh-clone Macs → flip public → Pages §7 (Source=GitHub Actions + two secrets + OAuth origin) → pin PWA both phones → VPS remote to credless public URL + revoke provision PAT. Dashboard-dependent acceptance items (#2, #5) wait for this; digest acceptance (#1) ticks independently once D-029 is re-paired
+- ✅ Day-1 fix (D-029): bridge → **Baileys 7.0.0-rc13 + ESM** — deployed, `auth_state/` wiped, re-paired on VPS — **done 2026-06-13**
+- ✅ **Publication** (D-030): `publish.sh` run, repo public, Pages live (GitHub Actions + secrets + OAuth origin), PWA pinned to both phones, VPS remote updated to credless public URL, provision PAT revoked — **done 2026-06-13**
 - ✅ Publication-day dashboard fix: the appreciation-ticker block (landed 15890a4/D-028) was one literal-`\n` comment line — `renderAll` called an undefined function, killing boot before `initAuth`, so sign-in could only toast "OAuth not configured"; de-escaped back into 50 lines of code (`node --check` green), `sw.js` shell cache bumped v2→v3 so cached-broken clients self-heal. Ticker is live but **unstyled + absent from DESIGN §6** — style/spec call (Shanee) at the next session. Second layer found under it: the Pages workflow generated `config.js` from the example with `DEMO_MODE: true` intact — real ids present but ignored, `initAuth` returned silently, site served mock data; sed now flips the flag + a generation-time guard fails the deploy if it survives, shell cache → v4
-- ⬜ **Acceptance: both phones receive the morning digest 3 consecutive days; one full done→recur cycle visible in the log** — clock starts after the D-029 re-pair (first countable digest = first morning after; WhatsApp delivery only, D-028) → then flip CLAUDE.md "Current state", tag `v1-live`, M4 after ≥1 week
+- 🔵 **Acceptance: both phones receive the morning digest 3 consecutive days; one full done→recur cycle visible in the log** — **clock started 2026-06-13 (day 1/3); window closes after 2026-06-15 morning digest** → then flip CLAUDE.md "Current state", tag `v1-live`, M4 after ≥1 week
 
 ### M4 — Summarizer hardening (1 session, after ≥1 week live)
 
@@ -49,9 +49,20 @@
 - ⬜ Phase F weekly accuracy review surface (false-positive purge)
 - ⬜ PO call (joint): do family-group criticals override digest-only routing?
 - ⬜ PO call (joint): quiet-day digest goes to Adar only (pre-M1 heartbeat behavior preserved) — Shanee gets nothing on days without her fires, incl. the WhatsApp-groups section. Partner-symmetric? (noticed at go-live 2026-06-12)
-- ⬜ PO call (joint): LLM provider — Anthropic (as spec'd, §8.7) vs DeepSeek (cheaper; PRC data-handling tradeoff for group plaintext + Sheet data). v1 went live **keyless** by design (2026-06-12): keyword classification + template briefing until this lands; if DeepSeek wins, `lib/llm.py` gains an OpenAI-compatible backend (~30 lines + tests)
+- ⬜ LLM provider — **direction set to DeepSeek (D-032, 2026-06-13, Adar in-session); remaining = Shanee's confirm of the joint call + wiring** (`lib/llm.py` OpenAI-compatible backend, ~30 lines + tests; §8.6/§8.7 update to name DeepSeek at wiring). v1 stays **keyless** (keyword classification + template briefing) until then; the PRC data-handling tradeoff for group plaintext + Sheet data is accepted by that call
 - ⬜ WhatsApp_Inbox hot-tab rolloff against the live Sheet (SPEC §6.2; deferred from M2 — nothing to roll off before ~3 months of live rows; also resolve the 90-day-spec vs 30-day-config disagreement, D-025)
 - ⬜ Milestone review (external model) on the live system
+
+### M5 — Property tracker (unfrozen 2026-06-13, D-034) — build after acceptance (≥2026-06-16)
+
+*First post-acceptance build; independent of finance. Full spec: `SPEC.md` §12.1. (`session_kickoff.py` will name M4 as "current" since it lists first with open items — M5 is the earlier build in wall-clock; M4 still waits ≥1 week live.)*
+
+- ⬜ Provision headless Chromium on the VPS (`provision.sh`: chromium + shared libs; shared with a future finance scraper)
+- ⬜ `automation/property_scrape.*` — load saved-search URLs from `/etc/family-inc/property_searches.json`, extract listing cards, diff `listing_id` vs `/var/lib/family-inc/property/seen.json`
+- ⬜ `Property-Listings` tab created; new listings written via `lib/sheet` (dedup on `listing_id`)
+- ⬜ `family-property.timer` (1–2×/day) + `TimeoutStartSec`/`MemoryMax`; fail-flag on scrape error
+- ⬜ Digest gains a "🏠 דירות חדשות / New listings" section (silent landing, no alert; DESIGN copy call)
+- ⬜ Tests: card parse, dedup, empty-result + anti-bot-block fail-loud path
 
 ## v1.1 candidates (unordered — pick after v1 is boring)
 
@@ -64,13 +75,13 @@
 
 ## Frozen lanes 🧊
 
-*Frozen = script moves to `attic/`, runbook to `Archive/`, no maintenance. Unfreeze = the stated condition is true AND v1 acceptance has held for 30 days.*
+*Frozen = script moves to `attic/`, runbook to `Archive/`, no maintenance. Unfreeze = the stated condition is true AND v1 acceptance has held for 30 days. (D-034 fast-tracked Dira/property to post-3-day-acceptance — active search.)*
 
 | Lane | Assets | Unfreeze condition |
 |---|---|---|
-| Finance ingestion | bank-scraper plan, `Setup/01` | POs commit to monthly finance review using the data |
-| Hebrew categorizer | `hebrew_categorizer.py` | Finance ingestion live |
-| Anomaly / subscription detector | `anomaly_detector.py` | ≥90 days of real transactions in the Sheet |
+| Finance ingestion | bank-scraper plan, `Setup/01` (build arch resolved D-031: VPS+systemd, no Drive) | POs commit to monthly finance review using the data |
 | Pediatric milestones | `pediatric_milestones.py`, `Setup/09` | Health tab actively maintained |
-| Goal coaching | `goal_coaching.py` | Goals updated weekly for a month (proves the habit exists) |
-| PDF→event, receipt OCR, voice capture, Yad2/Madlan/Dira trackers, Gmail bill parser, Maccabi forwarders | `pdf_to_event.py`, `dira_tracker.py`, `Setup/02,03,04,06,07` | Per-item PO request, one at a time |
+| Goal coaching | `goal_coaching.py` (Goals tab exists §6.4; automation frozen) | Goals updated weekly for a month (proves the habit exists) |
+| PDF→event, receipt OCR, voice capture, Gmail bill parser, Maccabi forwarders | `pdf_to_event.py`, `Setup/02,03,04,06,07` | Per-item PO request, one at a time |
+
+*Killed 2026-06-13 (D-033): Hebrew categorizer + anomaly/subscription detector — removed from the board; `attic/hebrew_categorizer.py` + `attic/anomaly_detector.py` orphaned (physical delete = a future code session). iCloud→GCal stays in v1.1 candidates (not reclassified).*

@@ -1,6 +1,6 @@
 # Next session — Family Inc
 
-*Generated 2026-06-12 by `automation/session_kickoff.py`. Regenerated at every session end — do not edit by hand.*
+*Generated 2026-06-13 by `automation/session_kickoff.py`. Regenerated at every session end — do not edit by hand.*
 
 **Before pasting (on your machine):** `git pull --ff-only`
 
@@ -11,19 +11,25 @@ Paste everything below this line to open the session:
 You are opening a Family Inc working session as Lead Architect. Read `CLAUDE.md`
 (roles, principles, guardrails), then work the current milestone only.
 
-**Current milestone: M3 — Appliance live = go-live (appliance live 2026-06-12; remaining = D-029 re-pair + publication + 3-day acceptance)**
+**Current milestone: M4 — Summarizer hardening (1 session, after ≥1 week live)**
 
 Open items:
 
-- ⬜ **Acceptance: both phones receive the morning digest 3 consecutive days; one full done→recur cycle visible in the log** — clock starts after the D-029 re-pair (first countable digest = first morning after; WhatsApp delivery only, D-028) → then flip CLAUDE.md "Current state", tag `v1-live`, M4 after ≥1 week
+- ⬜ Sender→role roster seeded (makes hard rules 2–3 reliable)
+- ⬜ Phase F weekly accuracy review surface (false-positive purge)
+- ⬜ PO call (joint): do family-group criticals override digest-only routing?
+- ⬜ PO call (joint): quiet-day digest goes to Adar only (pre-M1 heartbeat behavior preserved) — Shanee gets nothing on days without her fires, incl. the WhatsApp-groups section. Partner-symmetric? (noticed at go-live 2026-06-12)
+- ⬜ LLM provider — **direction set to DeepSeek (D-032, 2026-06-13, Adar in-session); remaining = Shanee's confirm of the joint call + wiring** (`lib/llm.py` OpenAI-compatible backend, ~30 lines + tests; §8.6/§8.7 update to name DeepSeek at wiring). v1 stays **keyless** (keyword classification + template briefing) until then; the PRC data-handling tradeoff for group plaintext + Sheet data is accepted by that call
+- ⬜ WhatsApp_Inbox hot-tab rolloff against the live Sheet (SPEC §6.2; deferred from M2 — nothing to roll off before ~3 months of live rows; also resolve the 90-day-spec vs 30-day-config disagreement, D-025)
+- ⬜ Milestone review (external model) on the live system
 
 Recent decisions (full log in `DECISIONS.md`):
 
+- D-034 (2026-06-13): Property tracker (Yad2/Madlan) UNFROZEN — active house search (data-fetching planning session). The only lane unfrozen this session. Build s…
+- D-033 (2026-06-13): Frozen-lane dispositions (data-fetching planning session). (a) Finance ingestion (L1) stays frozen — no commitment yet to the ~20–30 min/mon…
+- D-032 (2026-06-13): LLM provider direction = DeepSeek (joint M4 call made early; Adar in-session, Shanee to confirm). The open M4 provider call (Anthropic §8.7 …
+- D-031 (2026-06-13): Finance-ingestion build architecture pre-resolved while the lane stays frozen (data-fetching planning session). Runtime = the VPS, not Rende…
 - D-030 (2026-06-12): Publication rewrite kit + privacy posture (M3 session 3). The D-027f-deferred history rewrite scoped *empirically*, not from memory: a token…
-- D-029 (2026-06-12): Bridge → Baileys 7.0.0-rc13 + ESM (go-live night fix). Day-1 symptom: every bridge→Adar message stuck as "waiting for this message" on Adar'…
-- D-028 (2026-06-12): M3 session-1 review run (DeepSeek, post-push — the in-chain gate ran MOCK twice: Ollama cloud 403'd the 671b model mid-day, then a placehold…
-- D-027 (2026-06-12): M3 session-1 contract resolutions (delivery infrastructure). (a) Daily digest queues kind=briefing — it was kind=alert, consuming 1 of the 2…
-- D-026 (2026-06-12): M2 milestone review run (DeepSeek) and resolved: 2 wording applies (SPEC §8.3 one-clock tombstone semantics; §7.1 validate-before-write clau…
 
 Session contract: don't open lanes outside this milestone without a PO call
 logged in `DECISIONS.md` · constants → config, utilities → `automation/lib/`,

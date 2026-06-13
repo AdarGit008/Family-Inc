@@ -61,7 +61,7 @@ Money movement · credential storage · messaging anyone beyond the two adults �
 
 ### Frozen (explicitly out of v1)
 
-Finance ingestion, merchant categorization, anomaly detection, pediatric milestones, goal coaching, PDF/OCR/voice capture, property trackers, Gmail parsing, Maccabi forwarders, WhatsApp reply parsing. Each has an unfreeze condition in `BACKLOG.md`. Frozen code lives in `attic/`, unmaintained.
+Finance ingestion, pediatric milestones, goal coaching, PDF/OCR/voice capture, Gmail parsing, Maccabi forwarders, WhatsApp reply parsing. Each has an unfreeze condition in `BACKLOG.md`. Frozen code lives in `attic/`, unmaintained. (2026-06-13, D-033/D-034: property tracking unfrozen → §12.1, M5; merchant categorization + anomaly detection killed.)
 
 ## 5. System architecture
 
@@ -136,7 +136,7 @@ group_name · group_type · importance_default (alert_eligible/digest_only/mute)
 
 ### 6.4 Other tabs
 
-`People`, `Calendar-Events`, `Finance-Budget`, `Goals`, `Health`, `Education`, `Car`, `Contracts`, `Contacts`, `Settings` (Key|Value rows: keys containing `@` are UserMap entries email→display-name; key `lang` is the chrome default), `Reminders-Archive` (one-offs roll here monthly). Money values are **ILS only**; legacy USD figures from the kickoff are restated in ILS in the Sheet.
+`People`, `Calendar-Events`, `Finance-Budget`, `Goals`, `Health`, `Education`, `Car`, `Contracts`, `Contacts`, `Settings` (Key|Value rows: keys containing `@` are UserMap entries email→display-name; key `lang` is the chrome default), `Reminders-Archive` (one-offs roll here monthly), `Property-Listings` (pending M5 build, scraper-written — schema in §12.1). Money values are **ILS only**; legacy USD figures from the kickoff are restated in ILS in the Sheet.
 
 ## 7. Component contracts
 
@@ -216,7 +216,7 @@ All schedules in Asia/Jerusalem (DST-correct via system TZ, never UTC offsets). 
 
 ### 8.6 Privacy & security
 
-- WhatsApp plaintext exists in two places: Meta's servers (inherent) and the VPS we control. No third-party message processors. LLM classification sends one message + ≤3 context messages, never whole threads or cross-group context.
+- WhatsApp plaintext exists in two places: Meta's servers (inherent) and the VPS we control. No third-party message processors. LLM classification sends one message + ≤3 context messages, never whole threads or cross-group context. *(Provider direction set 2026-06-13: at M4 wiring the single configured LLM provider becomes DeepSeek, which permits one external processor under this clause — pending Shanee's confirm of the joint call; see §8.7 and D-032. v1 is keyless until then, so this clause holds as written today.)*
 - Secrets (`recipients.json`, service-account JSON, `ANTHROPIC_API_KEY`) live in `/etc/family-inc/`, mode 600, never in the repo. The repo is public-safe by construction: personal values only in the Sheet and gitignored files.
 - Phone numbers/JIDs appear nowhere except `recipients.json` on the VPS.
 - The service account has access to exactly one spreadsheet (shared to it explicitly), nothing else in Drive.
@@ -224,7 +224,7 @@ All schedules in Asia/Jerusalem (DST-correct via system TZ, never UTC offsets). 
 
 ### 8.7 LLM usage
 
-One wrapper (`lib/llm.py`), model ids in config not call sites, per-call cost logged to `logs/llm_costs.csv`. Current assignments: classification + briefing prose = Haiku-class; nothing in v1 needs more. Monthly cost line appears in the first weekly briefing of each month.
+One wrapper (`lib/llm.py`), model ids in config not call sites, per-call cost logged to `logs/llm_costs.csv`. Current assignments: classification + briefing prose = Haiku-class; nothing in v1 needs more. Monthly cost line appears in the first weekly briefing of each month. **Provider direction (D-032, 2026-06-13):** the open M4 provider call is set toward DeepSeek (OpenAI-compatible backend); not wired in v1 — the system stays keyless (keyword classification + template briefing) until M4 wires it and Shanee confirms, at which point this line and §8.6 update to name DeepSeek.
 
 ## 9. Failure modes
 
@@ -259,6 +259,25 @@ One wrapper (`lib/llm.py`), model ids in config not call sites, per-call cost lo
 7. `logs/` show 7 days of green runs; pytest suite green; zero Twilio references in code.
 8. Total monthly run cost confirmed ≤ ₪120.
 
-## 12. References
+## 12. Data ingestion lanes
+
+Specs for ingestion lanes that have been **unfrozen**. Frozen lanes (finance, pediatric, goal coaching, Gmail/Maccabi parsing, PDF/OCR/voice) carry no spec here until unfrozen; their dispositions — and the pre-resolved finance build architecture — live in `DECISIONS.md` (D-031–D-034). All ingestion obeys the same rules: one runtime (the VPS, D-018), `lib/sheet` is the only Sheet writer (D-016), no new path bypasses `lib/outbox.py` (§8.1), secrets only in `/etc/family-inc/` (§8.6).
+
+### 12.1 Property listings — Yad2 / Madlan (unfrozen 2026-06-13, D-034)
+
+Active house search. Build scheduled **after the v1 3-day acceptance window closes (earliest 2026-06-16)**, not during it; independent of any other lane.
+
+| Facet | Spec |
+|---|---|
+| **Source** | Saved-search result pages on Yad2 (primary) and Madlan (optional). One or more saved-search URLs per portal, each encoding the criteria (area, price, rooms). No public API for either portal — scrape only. |
+| **Mechanism** | Headless Chromium on the VPS (the same browser dependency the frozen finance scraper will use — one shared dep, provisioned once in `provision.sh`). A small scraper loads each saved-search URL, extracts listing cards (`listing_id`, price, rooms, size, location, url, posted-at), and diffs the `listing_id` set against the last-seen set persisted at `/var/lib/family-inc/property/seen.json`. New ids = new listings. |
+| **Runtime** | One `systemd` timer (`family-property.timer`), Asia/Jerusalem, 1–2×/day (not real-time — listings don't churn by the minute and tighter polling raises ban risk). `TimeoutStartSec` + `MemoryMax` bound a stuck or runaway browser; the unit is independent of the bridge service. No second runtime (D-018). |
+| **Auth model** | None for the portals (public listings). The only secret is the saved-search config at `/etc/family-inc/property_searches.json` (mode 600, personal criteria, never in the repo — D-024). Sheet writes use the existing `Family_OS` service account (access scoped to the one spreadsheet, §8.6). |
+| **Sheet landing zone** | New `Property-Listings` tab. Columns: `listing_id` (dedup key) · `portal` · `first_seen` (ISO-T) · `price_ils` · `rooms` · `size_sqm` · `location` · `url` · `status` (human-edited: new/seen/contacted/dismissed). Append-only via `lib/sheet`; dedup on `listing_id`; a listing that drops out of results is left in place (no delisting tracking in v1 of the lane). |
+| **Delivery** | New listings land **silently** in the Sheet and surface in a "🏠 דירות חדשות / New listings" section of the 07:30 daily digest. They never fire an alert and never bypass the budget — property is not critical-safety (briefings > notifications, §3 principle 4, §8.1). |
+| **Failure handling** | A scrape error or anti-bot block (Yad2 runs Cloudflare; scraper fragility is rising across 2026 Israeli portals) sets the fail-flag (`OnFailure` → `logs/fail.flag`); the next delivered digest reports "property scrape failed" and the weekly briefing surfaces persistent failures — fail loud, never silent (§9, §10.2). Persistent block → escape hatch is an anti-detect browser (e.g. a Camoufox-based fork), still on the one VPS. |
+| **Unfreeze ordering** | Independent of finance. Build after acceptance (≥2026-06-16). The first scraper to land (property or, later, finance) pays the one-time Chromium provisioning cost; the second reuses it. |
+
+## 13. References
 
 `ENGINEERING.md` — runtime, repo layout, migration plan, testing, ops. `DESIGN.md` — dashboard UI, message design system, i18n. `DECISIONS.md` — rationale history. `BACKLOG.md` — sequencing. `Archive/` — superseded docs, kept for the paper trail.
