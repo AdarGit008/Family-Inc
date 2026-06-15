@@ -1,6 +1,6 @@
 # Next session — Family Inc
 
-*Generated 2026-06-13 by `automation/session_kickoff.py`. Regenerated at every session end — do not edit by hand.*
+*Generated 2026-06-15 by `automation/session_kickoff.py`. Regenerated at every session end — do not edit by hand.*
 
 **Before pasting (on your machine):** `git pull --ff-only`
 
@@ -10,6 +10,8 @@ Paste everything below this line to open the session:
 
 You are opening a Family Inc working session as Lead Architect. Read `CLAUDE.md`
 (roles, principles, guardrails), then work the current milestone only.
+
+> **⚠ Build order (overrides the auto-pick below): the next build is M5 — Property tracker (build now per D-034/D-035), independent of finance — see the M5 section in `BACKLOG.md`. The generator names M4 because it lists first with open items, but M4 (summarizer hardening) is gated "≥1 week live" (earliest ~2026-06-22), so it is NOT this session. The M4 items are retained below for when that gate opens.**
 
 **Current milestone: M4 — Summarizer hardening (1 session, after ≥1 week live)**
 
@@ -25,11 +27,11 @@ Open items:
 
 Recent decisions (full log in `DECISIONS.md`):
 
+- D-035 (2026-06-15): M3 (go-live) CLOSED — v1 accepted, tagged `v1-live`. The SPEC §11 acceptance window (2026-06-13→15, clock from the D-029 Baileys-7 re-pair) …
 - D-034 (2026-06-13): Property tracker (Yad2/Madlan) UNFROZEN — active house search (data-fetching planning session). The only lane unfrozen this session. Build s…
 - D-033 (2026-06-13): Frozen-lane dispositions (data-fetching planning session). (a) Finance ingestion (L1) stays frozen — no commitment yet to the ~20–30 min/mon…
 - D-032 (2026-06-13): LLM provider direction = DeepSeek (joint M4 call made early; Adar in-session, Shanee to confirm). The open M4 provider call (Anthropic §8.7 …
 - D-031 (2026-06-13): Finance-ingestion build architecture pre-resolved while the lane stays frozen (data-fetching planning session). Runtime = the VPS, not Rende…
-- D-030 (2026-06-12): Publication rewrite kit + privacy posture (M3 session 3). The D-027f-deferred history rewrite scoped *empirically*, not from memory: a token…
 
 Session contract: don't open lanes outside this milestone without a PO call
 logged in `DECISIONS.md` · constants → config, utilities → `automation/lib/`,

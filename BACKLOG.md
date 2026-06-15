@@ -3,7 +3,7 @@
 *The only live backlog. Status legend: ⬜ todo · 🔵 in progress · ✅ done · 🧊 frozen.*
 *v1 definition and acceptance criteria live in `SPEC.md` §11. Migration session plan lives in `ENGINEERING.md` §9.*
 
-**Now:** milestone = **M3** (go-live) — **fully live as of 2026-06-13** (Baileys 7 re-paired, publication done, PWA pinned, 3-day acceptance in progress: day 1/3 = 2026-06-13); window closes after 2026-06-15 morning digest → tag `v1-live` · last session: **2026-06-13 (data-fetching planning session, D-031–034)** — finance stack stays frozen, **L2/L3 killed**, **Dira unfrozen → M5** (build after acceptance, ~Jun 16); prior: 2026-06-12 (M3 s3, D-030)
+**Now:** **M3 (go-live) CLOSED 2026-06-15 — v1 live & accepted, tagged `v1-live`.** The §11 3-day window (2026-06-13→15, D-029 re-pair clock) passed: the morning digest reached both phones three consecutive days. **Next = M5** (property tracker — build now, D-034); **M4** (summarizer hardening) waits ≥1 week live. · last session: **2026-06-15 (M3 close, D-035)**; prior: 2026-06-13 (data-fetching planning, D-031–034) — finance frozen, L2/L3 killed, Dira → M5
 
 ## v1 — to first real message on both phones
 
@@ -41,7 +41,7 @@
 - ✅ Day-1 fix (D-029): bridge → **Baileys 7.0.0-rc13 + ESM** — deployed, `auth_state/` wiped, re-paired on VPS — **done 2026-06-13**
 - ✅ **Publication** (D-030): `publish.sh` run, repo public, Pages live (GitHub Actions + secrets + OAuth origin), PWA pinned to both phones, VPS remote updated to credless public URL, provision PAT revoked — **done 2026-06-13**
 - ✅ Publication-day dashboard fix: the appreciation-ticker block (landed 15890a4/D-028) was one literal-`\n` comment line — `renderAll` called an undefined function, killing boot before `initAuth`, so sign-in could only toast "OAuth not configured"; de-escaped back into 50 lines of code (`node --check` green), `sw.js` shell cache bumped v2→v3 so cached-broken clients self-heal. Ticker is live but **unstyled + absent from DESIGN §6** — style/spec call (Shanee) at the next session. Second layer found under it: the Pages workflow generated `config.js` from the example with `DEMO_MODE: true` intact — real ids present but ignored, `initAuth` returned silently, site served mock data; sed now flips the flag + a generation-time guard fails the deploy if it survives, shell cache → v4
-- 🔵 **Acceptance: both phones receive the morning digest 3 consecutive days; one full done→recur cycle visible in the log** — **clock started 2026-06-13 (day 1/3); window closes after 2026-06-15 morning digest** → then flip CLAUDE.md "Current state", tag `v1-live`, M4 after ≥1 week
+- ✅ **Acceptance PASSED 2026-06-15: morning digest reached both phones 3 consecutive days (2026-06-13→15, D-029 re-pair clock); done→recur cycle observed in the log.** CLAUDE.md current-state flipped to live; `v1-live` tagged (D-035). M4 after ≥1 week live
 
 ### M4 — Summarizer hardening (1 session, after ≥1 week live)
 
