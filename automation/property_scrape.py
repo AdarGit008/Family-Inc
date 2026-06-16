@@ -45,6 +45,7 @@ import argparse
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -153,9 +154,13 @@ _USER_AGENT = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
 
 
 def fetch_html(url: str, timeout_s: int = cfg.PROPERTY_FETCH_TIMEOUT_S) -> str:
-    """Render `url` with headless Chromium and return the DOM HTML. Raises
-    ScrapeError on a missing browser or a timeout — anti-bot detection happens
-    later in parse_listings (a challenge page still returns HTML)."""
+    """Render `url` with a HEADED Chromium (under Xvfb on the VPS — the unit runs
+    via `xvfb-run`) and return the DOM HTML once any anti-bot interstitial has
+    cleared. Headed + light stealth gets past the headless tell that Yad2's
+    Cloudflare / Madlan's PerimeterX challenge from a datacenter IP (D-039, the
+    D-034 escape hatch). Raises ScrapeError on a missing browser or a timeout; a
+    challenge that never clears returns the challenge HTML, which parse_listings
+    turns into a loud BlockedError."""
     try:
         from playwright.sync_api import TimeoutError as PWTimeout  # noqa: N814
         from playwright.sync_api import sync_playwright
@@ -166,16 +171,31 @@ def fetch_html(url: str, timeout_s: int = cfg.PROPERTY_FETCH_TIMEOUT_S) -> str:
             "`uv run --with playwright python -m playwright install chromium`"
         ) from e
     with sync_playwright() as p:                   # pragma: no cover (VPS-only)
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(
+            headless=False,
+            args=["--disable-blink-features=AutomationControlled",
+                  "--no-sandbox", "--disable-dev-shm-usage"])
         try:
-            page = browser.new_context(
+            context = browser.new_context(
                 user_agent=_USER_AGENT,
                 locale="he-IL",
                 viewport={"width": 1366, "height": 900},
-            ).new_page()
+            )
+            # Hide the most obvious automation tell before page scripts run.
+            context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', "
+                "{get: () => undefined});")
+            page = context.new_page()
             page.goto(url, wait_until="domcontentloaded", timeout=timeout_s * 1000)
+            # Give a JS interstitial ("just a moment…") time to solve itself in a
+            # real browser: poll until the page stops looking like a challenge or
+            # the per-URL budget runs out. Whatever is loaded is returned — if
+            # still blocked, parse_listings raises BlockedError (fail loud).
+            deadline = time.monotonic() + timeout_s
+            while detect_block(page.content()) and time.monotonic() < deadline:
+                page.wait_for_timeout(2000)
             try:
-                page.wait_for_load_state("networkidle", timeout=timeout_s * 1000)
+                page.wait_for_load_state("networkidle", timeout=5000)
             except PWTimeout:
                 pass  # network may never idle on ad-heavy pages; DOM is enough
             return page.content()

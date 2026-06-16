@@ -37,12 +37,15 @@ echo "== 4. dependencies"
 (cd "$APP_DIR" && sudo -u "$APP_USER" uv sync --frozen)
 (cd "$APP_DIR/automation/bridge" && sudo -u "$APP_USER" npm ci --omit=dev)
 
-echo "== 4b. headless browser for the property scraper (M5, SPEC §12.1)"
+echo "== 4b. headed browser + Xvfb for the property scraper (M5/D-039, SPEC §12.1)"
 # Kept OUT of the core lockfile (boring core; one runtime, D-018): the
 # family-property unit runs via `uv run --with playwright`. OS libs need root;
 # the browser binary is installed under the app user (where the unit looks).
 # Idempotent — playwright skips an already-installed browser. Non-fatal: a
 # failure here only disables the property lane, which then fails loud (§10.2).
+# Xvfb + xauth give the HEADED Chromium a virtual display (D-039 anti-bot).
+apt-get install -y -qq xvfb xauth \
+  || echo "  [warn] xvfb/xauth install failed — headed scraping (D-039) disabled until fixed"
 (cd "$APP_DIR" && uv run --with playwright python -m playwright install-deps chromium) \
   || echo "  [warn] playwright OS-deps install failed — property lane disabled until fixed"
 (cd "$APP_DIR" && sudo -u "$APP_USER" uv run --with playwright python -m playwright install chromium) \
