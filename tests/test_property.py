@@ -233,6 +233,20 @@ class TestRun:
                      state_path=state, briefings_dir=bd, sheet_path=None)
         assert len(res2.new_listings) == 3
 
+    def test_mock_with_live_sheet_fails_loud_writes_nothing(self, tmp_runtime, monkeypatch):
+        """D-038: MOCK mode + a live Sheet configured (the appliance with
+        property_searches.json missing) must fail loud and write NOTHING — never
+        append the mock sample rows to the live Property-Listings tab."""
+        from automation.lib import sheet
+        monkeypatch.setattr(sheet, "is_live", lambda: True)
+        state = tmp_runtime / "seen.json"
+        bd = tmp_runtime / "Briefings"
+        with pytest.raises(P.ScrapeError):
+            P.run(dry_run=False, today=date(2026, 6, 16),
+                  state_path=state, briefings_dir=bd, sheet_path=None)
+        assert not state.exists()                       # seen-set NOT advanced
+        assert not (bd.exists() and any(bd.glob("property_listings_*.md")))
+
     def test_html_fixture_path_with_error_raises(self, tmp_runtime):
         # a blocked page surfaces as a loud ScrapeError (systemd OnFailure)
         with pytest.raises(P.BlockedError):

@@ -553,6 +553,15 @@ def run(searches_path: Optional[Path] = None, state_path: Optional[Path] = None,
 
     if dry_run:
         print("(dry-run — no Sheet write, no seen-set update, no digest file)")
+    elif res.is_mock and sheet_path is None and sheet.is_live():
+        # D-038 safety: MOCK sample data must NEVER reach the live Sheet or the
+        # morning digest. Reaching here on the appliance means
+        # /etc/family-inc/property_searches.json is missing — fail loud (systemd
+        # OnFailure → fail-flag → next digest reports it) so the operator fixes
+        # it, rather than silently appending rows like yad2:mock-1 to the tab.
+        raise ScrapeError(
+            "MOCK mode but a live Sheet is configured — "
+            "property_searches.json is missing; refusing to write sample data")
     else:
         persisted = persist_new(res.new_listings, sheet_path)
         # Advance the seen-set ONLY when the rows were durably recorded. With no

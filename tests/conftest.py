@@ -16,6 +16,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from automation.lib import config  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _hermetic_no_live_sheet(monkeypatch):
+    """Tests must NEVER reach the live Google Sheet. `sheet.is_live()` calls
+    `config.load_env()`, which on the appliance loads FAMILY_INC_SHEET_ID from
+    /etc/family-inc/env — so `deploy.sh`'s pytest would otherwise select the live
+    backend (on 2026-06-16 a no-backend test appended the 3 mock listings to the
+    live Property-Listings tab — D-038). Setting the var EMPTY makes is_live()
+    False on any box: load_env keeps "existing env wins", so the file can't
+    repopulate it (delenv / `-u` would let it back in). Tests that need a backend
+    pass an explicit xlsx path or live_override=."""
+    monkeypatch.setenv(config.SHEET_ID_ENV, "")
+    from automation.lib import sheet
+    sheet.reset_backend()
+
+
 @pytest.fixture
 def today() -> date:
     """Fixed test date: a Wednesday so we can test week and month boundaries."""

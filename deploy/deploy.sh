@@ -8,6 +8,6 @@ cd /opt/family-inc
 git pull --ff-only
 uv sync --frozen
 (cd automation/bridge && npm ci --omit=dev)
-uv run pytest -q
+FAMILY_INC_SHEET_ID= uv run pytest -q   # empty, NOT -u: load_env "existing env wins" keeps the suite off the live Sheet (D-038)
 sudo /usr/bin/systemctl restart family-bridge   # the one whitelisted sudoers line
 echo "deployed $(git rev-parse --short HEAD); timers pick up new code on next fire"
