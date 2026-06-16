@@ -558,13 +558,26 @@ def merge_listings(primary: list[Listing],
 
 def _apify_search(s: dict, kind: str, errors: list[str], apify_token,
                   apify_runner) -> tuple[list[Listing], bool]:
-    """One Apify call for search `s`. Returns (listings, ok). Corrupt items are
-    ALWAYS surfaced into `errors` (D-040: no silent failure on missing/corrupt
-    data). A transport ApifyError is re-raised to the caller, which decides
-    loud (backup) vs best-effort (gap-fill)."""
+    """One Apify call for search `s`. Returns (listings, ok). A transport
+    ApifyError is re-raised to the caller (loud for backup, best-effort for
+    gap-fill).
+
+    Item-level errors follow the D-042 contract (relaxed from D-040's
+    per-item fail-flag): a junk row is ALWAYS skipped (never invented), and is
+    surfaced as FATAL only when the call returned items but ZERO usable
+    listings — i.e. the adapter/schema is genuinely broken (verify-live drift).
+    When usable listings did come back, the junk rows among them are dirty-data
+    noise (real portals return the odd id-less/promo row): logged and skipped,
+    never a run failure. Same rule on both paths (backup + gap-fill)."""
     sec, item_errs = apify.fetch_listings(s["portal"], s, api_token=apify_token,
                                           runner=apify_runner)
-    errors.extend(f"{s['portal']} apify item: {m}" for m in item_errs)
+    if item_errs:
+        if sec:                                   # usable data came back → noise
+            for m in item_errs:
+                log.warning("apify %s item skipped for %s: %s",
+                            kind, s["portal"], m)
+        else:                                     # items but none usable → broken
+            errors.extend(f"{s['portal']} apify item: {m}" for m in item_errs)
     return sec, True
 
 

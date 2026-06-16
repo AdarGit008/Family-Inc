@@ -334,6 +334,51 @@ class TestRunIntegration:
         assert res.errors == []                       # best-effort, no fail-flag
         assert res.all_listings[0].size_sqm is None   # primary stands, not invented
 
+    def test_backup_item_errors_best_effort_when_usable(self, tmp_path, monkeypatch):
+        # D-042: a backup returning SOME usable listings plus a junk row (no id)
+        # skips the junk and succeeds — a few dirty rows are not a run failure.
+        monkeypatch.setattr(P, "fetch_html", _blocked)
+        sfile = _searches_file(tmp_path, [{"portal": "yad2", "url": "U"}])
+        r = _FakeRunner([YAD2_ITEM, {"item_url": "u-no-id"}])   # 1 good, 1 junk
+        res = P.run(today=date(2026, 6, 16), searches_path=sfile,
+                    state_path=tmp_path / "seen.json",
+                    briefings_dir=tmp_path / "Briefings", sheet_path=_xlsx(tmp_path),
+                    apify_enabled=True, apify_token="t", apify_runner=r,
+                    apify_stamp_path=tmp_path / "stamp.json")
+        assert res.errors == []                        # junk warned, not fatal
+        assert {li.listing_id for li in res.new_listings} == {"yad2:abc123"}
+
+    def test_gapfill_item_errors_best_effort(self, tmp_path, monkeypatch):
+        # D-042: a gap-fill whose actor returns a junk row alongside a usable one
+        # never fails the run; the primary stands and the good row enriches it.
+        monkeypatch.setattr(P, "fetch_html", lambda *a, **k: "html")
+        monkeypatch.setattr(P, "parse_listings",
+                            lambda html, portal: [P.Listing(
+                                "yad2:abc123", "yad2", 1_850_000, 4, None,
+                                "loc", "u")])
+        sfile = _searches_file(tmp_path, [{"portal": "yad2", "url": "U"}])
+        r = _FakeRunner([YAD2_ITEM, {"item_url": "u-no-id"}])   # good enriches, junk skipped
+        res = P.run(today=date(2026, 6, 16), searches_path=sfile,
+                    state_path=tmp_path / "seen.json",
+                    briefings_dir=tmp_path / "Briefings", sheet_path=_xlsx(tmp_path),
+                    apify_enabled=True, apify_token="t", apify_runner=r,
+                    apify_stamp_path=tmp_path / "stamp.json")
+        assert res.errors == []
+        assert res.all_listings[0].size_sqm == 92      # enriched from the good row
+
+    def test_apify_all_items_bad_fails_loud(self, tmp_path, monkeypatch):
+        # D-042: items returned but ZERO usable (every row id-less) = broken
+        # adapter / schema drift → still fail loud (the one case that survives).
+        monkeypatch.setattr(P, "fetch_html", _blocked)
+        sfile = _searches_file(tmp_path, [{"portal": "yad2", "url": "U"}])
+        r = _FakeRunner([{"item_url": "u1"}, {"item_url": "u2"}])   # all id-less
+        with pytest.raises(P.ScrapeError):
+            P.run(today=date(2026, 6, 16), searches_path=sfile,
+                  state_path=tmp_path / "seen.json",
+                  briefings_dir=tmp_path / "Briefings", sheet_path=_xlsx(tmp_path),
+                  apify_enabled=True, apify_token="t", apify_runner=r,
+                  apify_stamp_path=tmp_path / "stamp.json")
+
 
 class TestSearchConfigCarriesApify:
     def test_apify_block_preserved_through_loader(self, tmp_path):
