@@ -61,7 +61,7 @@ Rules: scripts never define utilities that belong in `lib/` (CI greps for redefi
 
 ## 3. Configuration
 
-- `automation/lib/config.py` loads `/etc/family-inc/env` then `config.toml` (committed, non-secret): schedule constants, budget cap, tombstone window, model ids, group digest order.
+- `automation/lib/config.py` loads secrets from `/etc/family-inc/env`; **all non-secret constants (alert-budget cap, tombstone window, quiet hours, digest size, lead/recurrence + goal thresholds, inbox retention, model ids) are defined directly in `config.py` — there is no separate `config.toml`.** The single-source-of-constants rule the 2026-06-11 audit established lives in this one module.
 - **No constant may be defined in a script.** The 2026-06-11 audit found `ALERT_BUDGET_PER_DAY` defined twice with independent ledgers — the class of bug this rule exists to prevent.
 - Dashboard config: `config.example.js` committed with placeholders; real `config.js` (Sheet ID, OAuth client id) gitignored. Sheet ID is not secret-secret, but keeping it out of the public repo is free.
 

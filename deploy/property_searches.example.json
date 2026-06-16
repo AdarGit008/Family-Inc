@@ -1,0 +1,15 @@
+{
+  "_comment": "TEMPLATE for /etc/family-inc/property_searches.json (mode 600, owner familyinc). The real file holds your personal saved-search URLs (area/price/rooms) and is NEVER committed — it lives only on the VPS (SPEC §12.1, D-024). Replace the placeholder URLs below with your own saved searches from each portal. 'madlan' is optional; remove the entry to scrape Yad2 only.",
+  "searches": [
+    {
+      "portal": "yad2",
+      "label": "example — replace with your Yad2 saved search",
+      "url": "https://www.yad2.co.il/realestate/forsale?city=0000&price=0-2000000&rooms=3-5&propertyGroup=apartments"
+    },
+    {
+      "portal": "madlan",
+      "label": "example — optional second portal",
+      "url": "https://www.madlan.co.il/for-sale/Israel?dealType=buy&minRooms=3&maxPrice=2000000"
+    }
+  ]
+}

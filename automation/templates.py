@@ -48,6 +48,14 @@ WA_ITEM = "{group} — {one_liner} ({sender}, {time})"
 WA_NEEDS_A_LOOK = "⚠ דורש מבט"                              # [Shanee review]
 WA_NEEDS_A_LOOK_ITEM = "• {one_liner} ({sender}, {time})"
 
+# --- Property tracker section (M5, SPEC §12.1: silent landing in the digest) -
+# No DESIGN §6 literal yet — written to the §6 register; the section layout +
+# which facets to show is a design call. [Shanee review: head + line shape]
+PROPERTY_SECTION_HEAD = "🏠 דירות חדשות"
+PROPERTY_ITEM = "{location} — ₪{price}{rooms}{size} ({portal})"
+PROPERTY_ROOMS = " · {rooms} חד׳"      # appended only when rooms is known
+PROPERTY_SIZE = " · {size} מ״ר"        # appended only when size is known
+
 # --- Alerts (unsolicited, in-budget) and criticals (budget-bypassing) -------
 # DESIGN §6: critical is a single line, no frame. The standard alert shares
 # the shape minus the warning glyph. [Shanee review: alert shape]

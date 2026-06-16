@@ -4,8 +4,9 @@ per recipient, not several)
 
 Carved out of the engine's send path in M1 (ENGINEERING.md §9). Assembles, in
 order: reminders fires (engine compute) · alerts held by yesterday's budget ·
-the WhatsApp groups digest (written hourly by whatsapp_summarizer) · a Hebcal
-candle-lighting line on Fridays. Renders with `templates.py` copy and writes
+the WhatsApp groups digest (written hourly by whatsapp_summarizer) · new
+property listings (written by property_scrape, M5/§12.1 — silent, no alert) ·
+a Hebcal candle-lighting line on Fridays. Renders with `templates.py` copy and writes
 one file per recipient to Briefings/; with --send it also queues through
 lib/outbox.py (kind=briefing per SPEC §7.2 — budget-exempt, never deferrable;
 was kind=alert until D-027 — id=brief-daily-{date}).
@@ -139,6 +140,15 @@ def _wa_digest_text(today: date, briefings_dir: Path) -> str:
     return p.read_text(encoding="utf-8").strip()
 
 
+def _property_text(today: date, briefings_dir: Path) -> str:
+    """The "🏠 דירות חדשות" section written by property_scrape (M5, §12.1).
+    Absent on days with no new listings → contributes nothing (silent)."""
+    p = briefings_dir / f"property_listings_{today.isoformat()}.md"
+    if not p.exists():
+        return ""
+    return p.read_text(encoding="utf-8").strip()
+
+
 def _hebcal_line(today: date, shabbat_times: Optional[Callable]) -> str:
     """Candle-lighting line on Fridays (SPEC §7.2). Degrades to nothing —
     a missing Hebcal answer must not page anyone."""
@@ -198,6 +208,7 @@ def assemble(today: date, now: Optional[datetime] = None,
     if deferred is None:
         deferred = outbox.read_deferred(today)
     wa_text = _wa_digest_text(today, briefings_dir)
+    property_text = _property_text(today, briefings_dir)
     hebcal = _hebcal_line(today, shabbat_times)
 
     # Overnight unit failures prepend, never replace (DESIGN §6) — the humans
@@ -214,6 +225,8 @@ def assemble(today: date, now: Optional[datetime] = None,
                                    [T.DEFERRED_ITEM.format(body=r["body"]) for r in mine]))
         if wa_text:
             parts.append(wa_text)
+        if property_text:
+            parts.append(property_text)
         if hebcal:
             parts.append(hebcal)
         messages[rcpt] = "\n\n".join(parts) + "\n"

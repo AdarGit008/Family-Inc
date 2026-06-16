@@ -63,10 +63,6 @@
       'empty.noUpcoming': 'אין פריטים קרובים.',
       'empty.noOverdue': 'אין פריטים באיחור.',
       'empty.allClean': 'הכל נקי.',
-      // Appreciation ticker
-      'ticker.heading': 'הושלמו לאחרונה',
-      'ticker.empty': 'פעולות שהושלמו יופיעו כאן.',
-      'ticker.emptyEn': 'Completed actions will show up here.',
       'state.allGood': 'הכל בסדר',
       'state.loading': 'טוען…',
       // Calendar
@@ -184,10 +180,6 @@
       'empty.noUpcoming': 'No upcoming items.',
       'empty.noOverdue': 'No overdue items.',
       'empty.allClean': 'All clean.',
-      // Appreciation ticker
-      'ticker.heading': 'Recently completed',
-      'ticker.empty': 'Completed actions will show up here.',
-      'ticker.emptyEn': 'Completed actions will show up here.',
       'state.allGood': 'All good',
       'state.loading': 'Loading…',
       'cal.allDay': 'all day',
@@ -753,7 +745,6 @@
     renderTodayCalendar();
     renderNext7();
     renderDrawers();
-    renderAppreciationTicker();
     renderSunday();
     renderSettings();
   }
@@ -1088,57 +1079,6 @@
       const toggle = d.querySelector('.drawer-toggle');
       toggle.addEventListener('click', () => d.classList.toggle('open'));
     });
-  }
-
-  // ---------------- Appreciation ticker ----------------
-  // Shows up to 7 recently-completed reminders grouped by domain.
-  // Reads DoneAt and LastDoneBy from Phase 6.1 columns.
-  function renderAppreciationTicker() {
-    const el = document.getElementById('appreciation-ticker');
-    if (!el) return;
-    const completed = state.data.reminders
-      .filter(r => r.status === 'Done' && r.doneAt)
-      .sort((a, b) => b.doneAt - a.doneAt)
-      .slice(0, 7);
-    if (!completed.length) {
-      el.innerHTML = `<div class="empty">${escapeHtml(t('ticker.empty'))}</div>`;
-      return;
-    }
-    // Group by domain
-    const byDomain = {};
-    completed.forEach(r => {
-      const dom = r.domain || 'Other';
-      if (!byDomain[dom]) byDomain[dom] = [];
-      byDomain[dom].push(r);
-    });
-    let html = '';
-    const domainOrder = ['Health', 'Money', 'Car', 'Education', 'Contracts', 'Calendar'];
-    const ordered = [...new Set([...domainOrder, ...Object.keys(byDomain)])];
-    ordered.forEach(dom => {
-      const items = byDomain[dom];
-      if (!items) return;
-      html += `<div class="ticker-domain">${escapeHtml(dom)}</div>`;
-      items.forEach(r => {
-        const who = r.lastDoneBy || 'Someone';
-        const when = relativeTime(r.doneAt);
-        html += `<div class="ticker-row"><span>✓ ${escapeHtml(r.title)}</span><span class="ticker-attribution">${escapeHtml(who)}, ${when}</span></div>`;
-      });
-    });
-    el.innerHTML = html;
-  }
-
-  // Relative time helper for the ticker.
-  function relativeTime(d) {
-    if (!d) return '';
-    const min = Math.round((new Date() - d) / 60000);
-    if (min < 1) return 'just now';
-    if (min < 60) return `${min}m ago`;
-    const h = Math.round(min / 60);
-    if (h < 24) return `${h}h ago`;
-    const days = Math.round(h / 24);
-    if (days === 1) return 'yesterday';
-    if (days < 7) return `${days}d ago`;
-    return formatDateHE(d);
   }
 
   // Build a last-7-day spending series from transactions (signed-amount sum per day).

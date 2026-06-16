@@ -43,7 +43,6 @@ Semantic colors appear only on status; the accent is the single brand color. No 
 - **Reminder row**: flag dot · title · due phrase; tap reveals `✓ done` `+Nd` `note` pills. Snooze pills: 1/3/7/14/30.
 - **Domain drawers** (Money/Health/Goals/Car/Contracts): closed = one big KPI + sparkline; open = detail list. 
 - **Bright-line goal viz**: target line + actual line + safety band (ahead/on-pace/behind) for multi-year goals — progress bars are banned for anything >90 days.
-- **Appreciation ticker**: last 7 completions, grouped by domain, name + relative time inline. Non-interactive by design (a passive surface can't become a scoreboard).
 - **Connection pill**: 🟢 live / ⛔ offline — N queued. The only place sync state appears.
 - **Sticky status pill** (top): one-liner like "Weekly briefing ready · 2 alerts" — our budget-friendly stand-in for OS-level notification surfaces.
 
@@ -57,8 +56,7 @@ Today (home)
 ├── TODAY — reminders where Auto-flag ∈ {OVERDUE, FIRE TODAY}
 ├── CALENDAR — today's Calendar-Events
 ├── NEXT 7 DAYS — week-out reminders + events
-├── ▸ Drawers: Money · Health · Goals · Car · Contracts
-└── RECENTLY COMPLETED — appreciation ticker
+└── ▸ Drawers: Money · Health · Goals · Car · Contracts
 Briefing tab — latest weekly briefing rendered
 Settings tab — sign-in · Sheet ID · language toggle · demo toggle · queue inspector
 ```
@@ -68,9 +66,8 @@ Rationale (kept from the four-direction exploration, `Archive/05`): Today-first 
 ## 4. States
 
 - **Loading**: skeleton shell <50ms with cached-snapshot shapes (counts from cache, else 3/2/3/4 rows); shimmer 1.6s; header/pills/tabs are real from t=0; cached values replace skeletons, live values cross-fade 120ms. Skeletons never shimmer while offline — static gray is more honest.
-- **Quiet day**: arc keeps its ticks, banner shows sage "all clear", TODAY renders "(nothing urgent)", ticker shows the week's wins. The screen is never blank.
-- **First run / empty ticker**: "Marks of work done will show up here." No CTA.
-- **Offline**: pill flips to "⛔ offline — N queued"; rows keep working; a queued row shows "⏳ queued — will sync on reconnect"; ticker shows "will refresh after sync". **Buttons never disable offline.**
+- **Quiet day**: arc keeps its ticks, banner shows sage "all clear", TODAY renders "(nothing urgent)". The screen is never blank.
+- **Offline**: pill flips to "⛔ offline — N queued"; rows keep working; a queued row shows "⏳ queued — will sync on reconnect". **Buttons never disable offline.**
 - **Write failure (online)**: optimistic UI rolls back; inline "Couldn't save — retry?"; token expiry → silent refresh once, then a re-sign-in banner.
 - **Back from vacation (30 overdue)**: top 10 by due date + "+20 more" expander; banner offers bulk-done multi-select; arc shows the honest low count with zero commentary.
 
@@ -80,7 +77,7 @@ Every tap maps to one batched Sheet write per SPEC §6.1 (intent columns + `Done
 
 | Action | Writes | UI |
 |---|---|---|
-| ✓ done | Status=Done, DoneAt, LastDoneBy, Tombstone (+ recurrence bump) | row → ticker prepend under its domain |
+| ✓ done | Status=Done, DoneAt, LastDoneBy, Tombstone (+ recurrence bump) | row clears from its list |
 | +Nd | Due+=N, Status=Snoozed, Tombstone (no DoneAt — snooze isn't completion) | row re-sorts |
 | note | append to Notes with `[date name]` prefix, Tombstone | inline confirm |
 
@@ -95,7 +92,7 @@ The most-used UI in the product. Rules:
 - **Emoji are semantics, not decoration**: 🔴 overdue · 🟠 today · 🟡 week-out · 🟢 month-out · ⚠ needs-a-look · 🕯 Shabbat line. No other emoji in generated copy.
 - **No reply affordances** until reply parsing ships (SPEC §3.7). Messages end with content, not instructions. When v1.1 lands, the reply grammar returns as a single footer line.
 - **Hebrew copy register**: short, warm, zero exclamation marks, no imperatives toward a person ("לקבוע תור" not "תקבעי תור!"). Dates as "יום ג׳ 17/6". Money as ₪ with thousands separator.
-- **Attribution mirrors the ticker**: domain first, name inline.
+- **Attribution**: domain first, name inline.
 
 ### Templates (v1)
 
@@ -137,12 +134,13 @@ Tap targets ≥44px; contrast AA against both surfaces (the muted zinc fails on 
 
 1. Cold load <1s on phone over LTE; skeletons → live without layout shift.
 2. Hebrew default renders RTL with no mirrored numerals; toggle flips chrome only.
-3. Mark done online → row moves to ticker, Sheet shows M/N/O stamped.
-4. Airplane mode → tap done → pill shows queued → reconnect → flush + ticker refresh; engine log shows tombstone skip if within window.
+3. Mark done online → row clears, Sheet shows M/N/O stamped.
+4. Airplane mode → tap done → pill shows queued → reconnect → flush; engine log shows tombstone skip if within window.
 5. Demo toggle never touches the live Sheet.
 6. Lighthouse PWA installable; offline reload serves shell + cached data.
 
 ## 10. History
 
+- 2026-06-15: appreciation ticker removed entirely (D-036) — a passive "recently completed" surface still risked reading as a partner scoreboard; supersedes the domain-grouped ticker (D-004) and its §2/§3/§4/§5/§8 references.
 - 2026-06-11: v2.0. Absorbed `Archive/05_Dashboard_Design.md`; removed the contradictory "explicit offline lock" refinement (queue+tombstone is the single offline model); elevated WhatsApp messages to a designed surface; banned reply affordances until parsing ships; single-morning-message rule added.
 - 2026-05-30: arc/ticker/skeleton/queue+tombstone refinements; Hebrew-default chrome; domain-grouped ticker (post-review resolutions preserved in `Archive/05_Dashboard_Design.md`).

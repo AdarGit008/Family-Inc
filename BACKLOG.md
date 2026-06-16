@@ -3,7 +3,7 @@
 *The only live backlog. Status legend: ⬜ todo · 🔵 in progress · ✅ done · 🧊 frozen.*
 *v1 definition and acceptance criteria live in `SPEC.md` §11. Migration session plan lives in `ENGINEERING.md` §9.*
 
-**Now:** **M3 (go-live) CLOSED 2026-06-15 — v1 live & accepted, tagged `v1-live`.** The §11 3-day window (2026-06-13→15, D-029 re-pair clock) passed: the morning digest reached both phones three consecutive days. **Next = M5** (property tracker — build now, D-034); **M4** (summarizer hardening) waits ≥1 week live. · last session: **2026-06-15 (M3 close, D-035)**; prior: 2026-06-13 (data-fetching planning, D-031–034) — finance frozen, L2/L3 killed, Dira → M5
+**Now:** **M3 (go-live) CLOSED 2026-06-15 — v1 live & accepted, tagged `v1-live`.** The §11 3-day window (2026-06-13→15, D-029 re-pair clock) passed: the morning digest reached both phones three consecutive days. **M5 property-tracker code landed 2026-06-15 (D-037, local build — VPS deploy pending);** **M4** (summarizer hardening) still waits ≥1 week live. · last session: **2026-06-15 (M3 close, D-035)**; prior: 2026-06-13 (data-fetching planning, D-031–034) — finance frozen, L2/L3 killed, Dira → M5 · **2026-06-15 hardening (D-036):** zombie tasks deleted, D-033 orphans removed, ticker removed, rolloff→30d, ENGINEERING §3 fixed, M4 open calls ratified. · **2026-06-15 M5 local build (D-037):** property_scrape + Property-Listings landing + silent digest section + systemd/provision artifacts, 229 tests green; VPS deploy pending.
 
 ## v1 — to first real message on both phones
 
@@ -40,29 +40,31 @@
 - ✅ The VPS hour — **done 2026-06-12 evening**: provisioned (private-repo clone via read-only fine-grained PAT), secrets in `/etc/family-inc/` (`FAMILY_INC_SHEET_ID` live flip + SMTP; keyless go-live, LLM provider call in M4), Baileys paired, timers verified, seeds imported, one green `backup.sh` run
 - ✅ Day-1 fix (D-029): bridge → **Baileys 7.0.0-rc13 + ESM** — deployed, `auth_state/` wiped, re-paired on VPS — **done 2026-06-13**
 - ✅ **Publication** (D-030): `publish.sh` run, repo public, Pages live (GitHub Actions + secrets + OAuth origin), PWA pinned to both phones, VPS remote updated to credless public URL, provision PAT revoked — **done 2026-06-13**
-- ✅ Publication-day dashboard fix: the appreciation-ticker block (landed 15890a4/D-028) was one literal-`\n` comment line — `renderAll` called an undefined function, killing boot before `initAuth`, so sign-in could only toast "OAuth not configured"; de-escaped back into 50 lines of code (`node --check` green), `sw.js` shell cache bumped v2→v3 so cached-broken clients self-heal. Ticker is live but **unstyled + absent from DESIGN §6** — style/spec call (Shanee) at the next session. Second layer found under it: the Pages workflow generated `config.js` from the example with `DEMO_MODE: true` intact — real ids present but ignored, `initAuth` returned silently, site served mock data; sed now flips the flag + a generation-time guard fails the deploy if it survives, shell cache → v4
+- ✅ Publication-day dashboard fix: the appreciation-ticker block (landed 15890a4/D-028) was one literal-`\n` comment line — `renderAll` called an undefined function, killing boot before `initAuth`, so sign-in could only toast "OAuth not configured"; de-escaped back into 50 lines of code (`node --check` green), `sw.js` shell cache bumped v2→v3 so cached-broken clients self-heal. Ticker shipped live but unstyled; subsequently **removed entirely (D-036)** rather than styled — a passive completion surface still risked reading as a partner scoreboard. Second layer found under it: the Pages workflow generated `config.js` from the example with `DEMO_MODE: true` intact — real ids present but ignored, `initAuth` returned silently, site served mock data; sed now flips the flag + a generation-time guard fails the deploy if it survives, shell cache → v4
 - ✅ **Acceptance PASSED 2026-06-15: morning digest reached both phones 3 consecutive days (2026-06-13→15, D-029 re-pair clock); done→recur cycle observed in the log.** CLAUDE.md current-state flipped to live; `v1-live` tagged (D-035). M4 after ≥1 week live
 
 ### M4 — Summarizer hardening (1 session, after ≥1 week live)
 
 - ⬜ Sender→role roster seeded (makes hard rules 2–3 reliable)
 - ⬜ Phase F weekly accuracy review surface (false-positive purge)
-- ⬜ PO call (joint): do family-group criticals override digest-only routing?
-- ⬜ PO call (joint): quiet-day digest goes to Adar only (pre-M1 heartbeat behavior preserved) — Shanee gets nothing on days without her fires, incl. the WhatsApp-groups section. Partner-symmetric? (noticed at go-live 2026-06-12)
-- ⬜ LLM provider — **direction set to DeepSeek (D-032, 2026-06-13, Adar in-session); remaining = Shanee's confirm of the joint call + wiring** (`lib/llm.py` OpenAI-compatible backend, ~30 lines + tests; §8.6/§8.7 update to name DeepSeek at wiring). v1 stays **keyless** (keyword classification + template briefing) until then; the PRC data-handling tradeoff for group plaintext + Sheet data is accepted by that call
-- ⬜ WhatsApp_Inbox hot-tab rolloff against the live Sheet (SPEC §6.2; deferred from M2 — nothing to roll off before ~3 months of live rows; also resolve the 90-day-spec vs 30-day-config disagreement, D-025)
+- ✅ resolved D-036: family-group criticals do NOT override digest-only routing (critical_keywords already bypass per-group)
+- 🔵 decided D-036: quiet-day digest made partner-symmetric (both get the quiet-day line incl. WA-groups) — code lands M4
+- 🔵 D-036: DeepSeek confirmed by Shanee — wiring lands M4 (lib/llm OpenAI-compatible backend, ~30 lines + tests)
+- 🔵 D-036: WhatsApp_Inbox rolloff = 30-day (SPEC §6.2 aligned to config); rolloff code lands M4
 - ⬜ Milestone review (external model) on the live system
 
-### M5 — Property tracker (unfrozen 2026-06-13, D-034) — build after acceptance (≥2026-06-16)
+### M5 — Property tracker (unfrozen D-034) — 🔵 code landed 2026-06-15 (D-037, local build); VPS deploy pending
 
-*First post-acceptance build; independent of finance. Full spec: `SPEC.md` §12.1. (`session_kickoff.py` will name M4 as "current" since it lists first with open items — M5 is the earlier build in wall-clock; M4 still waits ≥1 week live.)*
+*First post-acceptance build; independent of finance. Full spec: `SPEC.md` §12.1. (`session_kickoff.py` still names M4 as "current" — it lists first with open ⬜ items; M5's build is the earlier one in wall-clock. M4 still waits ≥1 week live.)*
 
-- ⬜ Provision headless Chromium on the VPS (`provision.sh`: chromium + shared libs; shared with a future finance scraper)
-- ⬜ `automation/property_scrape.*` — load saved-search URLs from `/etc/family-inc/property_searches.json`, extract listing cards, diff `listing_id` vs `/var/lib/family-inc/property/seen.json`
-- ⬜ `Property-Listings` tab created; new listings written via `lib/sheet` (dedup on `listing_id`)
-- ⬜ `family-property.timer` (1–2×/day) + `TimeoutStartSec`/`MemoryMax`; fail-flag on scrape error
-- ⬜ Digest gains a "🏠 דירות חדשות / New listings" section (silent landing, no alert; DESIGN copy call)
-- ⬜ Tests: card parse, dedup, empty-result + anti-bot-block fail-loud path
+- 🔵 Provision headless Chromium on the VPS — `provision.sh` §4b written (ephemeral `uv run --with playwright`, kept out of the core lockfile; OS-deps as root + browser as app user, idempotent) and `family-property.service` runs via it; **runs at next deploy** (no appliance touch this session)
+- ✅ `automation/property_scrape.py` — saved-search URLs from `/etc/family-inc/property_searches.json`, headless-Chromium fetch (lazy Playwright), embedded-JSON card extraction + tolerant normalize, diff `listing_id` vs `seen.json`; MOCK MODE out-of-the-box; anti-bot page → `BlockedError` (fail loud), genuine empty page → `[]`
+- ✅ `Property-Listings` landing via `lib/sheet` (D-016) — `PROPERTY_LISTINGS_COLUMNS` (§12.1), append-only, dedup on `listing_id` (`seen.json` + a Sheet-side guard); tab auto-creates on first live append
+- ✅ `family-property.timer` (07:10 + 19:10, before the 07:25/07:30 run) + `family-property.service` (`TimeoutStartSec=300`/`MemoryMax=1500M`, `StateDirectory`, `OnFailure` → fail-flag)
+- ✅ Digest gains the silent "🏠 דירות חדשות" section — folded into `daily_digest.assemble` (never an alert, never budget); copy in `templates.py` **[Shanee review]**, DESIGN §6 addition pending
+- ✅ Tests: 23 in `tests/test_property.py` — card parse/normalize, `BlockedError`, empty-result, seen-diff, persist skip/roundtrip/Sheet-dedup, digest section, daily-digest fold-in, junk/promo rejection, anti-poison seen-set (suite → **229 green**, +25)
+
+**Remaining (PO machine / VPS — deploy step, not done in-session):** run `provision.sh` §4b (install Chromium), place `/etc/family-inc/property_searches.json` (real saved searches — personal, never in repo; template = `deploy/property_searches.example.json`), `systemctl enable --now family-property.timer`, run once + verify a live scrape writes `Property-Listings` rows and the morning section. Then M5 closes — its external-model review folds into the M4 "review on the live system" item (D-035 precedent), no separate run.
 
 ## v1.1 candidates (unordered — pick after v1 is boring)
 

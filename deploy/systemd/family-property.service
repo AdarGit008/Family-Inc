@@ -1,0 +1,21 @@
+; Property scraper — runs before the morning digest (SPEC §12.1, M5). Headless
+; Chromium comes from an ephemeral `uv run --with playwright`, so the browser
+; dep never enters the core lockfile (boring core; one runtime, D-018). Silent
+; lane: it writes the digest section + Property-Listings rows, never queues an
+; alert. TimeoutStartSec/MemoryMax bound a stuck or runaway browser; OnFailure
+; raises the fail-flag the next digest reports (§10.2).
+[Unit]
+Description=Family inc. property scraper (Yad2/Madlan)
+OnFailure=family-fail-flag@%n.service
+
+[Service]
+Type=oneshot
+User=familyinc
+WorkingDirectory=/opt/family-inc
+EnvironmentFile=-/etc/family-inc/env
+Environment=FAMILY_INC_PROPERTY_DIR=/var/lib/family-inc/property
+StateDirectory=family-inc/property
+TimeoutStartSec=300
+MemoryMax=1500M
+ExecStart=/usr/local/bin/uv run --with playwright --no-sync python automation/property_scrape.py
+NoNewPrivileges=true

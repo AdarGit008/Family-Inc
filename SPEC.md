@@ -126,7 +126,7 @@ Authoritative tab list. Column-level schema for the three tabs with code contrac
 
 **Dashboard write contract:** every write-back is one `batchUpdate` touching its intent columns **plus M, N (when completing), and always O.** A dashboard that doesn't stamp O is non-conformant — this was the v1-blocking gap found 2026-06-11.
 
-### 6.2 `WhatsApp_Inbox` (hot, 90-day rolloff) + `WhatsApp_Archive` (text-only, forever)
+### 6.2 `WhatsApp_Inbox` (hot, 30-day rolloff) + `WhatsApp_Archive` (text-only, forever)
 
 As built: msg_id, group_name, group_type, sender_name, sender_role, received_at, text, has_media, classification, one_liner, action_required, action_owner, critical, dispatched, dispatched_at, digested_at. Archive keeps msg_id/group/sender/received_at/text/one_liner only. Media is never stored — only the fact it existed. (critical/dispatched/dispatched_at are the outbox outcome record; budget enforcement itself lives only in the outbox ledger, §7.5.)
 

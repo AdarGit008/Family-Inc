@@ -69,6 +69,14 @@ WA_ARCHIVE_COLUMNS = ["msg_id", "group_name", "sender_name", "received_at",
                       "text", "one_liner"]
 SETTINGS_COLUMNS = ["Key", "Value"]
 
+# SPEC §12.1 — property tracker landing zone (M5). Scraper appends new listings;
+# `status` is human-edited (new/seen/contacted/dismissed). Append-only via
+# append_rows(); dedup on listing_id (the scraper's seen.json + read_column).
+PROPERTY_LISTINGS_COLUMNS = [
+    "listing_id", "portal", "first_seen", "price_ils", "rooms",
+    "size_sqm", "location", "url", "status",
+]
+
 
 class SchemaDriftError(RuntimeError):
     """Header row disagrees with SPEC §6.1 — abort the run (§7.1)."""

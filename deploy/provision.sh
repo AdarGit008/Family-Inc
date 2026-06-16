@@ -37,6 +37,17 @@ echo "== 4. dependencies"
 (cd "$APP_DIR" && sudo -u "$APP_USER" uv sync --frozen)
 (cd "$APP_DIR/automation/bridge" && sudo -u "$APP_USER" npm ci --omit=dev)
 
+echo "== 4b. headless browser for the property scraper (M5, SPEC §12.1)"
+# Kept OUT of the core lockfile (boring core; one runtime, D-018): the
+# family-property unit runs via `uv run --with playwright`. OS libs need root;
+# the browser binary is installed under the app user (where the unit looks).
+# Idempotent — playwright skips an already-installed browser. Non-fatal: a
+# failure here only disables the property lane, which then fails loud (§10.2).
+(cd "$APP_DIR" && uv run --with playwright python -m playwright install-deps chromium) \
+  || echo "  [warn] playwright OS-deps install failed — property lane disabled until fixed"
+(cd "$APP_DIR" && sudo -u "$APP_USER" uv run --with playwright python -m playwright install chromium) \
+  || echo "  [warn] playwright chromium install failed — property lane disabled until fixed"
+
 echo "== 5. secrets directory (files placed BY HAND — deploy/README.md step 3)"
 install -d -m 700 -o "$APP_USER" -g "$APP_USER" /etc/family-inc
 cat <<'EOF'
@@ -44,6 +55,8 @@ cat <<'EOF'
      env                    ANTHROPIC_API_KEY, FAMILY_INC_SHEET_ID, SMTP_* (SPEC §10.2), review keys
      service-account.json   Google service account (Sheet editor)
      recipients.json        the two adult JIDs (bridge send scope)
+     property_searches.json saved-search URLs (M5, §12.1; optional — see
+                            deploy/property_searches.example.json)
 EOF
 
 echo "== 6. sudoers — the ONE whitelisted line (ENGINEERING §6)"
@@ -56,7 +69,7 @@ cp "$APP_DIR"/deploy/systemd/* /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now family-bridge.service \
   family-reminders.timer family-digest.timer family-summarizer.timer \
-  family-weekly.timer family-backup.timer
+  family-weekly.timer family-backup.timer family-property.timer
 
 echo "== done. Next: place secrets, pair Baileys (deploy/README.md steps 3–4)."
 echo "   Until recipients.json + pairing exist, the bridge loops printing a QR — expected."

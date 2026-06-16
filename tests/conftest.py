@@ -94,4 +94,9 @@ def tmp_runtime(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "ENGINE_FLAGS", tmp_path / "logs" / "engine_flags.jsonl")
     monkeypatch.setattr(config, "FAIL_FLAG", tmp_path / "logs" / "fail.flag")
     monkeypatch.setattr(config, "DELIVERY_LOG", tmp_path / "logs" / "delivery_log.csv")
+    # Property tracker (M5) — keep the scraper's state + (absent) searches file
+    # inside the sandbox so a test run never reads /etc or writes /var/lib.
+    monkeypatch.setattr(config, "PROPERTY_STATE_DIR", tmp_path / "state" / "property")
+    monkeypatch.setattr(config, "PROPERTY_SEEN_FILE", tmp_path / "state" / "property" / "seen.json")
+    monkeypatch.setattr(config, "PROPERTY_SEARCHES_FILE", tmp_path / "etc" / "property_searches.json")
     return tmp_path

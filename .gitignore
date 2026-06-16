@@ -62,3 +62,6 @@ Archive/Progress/index.html
 # automation/data/ stays ignored so stale copies on dev machines never get tracked)
 automation/cache/
 automation/data/
+
+# stray pytest custom-cache dirs (sandbox runs)
+pytest-cache-files-*/

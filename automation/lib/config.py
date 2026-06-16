@@ -91,9 +91,7 @@ STALE_GOAL_UPDATE_DAYS = 21     # warn if goal Last Update older than 3 weeks
 # ---------------------------------------------------------------------------
 BRIDGE_STALE_HOURS = 12          # group silence this long is suspect
 HEARTBEAT_STALE_MINUTES = 45     # bridge heartbeat is written at least every 15m
-WA_INBOX_RETENTION_DAYS = 30     # hot-tab rolloff horizon (SPEC §6.2 says 90 —
-                                 # flagged 2026-06-12, PO call pending; rolloff
-                                 # against the live Sheet itself lands in M4)
+WA_INBOX_RETENTION_DAYS = 30     # hot-tab rolloff horizon — 30d confirmed (D-036, 2026-06-15); SPEC 6.2 aligned. Rolloff code lands M4.
 DIGEST_GROUP_ORDER = ["daycare", "building", "family", "neighborhood", "student", "other"]
 # Hebrew short labels, used inline per digest item (DESIGN §6: "גן — מחר יום פרי…").
 # Real group names stay in the gitignored seed; these label the TYPE.
@@ -101,6 +99,25 @@ DIGEST_GROUP_LABEL = {
     "daycare": "גן", "building": "ועד", "family": "משפחה",
     "neighborhood": "שכונה", "student": "לימודים", "other": "אחר",
 }
+
+# ---------------------------------------------------------------------------
+# Property tracker (SPEC.md §12.1, M5 — unfrozen D-034). Silent, digest-only:
+# new listings land in the Sheet and surface in the 07:30 digest, never an
+# alert, never a budget bypass (briefings > notifications).
+# ---------------------------------------------------------------------------
+PROPERTY_LISTINGS_TAB = "Property-Listings"   # scraper-written tab (SPEC §6 / §12.1)
+# Saved-search URLs per portal — PERSONAL (area/price/rooms), mode 600, /etc only,
+# NEVER in the repo (D-024). deploy/property_searches.example.json is the template.
+PROPERTY_SEARCHES_FILE = Path("/etc/family-inc/property_searches.json")
+# Last-seen listing_id set. VPS = /var/lib/family-inc/property (systemd
+# StateDirectory, set via FAMILY_INC_PROPERTY_DIR in the unit); dev/tests fall
+# back to the gitignored automation/cache so a local run never needs root.
+PROPERTY_STATE_DIR = Path(os.environ.get("FAMILY_INC_PROPERTY_DIR")
+                          or (CACHE_DIR / "property"))
+PROPERTY_SEEN_FILE = PROPERTY_STATE_DIR / "seen.json"
+PROPERTY_FETCH_TIMEOUT_S = 45     # per-URL headless-Chromium budget (the unit's
+                                  # TimeoutStartSec/MemoryMax bound a stuck browser)
+PROPERTY_MAX_PER_DIGEST = 8       # cap new-listing lines in one morning digest
 
 # ---------------------------------------------------------------------------
 # LLM (SPEC.md §8.7 — model ids live here, not at call sites)

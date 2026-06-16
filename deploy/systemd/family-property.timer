@@ -1,0 +1,15 @@
+; 07:10 + 19:10 — the morning run lands before the reminders engine (07:25) and
+; daily digest (07:30) so fresh listings make the morning message; the evening
+; run keeps the Sheet current. 1–2×/day, not real-time (SPEC §12.1: listings
+; don't churn by the minute and tighter polling raises ban risk).
+[Unit]
+Description=Family inc. property scraper timer (07:10 + 19:10 Asia/Jerusalem)
+
+[Timer]
+OnCalendar=*-*-* 07:10:00
+OnCalendar=*-*-* 19:10:00
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
