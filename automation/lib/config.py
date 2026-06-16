@@ -119,6 +119,35 @@ PROPERTY_FETCH_TIMEOUT_S = 45     # per-URL headless-Chromium budget (the unit's
                                   # TimeoutStartSec/MemoryMax bound a stuck browser)
 PROPERTY_MAX_PER_DIGEST = 8       # cap new-listing lines in one morning digest
 
+# --- Apify secondary source (SPEC §12.1, D-040) ----------------------------
+# SECONDARY/supplementary only: the on-box Chromium scraper above stays primary.
+# Apify (its own residential proxy pool) is the backup that clears the anti-bot
+# wall the VPS datacenter IP can't (D-039). Paid third party in the path → D-040
+# amends D-010's "₪0 marginal" to the §11 monthly ceiling, which still governs.
+APIFY_TOKEN_ENV = "FAMILY_INC_APIFY_TOKEN"   # SERVICE api key, NOT a portal login;
+                                             # /etc/family-inc/env mode 600 (§8.6),
+                                             # never the repo. Absent → path inert.
+APIFY_BASE_URL = "https://api.apify.com/v2"
+# Actor ids per portal (username~actorName) — non-secret, committed (D-040 picks).
+# amit123 ingests Yad2 saved-search URLs directly; swerve is parametric (Madlan
+# needs a city/dealType 'apify' block in property_searches.json — no URL input).
+PROPERTY_APIFY_ACTORS = {
+    "yad2": "amit123~yadscraper",
+    "madlan": "swerve~madlan-scraper",
+}
+PROPERTY_APIFY_TIMEOUT_S = 180    # run-sync-get-dataset-items hard-caps at 300s;
+                                  # the caps below keep real runs well under it
+PROPERTY_APIFY_MAX_ITEMS = 100    # per-search cap for parametric actors (Madlan)
+PROPERTY_APIFY_MAX_PAGES = 3      # per-search page cap for URL actors (Yad2) —
+                                  # newest-first searches put new listings first
+PROPERTY_APIFY_GAPFILL = True     # also fill missing fields on primary listings
+                                  # from the same Apify call (D-040). False =
+                                  # backup-only (blocked/empty) — the cheapest mode
+PROPERTY_APIFY_ONCE_PER_DAY = True  # Apify lands at most once/calendar-day (cost:
+                                  # priced per result; on-box primary stays free
+                                  # 2×/day; digest is morning-only). False = every run
+PROPERTY_APIFY_STAMP_FILE = PROPERTY_STATE_DIR / "apify_last_run.json"
+
 # ---------------------------------------------------------------------------
 # LLM (SPEC.md §8.7 — model ids live here, not at call sites)
 # ---------------------------------------------------------------------------

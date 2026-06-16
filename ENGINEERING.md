@@ -57,7 +57,7 @@ Rules: scripts never define utilities that belong in `lib/` (CI greps for redefi
 | Node | LTS, plain npm | bridge only; `npm ci`; `package-lock.json` committed (found missing at go-live 2026-06-12) |
 | Scheduling | **systemd timers** (not crontab) | journald logs, `OnFailure=` hooks, `Persistent=true` catches missed runs after reboots |
 | Hosting (dashboard) | GitHub Pages via Actions (`.github/workflows/pages.yml`) serving `main:/dashboard` | static, zero backend; branch-mode Pages can't serve subdirs — the workflow also generates the gitignored `config.js` from Actions secrets (D-027) |
-| Secrets | `/etc/family-inc/` mode 600 | `service-account.json`, `env` (ANTHROPIC_API_KEY, SMTP app password, review-provider keys), `recipients.json` |
+| Secrets | `/etc/family-inc/` mode 600 | `service-account.json`, `env` (ANTHROPIC_API_KEY, SMTP app password, review-provider keys, FAMILY_INC_APIFY_TOKEN — property secondary source, D-040), `recipients.json`, `property_searches.json` |
 
 ## 3. Configuration
 

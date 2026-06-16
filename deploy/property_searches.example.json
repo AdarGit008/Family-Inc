@@ -1,5 +1,7 @@
 {
-  "_comment": "TEMPLATE for /etc/family-inc/property_searches.json (mode 600, owner familyinc). The real file holds your personal saved-search URLs (area/price/rooms) and is NEVER committed — it lives only on the VPS (SPEC §12.1, D-024). Replace the placeholder URLs below with your own saved searches from each portal. 'madlan' is optional; remove the entry to scrape Yad2 only.",
+  "_comment": "TEMPLATE for /etc/family-inc/property_searches.json (mode 600, owner familyinc). Holds your personal saved searches (area/price/rooms) — NEVER committed; lives only on the VPS (SPEC §12.1, D-024). Replace the placeholders below. 'madlan' is optional; remove it to scrape Yad2 only.",
+  "_comment_primary": "The 'url' is what the on-box Chromium PRIMARY fetches. Use a real saved-search results URL from each portal.",
+  "_comment_secondary": "Apify is the SECONDARY source (D-040), used only when the primary is blocked/empty or a field is missing. It needs FAMILY_INC_APIFY_TOKEN in /etc/family-inc/env (Apify Console -> API & Integrations). Without the token the Apify path stays inert and the lane is primary-only. Yad2 (amit123~yadscraper) reuses the 'url' above automatically — no 'apify' block needed. Madlan (swerve~madlan-scraper) is PARAMETRIC and does NOT accept a URL, so a Madlan entry MUST carry an 'apify' block with at least {city, dealType}; params are never guessed from the url (it would fail loud).",
   "searches": [
     {
       "portal": "yad2",
@@ -9,7 +11,13 @@
     {
       "portal": "madlan",
       "label": "example — optional second portal",
-      "url": "https://www.madlan.co.il/for-sale/Israel?dealType=buy&minRooms=3&maxPrice=2000000"
+      "url": "https://www.madlan.co.il/for-sale/Israel?dealType=buy&minRooms=3&maxPrice=2000000",
+      "apify": {
+        "city": "Kfar Saba",
+        "dealType": "buy",
+        "minRooms": 3,
+        "maxPrice": 2000000
+      }
     }
   ]
 }

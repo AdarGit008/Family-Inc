@@ -3,7 +3,7 @@
 *The only live backlog. Status legend: ⬜ todo · 🔵 in progress · ✅ done · 🧊 frozen.*
 *v1 definition and acceptance criteria live in `SPEC.md` §11. Migration session plan lives in `ENGINEERING.md` §9.*
 
-**Now:** **M3 (go-live) CLOSED 2026-06-15 — v1 live & accepted, tagged `v1-live`.** The §11 3-day window (2026-06-13→15, D-029 re-pair clock) passed: the morning digest reached both phones three consecutive days. **M5 property-tracker code landed 2026-06-15 (D-037, local build — VPS deploy pending);** **M4** (summarizer hardening) still waits ≥1 week live. · last session: **2026-06-15 (M3 close, D-035)**; prior: 2026-06-13 (data-fetching planning, D-031–034) — finance frozen, L2/L3 killed, Dira → M5 · **2026-06-15 hardening (D-036):** zombie tasks deleted, D-033 orphans removed, ticker removed, rolloff→30d, ENGINEERING §3 fixed, M4 open calls ratified. · **2026-06-15 M5 local build (D-037):** property_scrape + Property-Listings landing + silent digest section + systemd/provision artifacts, 229 tests green; VPS deploy pending.
+**Now:** **M3 (go-live) CLOSED 2026-06-15 — v1 live & accepted, tagged `v1-live`.** The §11 3-day window (2026-06-13→15, D-029 re-pair clock) passed: the morning digest reached both phones three consecutive days. **M5 property-tracker built (D-037); the Yad2/Madlan anti-bot wall blocked the on-box scraper from the VPS datacenter IP (D-038/D-039), resolved by adding Apify as a SECONDARY source (D-040, 2026-06-16) — VPS deploy pending (token + Madlan params);** **M4** (summarizer hardening) still waits ≥1 week live. · last session: **2026-06-15 (M3 close, D-035)**; prior: 2026-06-13 (data-fetching planning, D-031–034) — finance frozen, L2/L3 killed, Dira → M5 · **2026-06-15 hardening (D-036):** zombie tasks deleted, D-033 orphans removed, ticker removed, rolloff→30d, ENGINEERING §3 fixed, M4 open calls ratified. · **2026-06-15 M5 local build (D-037):** property_scrape + Property-Listings landing + silent digest section + systemd/provision artifacts, 229 tests green; VPS deploy pending.
 
 ## v1 — to first real message on both phones
 
@@ -53,7 +53,7 @@
 - 🔵 D-036: WhatsApp_Inbox rolloff = 30-day (SPEC §6.2 aligned to config); rolloff code lands M4
 - ⬜ Milestone review (external model) on the live system
 
-### M5 — Property tracker (unfrozen D-034) — 🔵 code landed 2026-06-15 (D-037, local build); VPS deploy pending
+### M5 — Property tracker (unfrozen D-034) — 🔵 built; anti-bot resolved via Apify secondary (D-040); VPS deploy pending
 
 *First post-acceptance build; independent of finance. Full spec: `SPEC.md` §12.1. (`session_kickoff.py` still names M4 as "current" — it lists first with open ⬜ items; M5's build is the earlier one in wall-clock. M4 still waits ≥1 week live.)*
 
@@ -62,9 +62,10 @@
 - ✅ `Property-Listings` landing via `lib/sheet` (D-016) — `PROPERTY_LISTINGS_COLUMNS` (§12.1), append-only, dedup on `listing_id` (`seen.json` + a Sheet-side guard); tab auto-creates on first live append
 - ✅ `family-property.timer` (07:10 + 19:10, before the 07:25/07:30 run) + `family-property.service` (`TimeoutStartSec=300`/`MemoryMax=1500M`, `StateDirectory`, `OnFailure` → fail-flag)
 - ✅ Digest gains the silent "🏠 דירות חדשות" section — folded into `daily_digest.assemble` (never an alert, never budget); copy in `templates.py` **[Shanee review]**, DESIGN §6 addition pending
-- ✅ Tests: 23 in `tests/test_property.py` — card parse/normalize, `BlockedError`, empty-result, seen-diff, persist skip/roundtrip/Sheet-dedup, digest section, daily-digest fold-in, junk/promo rejection, anti-poison seen-set (suite → **229 green**, +25)
+- ✅ Tests: 23 in `tests/test_property.py` — card parse/normalize, `BlockedError`, empty-result, seen-diff, persist skip/roundtrip/Sheet-dedup, digest section, daily-digest fold-in, junk/promo rejection, anti-poison seen-set
+- ✅ **Anti-bot path (D-038 → D-040):** deploy-time pytest made hermetic vs the live Sheet (D-038); primary → headed Chromium under Xvfb + stealth (D-039) still drew challenges from the datacenter IP; **Apify added as the SECONDARY source** (`automation/lib/apify.py` — amit123 Yad2 + swerve Madlan): per-search backup + gap-fill, primary always wins, strict fail-loud / no-invented-data, once/day cost-gated, token-gated **inert without `FAMILY_INC_APIFY_TOKEN`**. 24 in `tests/test_apify.py` (suite → **253 green**, +24)
 
-**Remaining (PO machine / VPS — deploy step, not done in-session):** run `provision.sh` §4b (install Chromium), place `/etc/family-inc/property_searches.json` (real saved searches — personal, never in repo; template = `deploy/property_searches.example.json`), `systemctl enable --now family-property.timer`, run once + verify a live scrape writes `Property-Listings` rows and the morning section. Then M5 closes — its external-model review folds into the M4 "review on the live system" item (D-035 precedent), no separate run.
+**Remaining (PO machine / VPS — deploy step, not done in-session):** **(1)** run `provision.sh` §4b (install Chromium for the primary); **(2)** place `/etc/family-inc/property_searches.json` (real saved searches — personal, never in repo; template = `deploy/property_searches.example.json`) — each **Madlan** entry needs an `apify: {city, dealType, …}` block (swerve is parametric, not URL-driven); **(3)** add `FAMILY_INC_APIFY_TOKEN=…` to `/etc/family-inc/env` (Apify account → API & Integrations; free tier seeds enough credit to verify); **(4)** `systemctl enable --now family-property.timer`, run once + verify a live scrape writes `Property-Listings` rows and the morning section (with the IP blocked, this exercises the Apify backup path end-to-end). Then M5 closes — its external-model review folds into the M4 "review on the live system" item (D-035 precedent), no separate run.
 
 ## v1.1 candidates (unordered — pick after v1 is boring)
 
