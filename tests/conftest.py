@@ -18,15 +18,25 @@ from automation.lib import config  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def _hermetic_no_live_sheet(monkeypatch):
-    """Tests must NEVER reach the live Google Sheet. `sheet.is_live()` calls
-    `config.load_env()`, which on the appliance loads FAMILY_INC_SHEET_ID from
-    /etc/family-inc/env — so `deploy.sh`'s pytest would otherwise select the live
-    backend (on 2026-06-16 a no-backend test appended the 3 mock listings to the
-    live Property-Listings tab — D-038). Setting the var EMPTY makes is_live()
-    False on any box: load_env keeps "existing env wins", so the file can't
-    repopulate it (delenv / `-u` would let it back in). Tests that need a backend
-    pass an explicit xlsx path or live_override=."""
+    """Tests must NEVER reach live I/O selected from /etc/family-inc/env. That
+    file is loaded by `config.load_env()` (setdefault → "existing env wins"),
+    reached via BOTH `sheet.is_live()` and `mailer.send_digest()`, so on the
+    appliance `deploy.sh`'s pytest otherwise picks up the box's live creds:
+      • FAMILY_INC_SHEET_ID → the live Google Sheet backend. D-038: a no-backend
+        test once appended the 3 mock listings to the live Property-Listings tab.
+      • SMTP_USER/SMTP_PASS (+FAMILY_INC_EMAIL_TO) → the digest's §10.2
+        email-fallback path really SENDS, so the send-stamping tests take the
+        SMTP branch instead of the WhatsApp outbox. D-041: 2 TestSendStamping
+        failures surfaced at the M5 deploy — green on every dev box, red only on
+        the appliance, where the env file exists.
+    Setting each EMPTY (not delenv / `-u`) makes load_env's setdefault keep it
+    empty so the file can't repopulate it. Tests that need a backend pass an
+    explicit xlsx path / live_override=; the email-path tests (test_mailer) set
+    SMTP creds themselves and run after this autouse, so they still win."""
     monkeypatch.setenv(config.SHEET_ID_ENV, "")
+    monkeypatch.setenv("SMTP_USER", "")
+    monkeypatch.setenv("SMTP_PASS", "")
+    monkeypatch.setenv(config.EMAIL_TO_ENV, "")
     from automation.lib import sheet
     sheet.reset_backend()
 
