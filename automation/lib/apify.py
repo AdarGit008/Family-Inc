@@ -329,21 +329,32 @@ def fetch_listings(portal: str, search: dict, *, api_token: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
-# Once-per-day cost gate. Apify is priced per result; the on-box primary keeps
-# its free 2×/day while Apify lands at most once a calendar day (the digest is
-# morning-only, so a same-day second Apify call buys the user nothing). The
-# stamp is written ONLY after a successful Apify-using run, so a failed morning
-# call still lets the evening run retry.
-# ---------------------------------------------------------------------------
-def ran_successfully_today(stamp_path, today) -> bool:
+# Once-per-day cost gate — PER SEARCH and PER KIND. Apify is priced per result;
+# the on-box primary keeps its free 2×/day while Apify lands at most once a
+# calendar day (the digest is morning-only, so a same-day second call buys the
+# user nothing). Two INDEPENDENT budgets so a cheap GAP-FILL can never consume
+# the load-bearing BACKUP's daily call and silently suppress a later
+# blocked-primary backup (review CRITICAL); per-SEARCH so one search's backup
+# never suppresses another's (review SHOULD-FIX #2). Marked ONLY after a durable
+# Sheet write, so a failed call still lets the next run retry. Stamp shape:
+#   {"backup": {<search_key>: "YYYY-MM-DD"}, "gapfill": {<search_key>: "..."}}
+def load_run_stamp(stamp_path) -> dict:
     try:
         data = json.loads(stamp_path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
-        return False
-    return data.get("date") == today.isoformat()
+        return {}
 
 
-def stamp_run(stamp_path, today) -> None:
+def ran_today(stamp: dict, kind: str, key: str, today) -> bool:
+    return stamp.get(kind, {}).get(key) == today.isoformat()
+
+
+def mark_run(stamp: dict, kind: str, key: str, today) -> None:
+    stamp.setdefault(kind, {})[key] = today.isoformat()
+
+
+def save_run_stamp(stamp_path, stamp: dict) -> None:
     stamp_path.parent.mkdir(parents=True, exist_ok=True)
-    stamp_path.write_text(json.dumps({"date": today.isoformat()}),
+    stamp_path.write_text(json.dumps(stamp, ensure_ascii=False, indent=1),
                           encoding="utf-8")

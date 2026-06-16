@@ -271,6 +271,34 @@ class TestRunIntegration:
         assert res.all_listings[0].size_sqm == 92    # blank filled, primary kept
         assert res.all_listings[0].price_ils == 1_850_000
 
+    def test_gapfill_does_not_consume_backup_budget(self, tmp_path, monkeypatch):
+        # CRITICAL (review): a morning GAP-FILL must NOT spend the once/day budget
+        # and silently suppress a later BACKUP when the primary goes dark.
+        sfile = _searches_file(tmp_path, [{"portal": "yad2", "url": "U"}])
+        stamp = tmp_path / "stamp.json"
+        sp = _xlsx(tmp_path)
+        common = dict(today=date(2026, 6, 16), searches_path=sfile,
+                      state_path=tmp_path / "seen.json",
+                      briefings_dir=tmp_path / "Briefings", sheet_path=sp,
+                      apify_enabled=True, apify_token="t", apify_stamp_path=stamp)
+
+        # morning: primary OK but gappy → gap-fill fires (stamps gapfill only)
+        monkeypatch.setattr(P, "fetch_html", lambda *a, **k: "html")
+        monkeypatch.setattr(P, "parse_listings", lambda html, portal: [
+            P.Listing("yad2:1", "yad2", 100, 4, None, "loc", "u")])
+        r_gap = _FakeRunner([{"item_id": "1", "item_url": "u", "price": 100,
+                              "rooms": 4, "square_meter": 80, "location": "loc"}])
+        res1 = P.run(apify_runner=r_gap, **common)
+        assert res1.used_apify and len(r_gap.calls) == 1   # gap-fill happened
+
+        # evening: primary now BLOCKED → backup must STILL fire (budget intact)
+        monkeypatch.setattr(P, "fetch_html", _blocked)
+        r_bak = _FakeRunner([YAD2_ITEM, YAD2_ITEM2])
+        res2 = P.run(apify_runner=r_bak, **common)
+        assert res2.used_apify and len(r_bak.calls) == 1   # backup NOT suppressed
+        assert res2.errors == []
+        assert {li.listing_id for li in res2.new_listings} == {"yad2:abc123", "yad2:def456"}
+
     def test_both_sources_down_fails_loud(self, tmp_path, monkeypatch):
         # primary blocked AND Apify backup raises → the run must fail loud
         monkeypatch.setattr(P, "fetch_html", _blocked)

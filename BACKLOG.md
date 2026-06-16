@@ -63,7 +63,7 @@
 - ✅ `family-property.timer` (07:10 + 19:10, before the 07:25/07:30 run) + `family-property.service` (`TimeoutStartSec=300`/`MemoryMax=1500M`, `StateDirectory`, `OnFailure` → fail-flag)
 - ✅ Digest gains the silent "🏠 דירות חדשות" section — folded into `daily_digest.assemble` (never an alert, never budget); copy in `templates.py` **[Shanee review]**, DESIGN §6 addition pending
 - ✅ Tests: 23 in `tests/test_property.py` — card parse/normalize, `BlockedError`, empty-result, seen-diff, persist skip/roundtrip/Sheet-dedup, digest section, daily-digest fold-in, junk/promo rejection, anti-poison seen-set
-- ✅ **Anti-bot path (D-038 → D-040):** deploy-time pytest made hermetic vs the live Sheet (D-038); primary → headed Chromium under Xvfb + stealth (D-039) still drew challenges from the datacenter IP; **Apify added as the SECONDARY source** (`automation/lib/apify.py` — amit123 Yad2 + swerve Madlan): per-search backup + gap-fill, primary always wins, strict fail-loud / no-invented-data, once/day cost-gated, token-gated **inert without `FAMILY_INC_APIFY_TOKEN`**. 24 in `tests/test_apify.py` (suite → **253 green**, +24)
+- ✅ **Anti-bot path (D-038 → D-040):** deploy-time pytest made hermetic vs the live Sheet (D-038); primary → headed Chromium under Xvfb + stealth (D-039) still drew challenges from the datacenter IP; **Apify added as the SECONDARY source** (`automation/lib/apify.py` — amit123 Yad2 + swerve Madlan): per-search backup + gap-fill, primary always wins, strict fail-loud / no-invented-data, **per-search + per-kind** once/day cost gate (gap-fill can't starve backup — milestone review CRITICAL, D-040), token-gated **inert without `FAMILY_INC_APIFY_TOKEN`**. 29 in `tests/test_apify.py` (suite → **259 green**, +29)
 
 **Remaining (PO machine / VPS — deploy step, not done in-session):** **(1)** run `provision.sh` §4b (install Chromium for the primary); **(2)** place `/etc/family-inc/property_searches.json` (real saved searches — personal, never in repo; template = `deploy/property_searches.example.json`) — each **Madlan** entry needs an `apify: {city, dealType, …}` block (swerve is parametric, not URL-driven); **(3)** add `FAMILY_INC_APIFY_TOKEN=…` to `/etc/family-inc/env` (Apify account → API & Integrations; free tier seeds enough credit to verify); **(4)** `systemctl enable --now family-property.timer`, run once + verify a live scrape writes `Property-Listings` rows and the morning section (with the IP blocked, this exercises the Apify backup path end-to-end). Then M5 closes — its external-model review folds into the M4 "review on the live system" item (D-035 precedent), no separate run.
 
@@ -75,6 +75,7 @@
 - iCloud → GCal ICS subscribe (15 min, `Setup/05`)
 - Reminders `Priority` column + bulk-done flow
 - Hebrew chrome string completion pass
+- Apify monthly result-counter cap — a programmatic §11 ≤₪120/mo backstop for the property secondary source (D-040 milestone-review residual; today bounded only by per-search/per-day calls + item/page caps)
 
 ## Frozen lanes 🧊
 

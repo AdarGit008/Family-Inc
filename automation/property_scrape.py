@@ -539,7 +539,9 @@ def _missing_fields(li: Listing) -> bool:
 def merge_listings(primary: list[Listing],
                    secondary: list[Listing]) -> list[Listing]:
     """Union by listing_id, primary winning. Order: primary first (order
-    preserved), then any new secondary listings."""
+    preserved), then any new secondary listings. NOTE: fills blanks on the
+    primary Listing objects IN PLACE — callers must own them (gather passes
+    freshly parsed lists; the mock path hands out `replace()` copies)."""
     by_id = {li.listing_id: li for li in primary}
     order = list(primary)
     for s in secondary:
@@ -554,19 +556,35 @@ def merge_listings(primary: list[Listing],
     return order
 
 
+def _apify_search(s: dict, kind: str, errors: list[str], apify_token,
+                  apify_runner) -> tuple[list[Listing], bool]:
+    """One Apify call for search `s`. Returns (listings, ok). Corrupt items are
+    ALWAYS surfaced into `errors` (D-040: no silent failure on missing/corrupt
+    data). A transport ApifyError is re-raised to the caller, which decides
+    loud (backup) vs best-effort (gap-fill)."""
+    sec, item_errs = apify.fetch_listings(s["portal"], s, api_token=apify_token,
+                                          runner=apify_runner)
+    errors.extend(f"{s['portal']} apify item: {m}" for m in item_errs)
+    return sec, True
+
+
 def gather(searches: list[dict], html: Optional[str], portal: Optional[str],
            errors: list[str], *, apify_enabled: bool = False,
-           apify_allowed_today: bool = True, apify_token: Optional[str] = None,
-           apify_runner=None) -> tuple[list[Listing], bool, bool]:
+           apify_token: Optional[str] = None, apify_runner=None,
+           run_stamp: Optional[dict] = None, today: Optional[date] = None,
+           apify_runs: Optional[list] = None) -> tuple[list[Listing], bool, bool]:
     """Collect listings from (a) an explicit --html fixture, (b) the configured
     saved searches, or (c) the mock sample. Returns (listings, is_mock, used_apify).
 
     For (b) the on-box Chromium scraper is the PRIMARY source (unchanged). Apify
     (D-040) is the SECONDARY: per saved-search it is consulted ONLY when the
-    primary is blocked/empty (backup) or returned listings with missing fields
-    (gap-fill), then merged with the primary winning. A per-search fault is
-    isolated in `errors` and the other searches still run — one dead portal must
-    not suppress the rest; the run exits non-zero at the end (fail loud, §10.2).
+    primary is blocked/empty (BACKUP) or returned listings with missing fields
+    (GAP-FILL), then merged with the primary winning. Each kind has its OWN
+    per-search once/day budget in `run_stamp` (None = gate off): a cosmetic
+    gap-fill can never spend the load-bearing backup's daily call, and one
+    search never suppresses another. Successful calls are appended to
+    `apify_runs` as (kind, key) so the caller stamps them after a durable write.
+    A per-search fault is isolated in `errors`; the others still run.
     """
     if html is not None:
         return parse_listings(html, portal or "yad2"), False, False
@@ -576,9 +594,10 @@ def gather(searches: list[dict], html: Optional[str], portal: Optional[str],
         # module-level MOCK_LISTINGS singletons (review D-1).
         return [replace(li) for li in MOCK_LISTINGS], True, False
 
+    apify_runs = apify_runs if apify_runs is not None else []
     collected: list[Listing] = []
-    used_apify = False
     for s in searches:
+        key = s.get("url") or s.get("label") or s["portal"]
         primary: list[Listing] = []
         primary_failed = False
         primary_err = ""
@@ -593,48 +612,50 @@ def gather(searches: list[dict], html: Optional[str], portal: Optional[str],
         gapfill_needed = (cfg.PROPERTY_APIFY_GAPFILL and bool(primary)
                           and any(_missing_fields(li) for li in primary))
 
-        if apify_enabled and (backup_needed or gapfill_needed):
-            if not apify_allowed_today:
-                # Cost gate (D-040 once/day): Apify already ran this calendar day.
-                # With the morning-only digest, listings that appear later in the
-                # day surface on the NEXT run — delayed, not lost. A blocked
-                # primary here is a deliberate, logged no-op, not a failure (no
-                # fail-flag); never charged twice.
-                log.info("apify skipped for %s — once/day cap already used today",
-                         s["portal"])
-                if backup_needed:
-                    print(f"(apify once/day cap used — {s['portal']} primary "
-                          f"blocked; listings since the last run surface next run)")
+        if apify_enabled and backup_needed:
+            if run_stamp is not None and apify.ran_today(run_stamp, "backup", key, today):
+                # This search ALREADY backed up today — its listings are in the
+                # Sheet; intraday-new ones surface on the next run. Deliberate,
+                # logged no-op, not a failure (once/day cost gate). Per-search +
+                # backup-scoped, so we never land here with the search uncaptured.
+                log.info("apify backup skipped for %s — already backed up today", key)
+                print(f"(apify once/day: {s['portal']} already backed up today; "
+                      f"new listings surface next run)")
             else:
                 try:
-                    sec, item_errs = apify.fetch_listings(
-                        s["portal"], s, api_token=apify_token,
-                        runner=apify_runner)
-                    used_apify = True
-                    # Corrupt items are ALWAYS surfaced (D-040: no silent failure
-                    # on missing/corrupt data), whether backup or gap-fill.
-                    errors.extend(f"{s['portal']} apify item: {m}"
-                                  for m in item_errs)
+                    sec, _ = _apify_search(s, "backup", errors, apify_token, apify_runner)
                     primary = merge_listings(primary, sec)
+                    apify_runs.append(("backup", key))
                 except apify.ApifyError as e:
-                    log.error("apify failed for %s: %s", s["portal"], e)
-                    if backup_needed:
-                        # Both sources down for this search → fail loud.
-                        errors.append(f"{s['portal']} apify "
-                                      f"{s.get('label') or ''}: {e}".rstrip())
-                        if primary_failed:
-                            errors.append(primary_err)
-                    else:
-                        # Gap-fill is best-effort: the primary data stands, so a
-                        # failed enrichment is a warning, not a run failure.
-                        log.warning("apify gap-fill failed (primary stands): %s", e)
+                    # Both sources down for this search → fail loud.
+                    log.error("apify backup failed for %s: %s", s["portal"], e)
+                    errors.append(f"{s['portal']} apify "
+                                  f"{s.get('label') or ''}: {e}".rstrip())
+                    if primary_failed:
+                        errors.append(primary_err)
+        elif apify_enabled and gapfill_needed:
+            if run_stamp is not None and apify.ran_today(run_stamp, "gapfill", key, today):
+                # Cosmetic enrichment already done today — skipping loses only
+                # field-fill (the listings themselves are the primary's), so this
+                # is benign, never a data loss.
+                log.info("apify gap-fill skipped for %s — already enriched today", key)
+            else:
+                try:
+                    sec, _ = _apify_search(s, "gapfill", errors, apify_token, apify_runner)
+                    primary = merge_listings(primary, sec)
+                    apify_runs.append(("gapfill", key))
+                except apify.ApifyError as e:
+                    # Gap-fill is best-effort: the primary data stands, so a
+                    # failed enrichment is a warning, not a run failure.
+                    log.warning("apify gap-fill failed for %s (primary stands): %s",
+                                s["portal"], e)
         elif primary_failed:
-            # No Apify (not configured / not needed) → preserve the original
-            # fail-loud behavior: a blocked primary is a run error.
+            # No Apify (not configured) → preserve the original fail-loud
+            # behavior: a blocked primary is a run error.
             errors.append(primary_err)
 
         collected.extend(primary)
-    return collected, False, used_apify
+    return collected, False, bool(apify_runs)
 
 
 def run(searches_path: Optional[Path] = None, state_path: Optional[Path] = None,
@@ -654,14 +675,18 @@ def run(searches_path: Optional[Path] = None, state_path: Optional[Path] = None,
     if apify_enabled is None:
         apify_enabled = apify.is_configured()
     stamp_path = apify_stamp_path or cfg.PROPERTY_APIFY_STAMP_FILE
-    apify_allowed_today = (not cfg.PROPERTY_APIFY_ONCE_PER_DAY
-                           or not apify.ran_successfully_today(stamp_path, today))
+    # Per-search, per-kind once/day budgets (None = gate off). Loaded once;
+    # marked + saved only after a durable Sheet write (anti-poison aligned).
+    use_gate = apify_enabled and cfg.PROPERTY_APIFY_ONCE_PER_DAY
+    run_stamp = apify.load_run_stamp(stamp_path) if use_gate else None
+    apify_runs: list[tuple[str, str]] = []
 
     res = RunResult()
     all_listings, res.is_mock, res.used_apify = gather(
         searches, html, portal, res.errors,
-        apify_enabled=apify_enabled, apify_allowed_today=apify_allowed_today,
-        apify_token=apify_token, apify_runner=apify_runner)
+        apify_enabled=apify_enabled, apify_token=apify_token,
+        apify_runner=apify_runner, run_stamp=run_stamp, today=today,
+        apify_runs=apify_runs)
     res.all_listings = all_listings
 
     seen = load_seen(state_path)
@@ -698,11 +723,13 @@ def run(searches_path: Optional[Path] = None, state_path: Optional[Path] = None,
         # FAMILY_INC_SHEET_ID is in place) would silently lose a day's listings.
         if persisted:
             save_seen(state_path, seen | {li.listing_id for li in all_listings})
-            # Stamp the once/day Apify gate ONLY on a durable write (same gate as
-            # the seen-set): a backend-less run that stored nothing must still let
-            # a later live run call Apify (D-040 cost gate, anti-poison aligned).
-            if res.used_apify:
-                apify.stamp_run(stamp_path, today)
+            # Mark the per-search/per-kind once/day budgets ONLY on a durable
+            # write (same gate as the seen-set): a backend-less run that stored
+            # nothing must still let a later live run call Apify (anti-poison).
+            if use_gate and apify_runs:
+                for kind, key in apify_runs:
+                    apify.mark_run(run_stamp, kind, key, today)
+                apify.save_run_stamp(stamp_path, run_stamp)
         res.digest_path = write_digest_file(section, today, briefings_dir)
         if res.digest_path:
             print(f"wrote {res.digest_path}")
