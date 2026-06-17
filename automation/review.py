@@ -187,9 +187,9 @@ SYSTEM_INSTRUCTION = (
 )
 
 # ----------------------------------------------------------------------------
-# Lane → default attachment mapping. The five canon docs (D-019) are the only
-# specs that exist; superseded numbered docs live in Archive/ and are never
-# attached.
+# Lane → default attachment mapping. The four canon docs (SPEC, ENGINEERING,
+# DESIGN, BACKLOG) are the only live specs; superseded docs and the retired
+# D-NN decision log live in Archive/ and are never attached.
 # ----------------------------------------------------------------------------
 
 ALWAYS_ATTACH = [
@@ -203,7 +203,6 @@ LANE_DEFAULTS: dict[str, list[str]] = {
         # M-close: the full canon. Session's code/doc deltas via --extra-files.
         "ENGINEERING.md",
         "DESIGN.md",
-        "DECISIONS.md",
     ],
     "dashboard": [
         "DESIGN.md",
@@ -558,7 +557,7 @@ def main():
     )
     ap.add_argument("--lane", required=True, choices=sorted(LANE_DEFAULTS.keys()),
                     help="Which lane this review covers (drives default file attachments). "
-                         "M-closes use 'milestone' (attaches all five canon docs).")
+                         "M-closes use 'milestone' (attaches all four canon docs).")
     ap.add_argument("--changes", required=True,
                     help='Path to a markdown file with the "What this session changed" '
                          'bullet list, or "-" for stdin.')

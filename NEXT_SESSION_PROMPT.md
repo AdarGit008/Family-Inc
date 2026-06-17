@@ -9,26 +9,31 @@ Paste everything below this line to open the session:
 ---
 
 You are opening a Family Inc working session as Lead Architect. Read `CLAUDE.md`
-(roles, principles, guardrails), then work the current milestone only.
+(roles, principles, guardrails), then work the current focus only.
 
-**Current milestone: M4 — Summarizer hardening (build items landed 2026-06-16, D-044; reviews after ≥1 week live, ~2026-06-20)**
+**Current focus: In progress — M6 finance ingestion**
 
 Open items:
 
-- ⬜ Milestone review (external model) on the live system — **gated**; folds in the M5 review (D-035/D-043 precedent)
+- M6.2 — appliance deploy + first interactive auth (the "VPS hour"). Place `bank_creds.json` (mode 600); rename the 3 live-Sheet tabs to the f…
+- M6.3 — consumer wiring + close. Briefing Money section + dashboard Money drawer read live; the >35d stale-import warning fires. Acceptance =…
+- M6.4 — analysis layer. The on-box rules engine (`seeds/14_Finance_Category_Rules.csv`) populates `Category`/`Cat-Source` at ingest; DeepSeek…
+- Parallel (Shanee). Budget migration — her manual budget → `Finance-Budget`; gives the actuals a target and defines the category vocab the ru…
 
-Recent decisions (full log in `DECISIONS.md`):
+Recent commits (the dated decision record — decisions fold into the canon, not a separate log):
 
-- D-052 (2026-06-17): M6.1 — finance-ingestion repo half BUILT (hermetic, no appliance) + the finance tab names standardized to full forms (PO "standardize now").…
-- D-051 (2026-06-17): §8.6 amended: DeepSeek may process finance-transaction text for categorization gap-fill (joint — Shanee approved); resolves D-050's gate. Th…
-- D-050 (2026-06-17): Finance scope expanded from raw-only to categorized + trends (PO call, Adar; reverses D-033's categorizer kill — anomaly detection stays kil…
-- D-049 (2026-06-17): Finance-ingestion lane UNFROZEN (joint — Adar + Shanee co-signed); the "no credential storage" non-goal AMENDED to permit read-only bank/car…
-- D-048 (2026-06-17): Phase-F weekly classifier accuracy review surface BUILT — front-loaded by PO call (D-044 precedent); the first real review run + the externa…
+- 2026-06-18 docs: consolidate canon (SPEC bump) — present-tense rewrite; D-NN log retired to Archive/
+- 2026-06-17 M6.1 review fixes (D-052): .gitignore bank_creds Blocker, SPEC 12.2 auth honesty, +tests
+- 2026-06-17 M6.1: finance ingestion repo half + finance tab standardization (D-052)
+- 2026-06-17 plan: finance LLM gap-fill approved (D-051) - 8.6 amended, Shanee
+- 2026-06-17 plan: finance analysis layer (D-050) - categories and trends, LLM gap-fill gated on Shanee
+- 2026-06-17 plan: finance ingestion thaw (D-049 co-signed); M6 + SPEC 12.2
 
-Session contract: don't open lanes outside this milestone without a PO call
-logged in `DECISIONS.md` · constants → config, utilities → `automation/lib/`,
-message copy → templates · session end: tests green if code moved, `BACKLOG.md`
-flipped, directional calls logged with the next D-number, regenerate this file
+Session contract: don't open lanes outside the current focus without a PO call ·
+constants → config, utilities → `automation/lib/`, message copy → templates ·
+a directional call = edit the relevant canon doc to the new present-tense state
+(short inline *why* if non-obvious) with the dated rationale in the commit message ·
+session end: tests green if code moved, `BACKLOG.md` flipped, regenerate this file
 (`python3 automation/session_kickoff.py`), and hand the PO ONE terminal block
 (stage → review gate if milestone-closing → commit → push). Git index operations
 run on the PO's machine, never in the sandbox.
