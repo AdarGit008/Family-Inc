@@ -1,0 +1,27 @@
+; Finance scraper (SPEC §12.2, M6; unfrozen D-049/050/051). Two steps in one
+; oneshot: (1) Node logs into Mizrahi/Max/Cal READ-ONLY and writes a CSV per
+; provider to /var/lib/family-inc/finance; (2) Python ingests those CSVs and is
+; the only thing that writes the Sheet (D-016 — Node scrapes, Python writes).
+; Puppeteer headless, NO Xvfb (anti-bot is clean for this mix — the 2026
+; Cloudflare wall is Isracard/Amex, not ingested, §12.2). Silent lane: balances
+; surface in the weekly briefing Money section + dashboard drawer, never an
+; alert. TimeoutStartSec/MemoryMax bound a stuck browser; OnFailure raises the
+; fail-flag the next digest reports (§10.2). A creds-missing run or a provider
+; OTP re-challenge fails loud (scrape exit 1, or the _scrape_errors.json marker
+; that finance_ingest.py re-raises after persisting the good data).
+[Unit]
+Description=Family inc. finance scraper (Mizrahi/Max/Cal → Finance-Transactions)
+OnFailure=family-fail-flag@%n.service
+
+[Service]
+Type=oneshot
+User=familyinc
+WorkingDirectory=/opt/family-inc
+EnvironmentFile=-/etc/family-inc/env
+Environment=FAMILY_INC_FINANCE_DIR=/var/lib/family-inc/finance
+StateDirectory=family-inc/finance
+TimeoutStartSec=600
+MemoryMax=1500M
+ExecStart=/usr/bin/node automation/finance/scrape.js
+ExecStart=/usr/local/bin/uv run --no-sync python automation/finance_ingest.py
+NoNewPrivileges=true

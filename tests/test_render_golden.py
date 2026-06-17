@@ -108,14 +108,14 @@ def weekly() -> str:
             ["Car annual test", "Car", "Adar", date(2026, 6, 9), "7,1", "Yearly", "Pending"],
             ["Home insurance renewal", "Contracts", "Both", date(2026, 6, 17), "14,7", "Yearly", "Pending"],
         ],
-        "Finance-Bdgt": [
+        "Finance-Budget": [
             ["Groceries", 3000, 3400],
             ["Rent", 5000, 5000],
         ],
         "Goals": [
             ["House fund", "Both", "", date(2026, 7, 1), "Top up savings", 55, date(2026, 6, 1), "In progress"],
         ],
-        "Finance-Accts": [],
+        "Finance-Accounts": [],
         "People": [],
     }
     for idx, (name, rows) in enumerate(defs.items()):

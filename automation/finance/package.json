@@ -1,0 +1,16 @@
+{
+  "name": "familyinc-finance-scraper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Read-only Mizrahi/Max/Cal scraper (SPEC §12.2, M6) → local CSV staging for finance_ingest.py. Node scrapes; Python owns every Sheet write (D-016).",
+  "main": "scrape.js",
+  "scripts": {
+    "scrape": "node scrape.js"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "dependencies": {
+    "israeli-bank-scrapers": "6.7.3"
+  }
+}

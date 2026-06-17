@@ -34,6 +34,13 @@ REMINDERS_TAB = "Reminders"
 SETTINGS_TAB = "Settings"
 WA_INBOX_SHEET_TAB = "WhatsApp_Inbox"
 WA_ARCHIVE_SHEET_TAB = "WhatsApp_Archive"
+# Finance tabs (SPEC §6.4 / §12.2, M6). Standardized to full names 2026-06-17
+# (D-052) — the as-built seed used the short Finance-Accts/Finance-Txns/
+# Finance-Bdgt, which §6.4 already named Finance-Budget; the M6 build resolved
+# the drift §12.2 flagged. lib/sheet owns the column maps (FINANCE_*_COLUMNS).
+FINANCE_ACCOUNTS_TAB = "Finance-Accounts"
+FINANCE_TRANSACTIONS_TAB = "Finance-Transactions"
+FINANCE_BUDGET_TAB = "Finance-Budget"
 
 # Runtime output (gitignored)
 BRIEFINGS_DIR = ROOT / "Briefings"
@@ -169,6 +176,29 @@ PROPERTY_APIFY_ONCE_PER_DAY = True  # Apify lands at most once/calendar-day (cos
                                   # priced per result; on-box primary stays free
                                   # 2×/day; digest is morning-only). False = every run
 PROPERTY_APIFY_STAMP_FILE = PROPERTY_STATE_DIR / "apify_last_run.json"
+
+# ---------------------------------------------------------------------------
+# Finance ingestion (SPEC.md §12.2, M6 — unfrozen D-049/050/051). The Node
+# scraper (automation/finance/scrape.js) writes one CSV per provider to the
+# staging dir; finance_ingest.py reads them and writes via lib/sheet (the only
+# Sheet writer, D-016). Silent like property — balances + spend surface in the
+# weekly briefing Money section + dashboard drawer, never an alert.
+# ---------------------------------------------------------------------------
+# Read-only bank/card portal logins (D-049 amendment). PERSONAL, mode 600, /etc
+# only, NEVER the repo. deploy/bank_creds.example.json is the template. Absent →
+# the scraper fails loud (nothing to ingest), exactly like a missing config.
+FINANCE_CREDS_FILE = Path("/etc/family-inc/bank_creds.json")
+# Per-provider CSV staging. VPS = /var/lib/family-inc/finance (systemd
+# StateDirectory, set via FAMILY_INC_FINANCE_DIR in the unit); dev/tests fall
+# back to the gitignored automation/cache so a local run never needs root
+# (mirrors PROPERTY_STATE_DIR). The scraper persists session state here too.
+FINANCE_STATE_DIR = Path(os.environ.get("FAMILY_INC_FINANCE_DIR")
+                         or (CACHE_DIR / "finance"))
+# Provider → account Type label written to Finance-Accounts (bank vs card).
+FINANCE_PROVIDER_TYPES = {"mizrahi": "bank", "max": "card", "cal": "card"}
+# The briefing's data-hygiene line warns when an account hasn't imported in this
+# many days (§12.2 stale-import). One definition — section_hygiene reads it.
+FINANCE_STALE_IMPORT_DAYS = 35
 
 # ---------------------------------------------------------------------------
 # LLM (SPEC.md §8.6–8.7 — model ids live here, not at call sites)

@@ -36,6 +36,11 @@ sudo -u "$APP_USER" mkdir -p "$APP_DIR/logs" "$APP_DIR/Briefings" \
 echo "== 4. dependencies"
 (cd "$APP_DIR" && sudo -u "$APP_USER" uv sync --frozen)
 (cd "$APP_DIR/automation/bridge" && sudo -u "$APP_USER" npm ci --omit=dev)
+# M6 finance scraper (SPEC §12.2) — its own Node project (israeli-bank-scrapers
+# + Puppeteer, which downloads its own Chromium at install). Non-fatal: a
+# failure here only disables the finance lane, which then fails loud (§10.2).
+(cd "$APP_DIR/automation/finance" && sudo -u "$APP_USER" npm ci --omit=dev) \
+  || echo "  [warn] finance npm ci failed — finance lane disabled until fixed"
 
 echo "== 4b. headed browser + Xvfb for the property scraper (M5/D-039, SPEC §12.1)"
 # Kept OUT of the core lockfile (boring core; one runtime, D-018): the
@@ -60,6 +65,9 @@ cat <<'EOF'
      recipients.json        the two adult JIDs (bridge send scope)
      property_searches.json saved-search URLs (M5, §12.1; optional — see
                             deploy/property_searches.example.json)
+     bank_creds.json        read-only Mizrahi/Max/Cal portal logins (M6, §12.2,
+                            D-049; mode 600; optional — see
+                            deploy/bank_creds.example.json)
 EOF
 
 echo "== 6. sudoers — the ONE whitelisted line (ENGINEERING §6)"
@@ -72,7 +80,7 @@ cp "$APP_DIR"/deploy/systemd/* /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now family-bridge.service \
   family-reminders.timer family-digest.timer family-summarizer.timer \
-  family-weekly.timer family-backup.timer family-property.timer
+  family-weekly.timer family-backup.timer family-property.timer family-finance.timer
 
 echo "== done. Next: place secrets, pair Baileys (deploy/README.md steps 3–4)."
 echo "   Until recipients.json + pairing exist, the bridge loops printing a QR — expected."

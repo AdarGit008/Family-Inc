@@ -137,9 +137,13 @@ def section_reminders_week(wb, today: date, end: date) -> tuple[str, str]:
 
 
 def section_money(wb, today: date) -> str:
-    """Read Finance-Bdgt (as-built tab name; SPEC §6.4 calls it Finance-Budget
-    — flagged 2026-06-12, code follows the actual Sheet until the POs rename)."""
-    ws = wb["Finance-Bdgt"]
+    """Read the budget tab (Finance-Budget; standardized from the as-built
+    Finance-Bdgt at the M6 build, D-052 — SPEC §6.4 already named it). Tolerates
+    an absent tab (a Sheet not yet renamed / no budget yet) — degrade, don't
+    take the briefing down."""
+    if config.FINANCE_BUDGET_TAB not in wb.sheetnames:
+        return "_No budget data yet._"
+    ws = wb[config.FINANCE_BUDGET_TAB]
     rows = []
     for r in range(2, ws.max_row + 1):
         cat = ws.cell(r, 1).value
@@ -268,15 +272,17 @@ def section_hygiene(wb, today: date) -> str:
             missing += 1
     if missing:
         issues.append(f"- {missing} reminder(s) missing a Due Date")
-    # Stale Last Imported on accounts
-    fa_ws = wb["Finance-Accts"]
-    for row in range(2, fa_ws.max_row + 1):
-        if fa_ws.cell(row, 1).value and not fa_ws.cell(row, 1).value.startswith("["):
-            last_imp = to_date(fa_ws.cell(row, 7).value)
-            if not last_imp:
-                issues.append(f"- Account `{fa_ws.cell(row, 1).value}` has no Last Imported date")
-            elif (today - last_imp).days > 35:
-                issues.append(f"- Account `{fa_ws.cell(row, 1).value}` not imported in {(today-last_imp).days}d")
+    # Stale Last Imported on accounts (col 7 — Finance-Accounts §12.2 schema).
+    # Tolerate an absent tab (Sheet not yet renamed / finance not yet live).
+    if config.FINANCE_ACCOUNTS_TAB in wb.sheetnames:
+        fa_ws = wb[config.FINANCE_ACCOUNTS_TAB]
+        for row in range(2, fa_ws.max_row + 1):
+            if fa_ws.cell(row, 1).value and not fa_ws.cell(row, 1).value.startswith("["):
+                last_imp = to_date(fa_ws.cell(row, 7).value)
+                if not last_imp:
+                    issues.append(f"- Account `{fa_ws.cell(row, 1).value}` has no Last Imported date")
+                elif (today - last_imp).days > config.FINANCE_STALE_IMPORT_DAYS:
+                    issues.append(f"- Account `{fa_ws.cell(row, 1).value}` not imported in {(today-last_imp).days}d")
     # Placeholder rows still in People/Health/etc.
     p_ws = wb["People"]
     placeholders = sum(1 for r in range(2, p_ws.max_row + 1)

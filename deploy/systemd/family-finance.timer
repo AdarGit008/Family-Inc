@@ -1,0 +1,14 @@
+; 06:00 daily — before the 07:25 reminders engine read, so fresh balances feed
+; the 07:30 digest + the weekly briefing and the >35d stale-import line stays
+; accurate (SPEC §12.2). Cadence is the first tuning knob: if Max/Cal OTP
+; re-challenges prove noisy, drop the cards to 2–3×/week, keep the bank daily.
+[Unit]
+Description=Family inc. finance scraper timer (06:00 Asia/Jerusalem)
+
+[Timer]
+OnCalendar=*-*-* 06:00:00
+Persistent=true
+AccuracySec=1m
+
+[Install]
+WantedBy=timers.target

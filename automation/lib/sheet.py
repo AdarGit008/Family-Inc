@@ -77,6 +77,34 @@ PROPERTY_LISTINGS_COLUMNS = [
     "size_sqm", "location", "url", "status",
 ]
 
+# SPEC §12.2 — finance landing zone (M6, D-049/050/051). Standardized names
+# (D-052). Finance-Accounts is CURRENT-STATE (one row per account, upserted on
+# the "Account Name" key); Finance-Transactions is append-only with Txn-ID
+# dedup. The accounts schema is the as-built 9-col seed (richer than the §12.2
+# sketch — Bank/Provider, Last 4, Owner, Currency); section_hygiene's >35d
+# stale-import line reads "Last Imported" (col 7).
+FINANCE_ACCOUNTS_COLUMNS = [
+    "Account Name", "Type", "Bank/Provider", "Last 4", "Owner", "Currency",
+    "Last Imported", "Balance Snapshot", "Notes",
+]
+# Finance-Accounts fields the importer overwrites on an existing row — only the
+# machine-owned freshness/balance, so a human's Owner/Notes/label survive a
+# re-import (the rest are written once, at first insert).
+FINANCE_ACCOUNTS_UPDATE_COLUMNS = ["Last Imported", "Balance Snapshot"]
+# Column ORDER is load-bearing: the seed's Finance-Budget actuals are SUMIFS
+# over Finance-Transactions Date (A), Amount (D), Category (E) — so those
+# positions are fixed (D-052). M6.1 writes the raw fields (Date/Account/
+# Description/Amount/Txn-ID/Imported-At) and leaves Category + Cat-Source BLANK;
+# the M6.4 categorizer (rules + DeepSeek, D-050/051) populates them in place.
+FINANCE_TRANSACTIONS_COLUMNS = [
+    "Date", "Account", "Description", "Amount (ILS)",
+    "Category", "Cat-Source", "Txn-ID", "Imported-At",
+]
+# What M6.1 ingest fills (Category/Cat-Source stay empty until M6.4).
+FINANCE_TXN_RAW_COLUMNS = [
+    "Date", "Account", "Description", "Amount (ILS)", "Txn-ID", "Imported-At",
+]
+
 
 class SchemaDriftError(RuntimeError):
     """Header row disagrees with SPEC §6.1 — abort the run (§7.1)."""
@@ -453,6 +481,58 @@ def append_rows(tab: str, columns: list[str], rows: list[dict],
         return
     backend(path).append(tab, columns,
                          [[r.get(c, "") for c in columns] for r in rows])
+
+
+def upsert_rows(tab: str, columns: list[str], rows: list[dict], key_column: str,
+                update_columns: Optional[list[str]] = None,
+                path: Optional[Path] = None) -> None:
+    """Current-state upsert by `key_column` (Finance-Accounts, §12.2): a row
+    whose key is new is appended; a key already present has its cells
+    overwritten — limited to `update_columns` when given, so machine-owned
+    fields refresh while human-edited ones (Owner, Notes, label) survive a
+    re-import. The tab (with header) is created on first write. Live backend or
+    an explicit path only — refuses to mutate the committed seed, exactly like
+    the write-backs and roll_off. Values are passed RAW (each backend encodes)."""
+    if not rows:
+        return
+    if path is None and not is_live():
+        log.info("upsert skipped for %s — no live backend (won't touch the seed)", tab)
+        return
+    b = backend(path)
+    if tab not in b.tabs():                       # new tab → header + all rows
+        b.append(tab, columns, [[r.get(c, "") for c in columns] for r in rows])
+        return
+    grid = b.grid(tab)
+    header = grid[0] if grid else columns
+    norm_header = [_norm(h) for h in header]
+
+    def _col_index(name: str) -> int:             # 1-based physical column
+        try:
+            return norm_header.index(_norm(name)) + 1
+        except ValueError:
+            return columns.index(name) + 1
+
+    key_idx = _col_index(key_column)
+    existing: dict[str, int] = {}                 # key value → 1-based row index
+    for ridx, row in enumerate(grid[1:], start=2):
+        k = row[key_idx - 1] if key_idx - 1 < len(row) else None
+        kv = str(k).strip() if k not in (None, "") else ""
+        if kv and kv not in existing:
+            existing[kv] = ridx
+    overwrite = update_columns or columns
+    cells: list[tuple[int, int, object]] = []
+    appends: list[list] = []
+    for r in rows:
+        kv = str(r.get(key_column, "")).strip()
+        if kv and kv in existing:
+            ridx = existing[kv]
+            cells.extend((ridx, _col_index(c), r.get(c, "")) for c in overwrite)
+        else:
+            appends.append([r.get(c, "") for c in columns])
+    if cells:
+        b.batch_update(tab, cells)
+    if appends:
+        b.append(tab, columns, appends)
 
 
 def read_column(tab: str, column: str, path: Optional[Path] = None) -> list:

@@ -138,7 +138,7 @@ class TestSectionMoney:
             ["Rent", 5000, 5000],
             ["Utilities", 1000, 1200],
         ]
-        wb = _make_wb({"Finance-Bdgt": rows})
+        wb = _make_wb({"Finance-Budget": rows})
         today = date(2026, 6, 10)
         result = section_money(wb, today)
         assert "₪8,700" in result  # 2500+5000+1200
@@ -151,7 +151,7 @@ class TestSectionMoney:
             ["Groceries", 3000, 2000],
             ["Rent", 5000, 5000],
         ]
-        wb = _make_wb({"Finance-Bdgt": rows})
+        wb = _make_wb({"Finance-Budget": rows})
         today = date(2026, 6, 10)
         result = section_money(wb, today)
         assert "No categories over budget" in result
@@ -161,7 +161,7 @@ class TestSectionMoney:
             ["Groceries", 3000, 2500],
             ["TOTAL", 10000, 9000],
         ]
-        wb = _make_wb({"Finance-Bdgt": rows})
+        wb = _make_wb({"Finance-Budget": rows})
         today = date(2026, 6, 10)
         result = section_money(wb, today)
         assert "TOTAL" not in result
@@ -205,7 +205,7 @@ class TestSectionHygiene:
     def test_all_clean(self, tmp_runtime):
         wb = _make_wb({
             "Reminders": [["OK", "", "", date(2026, 6, 15)]],
-            "Finance-Accts": [["Bank", "", "", "", "", "", date(2026, 6, 1)]],
+            "Finance-Accounts": [["Bank", "", "", "", "", "", date(2026, 6, 1)]],
             "People": [["Adar"]],
         })
         today = date(2026, 6, 10)
@@ -221,7 +221,7 @@ class TestSectionHygiene:
             {"at": "2026-06-10T07:25:00", "tab": "Reminders",
              "problems": ["col 5: expected 'Lead Times', found 'Lead Tymes'"]}),
             encoding="utf-8")
-        wb = _make_wb({"Reminders": [], "Finance-Accts": [], "People": []})
+        wb = _make_wb({"Reminders": [], "Finance-Accounts": [], "People": []})
         result = section_hygiene(wb, date(2026, 6, 10))
         assert "schema drift" in result
         assert "Lead Tymes" in result
@@ -232,7 +232,7 @@ class TestSectionHygiene:
         config.ENGINE_FLAGS.write_text(
             '{"at": "2026-06-10T07:25:00", "reason": "recurrence_clamped_to_month_end", '
             '"row": 7, "title": "Lease anniversary"}\n', encoding="utf-8")
-        wb = _make_wb({"Reminders": [], "Finance-Accts": [], "People": []})
+        wb = _make_wb({"Reminders": [], "Finance-Accounts": [], "People": []})
         result = section_hygiene(wb, date(2026, 6, 10))
         assert "recurrence_clamped_to_month_end" in result
         assert "Lease anniversary" in result
@@ -240,7 +240,7 @@ class TestSectionHygiene:
     def test_missing_due_date(self, tmp_runtime):
         wb = _make_wb({
             "Reminders": [["Missing due", "", "", None]],
-            "Finance-Accts": [],
+            "Finance-Accounts": [],
             "People": [],
         })
         today = date(2026, 6, 10)
@@ -250,7 +250,7 @@ class TestSectionHygiene:
     def test_stale_account(self, tmp_runtime):
         wb = _make_wb({
             "Reminders": [],
-            "Finance-Accts": [["Old Bank", "", "", "", "", "", date(2026, 1, 1)]],
+            "Finance-Accounts": [["Old Bank", "", "", "", "", "", date(2026, 1, 1)]],
             "People": [],
         })
         today = date(2026, 6, 10)
@@ -260,7 +260,7 @@ class TestSectionHygiene:
     def test_placeholder_people(self, tmp_runtime):
         wb = _make_wb({
             "Reminders": [],
-            "Finance-Accts": [],
+            "Finance-Accounts": [],
             "People": [["[replace me]"]],
         })
         today = date(2026, 6, 10)
@@ -276,9 +276,9 @@ class TestRenderBriefing:
         wb = _make_wb({
             "Calendar-Events": [[date(2026, 6, 12), "10:00", "11:00", "Dentist", "Adar"]],
             "Reminders": [["Upcoming", "Health", "Adar", date(2026, 6, 14), "7", "One-off", "Pending"]],
-            "Finance-Bdgt": [["Groceries", 3000, 2500]],
+            "Finance-Budget": [["Groceries", 3000, 2500]],
             "Goals": [["Goal 1", "Adar", "", None, "", 0, None, "Not started"]],
-            "Finance-Accts": [],
+            "Finance-Accounts": [],
             "People": [],
         })
         today = date(2026, 6, 10)

@@ -132,4 +132,8 @@ def tmp_runtime(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "PROPERTY_STATE_DIR", tmp_path / "state" / "property")
     monkeypatch.setattr(config, "PROPERTY_SEEN_FILE", tmp_path / "state" / "property" / "seen.json")
     monkeypatch.setattr(config, "PROPERTY_SEARCHES_FILE", tmp_path / "etc" / "property_searches.json")
+    # Finance ingestion (M6) — keep the CSV staging + creds path inside the
+    # sandbox so a test run never reads /etc/family-inc or writes /var/lib.
+    monkeypatch.setattr(config, "FINANCE_STATE_DIR", tmp_path / "state" / "finance")
+    monkeypatch.setattr(config, "FINANCE_CREDS_FILE", tmp_path / "etc" / "bank_creds.json")
     return tmp_path

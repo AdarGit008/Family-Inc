@@ -1,0 +1,6 @@
+{
+  "_comment": "TEMPLATE. Copy to /etc/family-inc/bank_creds.json (mode 600, owner familyinc) and fill in. Read-only portal logins only (D-049 — no money movement). Omit a provider block to skip it (roll out one institution at a time; Mizrahi first — password-only). NEVER commit the real file; /etc is outside the repo by construction.",
+  "mizrahi": { "username": "REPLACE_ME", "password": "REPLACE_ME" },
+  "max": { "username": "REPLACE_ME", "password": "REPLACE_ME" },
+  "cal": { "username": "REPLACE_ME", "password": "REPLACE_ME" }
+}
