@@ -249,21 +249,27 @@ def _one_liner_fallback(text: str) -> str:
     t = re.sub(r"\s+", " ", text.strip())
     return t[:117] + "…" if len(t) > 120 else t
 
-def _first_json_obj(raw: str) -> Optional[dict]:
-    """First JSON object in an LLM reply, tolerating ```fences``` and trailing
-    prose. DeepSeek occasionally appends commentary after the object; a plain
+def _first_json_obj(raw: str) -> tuple[Optional[dict], bool]:
+    """First JSON object in an LLM reply, tolerating ```fences``` and surrounding
+    prose. DeepSeek occasionally wraps the object in commentary; a plain
     json.loads then raises 'Extra data' and we'd needlessly drop to the keyword
-    fallback (observed live 2026-06-17, D-046). raw_decode reads just the leading
-    object and ignores the rest. None when there is no JSON object."""
+    fallback (observed live 2026-06-17, D-046). raw_decode reads just the first
+    object and ignores the rest. Returns (obj, had_prose) — had_prose flags
+    leading/trailing non-JSON so the caller can surface a json_mode regression
+    instead of letting the safety net swallow it (review D-047). (None, False)
+    when there is no JSON object."""
     s = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.MULTILINE).strip()
     start = s.find("{")
     if start == -1:
-        return None
+        return None, False
     try:
-        obj, _ = json.JSONDecoder().raw_decode(s[start:])
+        obj, end = json.JSONDecoder().raw_decode(s[start:])
     except ValueError:
-        return None
-    return obj if isinstance(obj, dict) else None
+        return None, False
+    if not isinstance(obj, dict):
+        return None, False
+    had_prose = start > 0 or bool(s[start + end:].strip())
+    return obj, had_prose
 
 def llm_classify(msg: dict, cfg: dict, recent: list[dict]) -> Optional[dict]:
     """LLM classification via lib/llm.py (the one provider wrapper — DeepSeek by
@@ -291,10 +297,16 @@ def llm_classify(msg: dict, cfg: dict, recent: list[dict]) -> Optional[dict]:
                        source="whatsapp_summarizer", json_mode=True)
     if raw is None:
         return None
-    data = _first_json_obj(raw)
+    data, had_prose = _first_json_obj(raw)
     if data is None:
         log.warning("classify reply not JSON-parseable — deterministic fallback")
         return None
+    if had_prose:
+        # json_mode (D-046) asks DeepSeek for a bare object; surrounding prose
+        # means the provider ignored response_format. We recovered via raw_decode,
+        # but surface it so a silent json_mode regression stays visible (D-047).
+        log.warning("classify: json_mode reply carried prose around the JSON "
+                    "(recovered) — response_format may not be honored")
     if data.get("classification") not in CLASSES:
         return None
     return data

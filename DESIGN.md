@@ -124,7 +124,7 @@ Quiet day for this adult (no reminders of their own; shared sections still ride 
 
 Critical (budget-bypassing, rare): single line, no frame — `⚠ {group}: {one_liner} ({sender}, {time})`.
 
-Weekly briefing (Sat 21:00): five scenes, vertical, one line each opener — *the week's spend · kids' moment · next week's three things · one goal line · one contract heads-up* — then short sections. Strava-year-in-review meets Morning Brew; typography is the design.
+Weekly briefing (Sat 21:00): five scenes, vertical, one line each opener — *the week's spend · kids' moment · next week's three things · one goal line · one contract heads-up* — then short sections. Strava-year-in-review meets Morning Brew; typography is the design. **Rendered from a deterministic template** (no LLM call — SPEC §7.2); that voice is the template's design target, and a content review of the template — plus the deferred question of LLM-written prose — is parked for a future session (D-047).
 
 Bridge-health warning prepends, never replaces: `⚠ הגשר שקט 14 שעות — ייתכן שפספסנו הודעות`.
 

@@ -179,12 +179,12 @@ class TestRouting:
         from automation.whatsapp_summarizer import _first_json_obj
         obj = {"classification": "ALERT", "one_liner": "x", "action_required": True, "reason": "r"}
         base = json.dumps(obj)
-        assert _first_json_obj(base) == obj
-        assert _first_json_obj(base + "\n\ntrailing words") == obj          # the live bug
-        assert _first_json_obj("```json\n" + base + "\n```") == obj
-        assert _first_json_obj("Sure —\n" + base) == obj
-        assert _first_json_obj("no object here") is None
-        assert _first_json_obj("[1, 2, 3]") is None
+        assert _first_json_obj(base) == (obj, False)
+        assert _first_json_obj(base + "\n\ntrailing words") == (obj, True)   # the live bug → flagged
+        assert _first_json_obj("```json\n" + base + "\n```") == (obj, False)
+        assert _first_json_obj("Sure —\n" + base) == (obj, True)            # leading prose → flagged
+        assert _first_json_obj("no object here") == (None, False)
+        assert _first_json_obj("[1, 2, 3]") == (None, False)
 
 
 # ---------------------------------------------------------------------------
