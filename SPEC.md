@@ -15,7 +15,7 @@ The product's core promise: **nothing important gets dropped, without anyone hav
 
 - Not a chore-gamification app. No streaks, no scores, no nagging.
 - Not a kid-facing product. Children's data is structured but adult-mediated.
-- Not a finance robot. It never moves money, never stores bank credentials.
+- Not a finance robot. It never moves money; the only financial credentials it stores are appliance-local, read-only portal logins used to *read* finance (D-049).
 - Not a chat bot. It speaks at scheduled moments or for genuine urgency, within a hard budget.
 
 ## 2. Context
@@ -57,7 +57,7 @@ Phrased so a reviewer can check compliance:
 
 ### Non-goals (permanent, from principles)
 
-Money movement · credential storage · messaging anyone beyond the two adults · posting into any group · kid-facing surfaces · medical advice (scheduling only).
+Money movement · credential storage *(except appliance-local, read-only financial portal logins — D-049)* · messaging anyone beyond the two adults · posting into any group · kid-facing surfaces · medical advice (scheduling only).
 
 ### Frozen (explicitly out of v1)
 
@@ -278,6 +278,21 @@ Active house search. Build scheduled **after the v1 3-day acceptance window clos
 | **Delivery** | New listings land **silently** in the Sheet and surface in a "🏠 דירות חדשות / New listings" section of the 07:30 daily digest. They never fire an alert and never bypass the budget — property is not critical-safety (briefings > notifications, §3 principle 4, §8.1). |
 | **Failure handling** | A scrape error or anti-bot block (Yad2 runs Cloudflare; scraper fragility is rising across 2026 Israeli portals) sets the fail-flag (`OnFailure` → `logs/fail.flag`); the next delivered digest reports "property scrape failed" and the weekly briefing surfaces persistent failures — fail loud, never silent (§9, §10.2). Persistent block → the realized escape hatch is the Apify secondary source (D-040), which runs from a residential proxy pool off-box; an anti-detect browser (e.g. a Camoufox-based fork) on the one VPS remains a further fallback. |
 | **Unfreeze ordering** | Independent of finance. Build after acceptance (≥2026-06-16). The first scraper to land (property or, later, finance) pays the one-time Chromium provisioning cost; the second reuses it. |
+
+### 12.2 Finance — Mizrahi / Max / Cal (unfrozen 2026-06-17, D-049)
+
+A committed monthly finance review is the standing consumer. Build = **M6**; **raw transactions only** (D-033 — no categorization/anomaly). Reuses the M5 browser dependency; investments/brokerage out of scope.
+
+| Facet | Spec |
+|---|---|
+| **Source** | The online portals of Mizrahi-Tefahot (bank) + Max + Cal (cards), read via `israeli-bank-scrapers` (Puppeteer/headless-Linux, pinned 6.7.3, Node ≥ 22.12). No public API; the library drives each portal's web session. **Read-only by nature** — it fetches balances + transactions but cannot move money (the §4 "money movement" non-goal stays absolute). |
+| **Mechanism** | A `systemd` timer runs `automation/finance/scrape.js`: logs into each provider with creds from `/etc/family-inc/bank_creds.json`, fetches balances + the transaction window (since last success, with a few-days overlap), writes one CSV per provider to `/var/lib/family-inc/finance/<provider>_<YYYY-MM-DD>.csv`. `automation/finance_ingest.py` then normalizes, dedups on `Txn-ID`, and writes via `lib/sheet` (sole Sheet writer, D-016). Node scrapes; **Python owns every Sheet write**. The local CSV is the only staging — no Drive (D-031). Same-day reruns overwrite the day's CSV and dedup on ingest → idempotent; the import advance gates on a successful Sheet write (mirrors §12.1 / D-037). |
+| **Runtime** | One `systemd` timer (`family-finance.timer`), Asia/Jerusalem, **~06:00 daily** — before the 07:25 engine read, so fresh balances feed the 07:30 digest + the weekly briefing and the >35d staleness stays accurate. `TimeoutStartSec` + `MemoryMax` bound a stuck browser; reuses the M5 `xvfb-run` wrapper + provisioned Chromium (`provision.sh`). No second runtime (D-018). Cadence is the first tuning knob — if Max/Cal OTP challenges prove noisy, drop the cards to 2–3×/week and keep the bank daily. |
+| **Auth model** | **The D-049 amendment.** Read-only portal logins for the three institutions live at `/etc/family-inc/bank_creds.json` (mode 600, family-inc-owned, never in the repo, never logged; optional `systemd LoadCredentialEncrypted` hardening). This **narrows** the §4/§1 "no credential storage" non-goal to permit *appliance-local, read-only financial portal logins* — distinct from the service keys already stored (D-040) — while "no money movement" stays absolute (the scrapers cannot transfer). **2FA** (Max/Cal challenge new devices): first run is interactive (operator enters the OTP once; session persisted under `/var/lib/family-inc/finance/<provider>_session/`); later re-challenges **fail loud** (§10.2), never silent. Sheet writes use the existing `Family_OS` service account (§8.6). |
+| **Sheet landing zone** | Two tabs, written via `lib/sheet`, **raw — no category column** (D-033). **`Finance-Accts`** — one row per account/card: `Account` · `Type` (bank/card) · `Balance` (ILS) · `As-Of` · `Last Imported` (drives the briefing's >35d stale-import warning). **`Finance-Transactions`** (new) — one row per transaction, append-only: `Date` · `Amount` (ILS, signed) · `Description` (raw Hebrew merchant) · `Account` · `Txn-ID` (dedup key: provider id, else a stable hash of date+amount+description+account) · `Imported-At`. Retention: keep all (low volume; the monthly review + trend KPIs want history). Money values ILS only (§6). *(Name reconciliation: the as-built `Finance-Bdgt`/`Finance-Accts` vs this §6 `Finance-Budget` drift — flagged in code since 2026-06-12 — is resolved at the M6 build; schema changes additive-only.)* |
+| **Delivery** | Finance lands **silently**: balances + spend surface in the weekly briefing **Money** section, the dashboard **Money** drawer, and the >35d stale-import hygiene line — **never an alert, never a budget bypass** (briefings > notifications, §3 principle 4). The only finance *message* is fail-loud (below). The kickoff "ouch > ₪500 single charge" threshold is **not** wired in this lane (an alert path + a product call that brushes the killed anomaly lane, D-033 — deferred to a deliberate PO decision). |
+| **Failure handling** | An OTP re-challenge, a scraper/site-change error, or a Sheet-write failure sets the fail-flag (`OnFailure` → `logs/fail.flag`); the next delivered digest reports it ("⚠ <provider> צריך אימות מחדש" / "finance scrape failed") and the weekly briefing surfaces persistent failures + the >35d stale line — fail loud, never silent (§9, §10.2). CSVs are retained on disk on a Sheet-write failure (no data loss; retry next run). Anti-bot: clean for this mix (the 2026 Cloudflare wall is on Isracard/Amex, not ingested); if a wall ever appears the escape hatch is the maintained anti-detect fork (Camoufox) on-box, then a managed-proxy pivot (the D-040 precedent). A box compromise leaks read-only financial visibility only — no transfer capability. |
+| **Unfreeze ordering** | Unfrozen D-049 on a committed monthly-review habit; acceptance of the lane = the first real monthly review. The one-time Chromium provisioning cost was already paid by M5 (§12.1) — finance reuses it. Shanee's budget migration (manual budget → `Finance-Bdgt`) is a parallel track that gives the raw actuals a target to read against. |
 
 ## 13. References
 
