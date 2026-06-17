@@ -108,7 +108,9 @@ async function scrapeProvider(name, creds) {
   const scraper = createScraper({
     companyId: COMPANY[name],
     startDate: new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000),
-    combineInstallments: false,
+    combineInstallments: false, // stable per-charge ids: combined rows mutate
+                                // their amount as installments post → hash churn
+
     showBrowser: false,
     args: ['--no-sandbox', '--disable-dev-shm-usage'], // unprivileged systemd unit
   });

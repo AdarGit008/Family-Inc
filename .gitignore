@@ -33,7 +33,10 @@ credentials.json
 token.json
 *credential*
 *secret*
-bank_creds.json            # M6 read-only bank logins live in /etc (D-049); never a repo copy
+# M6 read-only bank logins live in /etc (D-049); never a repo copy (inline
+# comments don't work in .gitignore — keep the pattern on its own line)
+bank_creds.json
+*_creds.json
 
 # Runtime output — generated, not source (re-applies Hermes 556f445)
 Briefings/

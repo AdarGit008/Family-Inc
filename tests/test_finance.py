@@ -214,3 +214,46 @@ def test_upsert_rows_skips_without_live_or_path(tmp_path, monkeypatch):
     sheet.upsert_rows("Whatever", ["Account Name", "Balance Snapshot"],
                       [{"Account Name": "X", "Balance Snapshot": 1}],
                       key_column="Account Name")   # path=None → no-op, no crash
+
+
+# ---------------------------------------------------------------------------
+# Schema contract — column ORDER is load-bearing (review S3, D-052)
+# ---------------------------------------------------------------------------
+def test_transactions_column_order_is_load_bearing():
+    # The seed's Finance-Budget actuals are SUMIFS over Date(A)/Amount(D)/
+    # Category(E). A reorder here silently breaks the live budget formulas —
+    # pin it so that can't happen without a failing test.
+    cols = sheet.FINANCE_TRANSACTIONS_COLUMNS
+    assert cols[0] == "Date"          # column A
+    assert cols[3] == "Amount (ILS)"  # column D
+    assert cols[4] == "Category"      # column E
+
+
+def test_upsert_creates_accounts_tab_when_absent(tmp_path):
+    # The new-tab branch of upsert_rows (no pre-seeded Finance-Accounts).
+    sp = _sheet(tmp_path)   # only a Placeholder tab exists
+    fin.run(csv_dir=_csv(tmp_path), sheet_path=sp, today=TODAY, now=NOW)
+    accts = _rows(sp, cfg.FINANCE_ACCOUNTS_TAB)
+    assert accts[0] == sheet.FINANCE_ACCOUNTS_COLUMNS   # header created
+    assert len(accts) - 1 == 2
+
+
+def test_imported_at_is_populated_from_now(tmp_path):
+    sp = _sheet(tmp_path)
+    fin.run(csv_dir=_csv(tmp_path), sheet_path=sp, today=TODAY, now=NOW)
+    txns = _rows(sp, cfg.FINANCE_TRANSACTIONS_TAB)
+    assert all(v == NOW.isoformat(timespec="seconds")
+               for v in _col(txns, "Imported-At"))
+
+
+def test_multiple_provider_csvs_merge_in_one_run(tmp_path):
+    d = _csv(tmp_path)   # mizrahi_… → MIZ-0001, MIZ-0777
+    (d / "max_2026-06-17.csv").write_text(
+        "account,balance,date,identifier,amount,description\n"
+        "MAX-1234,,2026-06-15,maxid1,-150.00,SHOP\n", encoding="utf-8")
+    sp = _sheet(tmp_path)
+    res = fin.run(csv_dir=d, sheet_path=sp, today=TODAY, now=NOW)
+    assert res.accounts == 3   # MIZ-0001, MIZ-0777, MAX-1234
+    accts = _rows(sp, cfg.FINANCE_ACCOUNTS_TAB)
+    max_row = [r for r in accts[1:] if r[0] == "MAX-1234"][0]
+    assert max_row[sheet.FINANCE_ACCOUNTS_COLUMNS.index("Type")] == "card"

@@ -95,7 +95,11 @@ def _last4(account: str) -> str:
 def txn_id(date_s: str, amount, description: str, account: str,
            identifier: str = "") -> str:
     """Provider id when present, else a stable hash of the natural key. The hash
-    is deterministic so a re-fetched overlap window dedups to the same id."""
+    is deterministic so a re-fetched overlap window dedups to the same id.
+    Limitation (no provider id): two genuinely distinct same-day charges with an
+    identical merchant + amount hash to one id, so the second is deduped as a
+    phantom duplicate. israeli-bank-scrapers supplies `identifier` for most
+    providers, so this is rare; revisit if a provider returns id-less rows."""
     identifier = (identifier or "").strip()
     if identifier:
         return identifier
