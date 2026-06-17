@@ -2,6 +2,8 @@
 
 *Output of the 2026-06-17 finance planning session (Adar leading; **plan-only** — no appliance touch, no code lane opened). Executes the pre-resolved D-031 architecture, now thawing. The joint calls below were **co-signed by Shanee on 2026-06-17** (she'll refine later if needed) — ready to land as D-049. A future build session lands the code + the canon edits; this doc is consumed then (cf. `DATA_FETCHING_SESSION_PROMPT.md`, removed at D-035).*
 
+> **Update (D-050, 2026-06-17):** scope expanded beyond the raw-only framing below — finance now ships with **categorization + month-over-month trends**, delivered **silently** (briefing + dashboard; no alerts, no anomaly detection). Categorization is **rules-first on-box**; the **LLM (DeepSeek) gap-fill is gated on a §8.6 privacy amendment + Shanee's sign-off**. Authoritative contract = **DECISIONS D-050 / SPEC §12.2 / BACKLOG M6.4**; wherever this doc still says "raw-only," D-050 wins.
+
 ---
 
 ## 1. Decisions taken this session → draft **D-049** (pending Shanee co-sign)

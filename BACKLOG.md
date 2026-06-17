@@ -71,12 +71,13 @@
 
 ### M6 — Finance ingestion (thawed D-049, 2026-06-17)
 
-*Banks + cards, raw transactions only (D-033). Executes the pre-resolved D-031 architecture; full plan + contract in `FINANCE_PLAN.md` (→ SPEC §12.2). Joint Adar + Shanee call, co-signed 2026-06-17. The credential non-goal is narrowed (D-049): appliance-local read-only portal logins permitted; "no money movement" unchanged.*
+*Banks + cards, with categorization + trends (D-050; anomaly detection stays killed, D-033). Executes the pre-resolved D-031 architecture; full plan + contract in `FINANCE_PLAN.md` (→ SPEC §12.2). Joint Adar + Shanee call, co-signed 2026-06-17. The credential non-goal is narrowed (D-049): appliance-local read-only portal logins permitted; "no money movement" unchanged.*
 
 - ⬜ **M6.1 — repo port + schema (hermetic, no appliance):** un-attic `automation/finance/scrape.js` (strip Render/Drive), `automation/finance_ingest.py` (CSV→`lib/sheet`), new `Finance-Transactions` tab, `family-finance.{service,timer}` (~06:00), `provision.sh` finance section; tests (mock CSV→ingest→mock Sheet, dedup/idempotency, fail-loud on missing creds, stale-import). No live bank contact.
 - ⬜ **M6.2 — appliance deploy + first interactive auth (the "VPS hour"):** place `bank_creds.json` (mode 600); Mizrahi first → verify CSV→Sheet roundtrip live → Max + Cal (interactive OTP once, session persisted); enable the timer. Expect the M5 hermeticity gate (D-038/D-041 — tests must not reach the live Sheet/creds).
 - ⬜ **M6.3 — consumer wiring + close:** briefing Money section + dashboard Money drawer read live; >35d stale warning fires; resolve the `Finance-Bdgt`/`Finance-Accts` ↔ §6.4 `Finance-Budget` name drift. Acceptance = the first real monthly review (~30 days in). External review folds in (D-035 precedent).
-- ⬜ **Parallel (Shanee):** budget migration — her manual budget → `Finance-Bdgt`; gives the raw actuals a target to read against.
+- ⬜ **M6.4 — analysis layer (D-050):** on-box rules categorizer tags each transaction at ingest (`Category`/`Cat-Source` cols; `seeds/14_Finance_Category_Rules.csv`, gitignored); the briefing Money section + dashboard drawer gain per-category spend, month-over-month trends, and actuals-vs-`Finance-Bdgt`. Silent delivery (no alerts). **LLM (DeepSeek) review/gap-fill GATED** on a §8.6 amendment + Shanee. Anomaly detection stays killed (D-033).
+- ⬜ **Parallel (Shanee):** budget migration — her manual budget → `Finance-Bdgt`; gives the actuals a target to read against, and defines the category vocab the rules engine maps to.
 
 ## v1.1 candidates (unordered — pick after v1 is boring)
 
