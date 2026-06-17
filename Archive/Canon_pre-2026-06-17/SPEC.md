@@ -1,0 +1,300 @@
+# Family Inc. — System Specification
+
+*Canonical product + system spec. v2.0 · 2026-06-11 · supersedes `Archive/00_Architecture_and_Roadmap.md`, `Archive/02_Reminders_Engine_Spec.md`, `Archive/07_WhatsApp_Group_Summarizer_Spec.md` (absorbed and revised).*
+*Companions: `ENGINEERING.md` (how we build/run it) · `DESIGN.md` (how it looks/reads) · `DECISIONS.md` (why) · `BACKLOG.md` (when).*
+
+---
+
+## 1. Overview
+
+Family Inc. is a household operating system for a two-adult, two-child family in Israel. It watches the family's obligations (appointments, renewals, deadlines, school/daycare chatter) and reflects them back through **two calm surfaces**: a small number of WhatsApp messages, and a PWA dashboard pinned to both adults' iPhones. The master database is a single Google Sheet. The automation runs unattended on one small VPS.
+
+The product's core promise: **nothing important gets dropped, without anyone having to watch a screen.**
+
+### What it is not
+
+- Not a chore-gamification app. No streaks, no scores, no nagging.
+- Not a kid-facing product. Children's data is structured but adult-mediated.
+- Not a finance robot. It never moves money; the only financial credentials it stores are appliance-local, read-only portal logins used to *read* finance (D-049).
+- Not a chat bot. It speaks at scheduled moments or for genuine urgency, within a hard budget.
+
+## 2. Context
+
+| | |
+|---|---|
+| Household | 2 adults (joint product owners) + 2 young children |
+| Locale | Israel — Hebrew-first, RTL, ILS, Sunday-start week, Jewish calendar awareness (Shabbat, chagim) |
+| Healthcare | Maccabi (no public API — ingestion is mail/manual) |
+| Devices | Two iPhones (PWA + WhatsApp), one VPS, no other infrastructure |
+| Cost ceiling | ~₪120/mo all-in (VPS ~₪20 + LLM ~₪35 + margin). Anything above needs a PO call |
+
+Roles and decision authority are defined in `CLAUDE.md`. Personal data (names, phone JIDs, health specifics, real budgets) lives only in the Sheet and in gitignored config/seed files — never in this repo's committed code or docs.
+
+## 3. Operating principles
+
+Phrased so a reviewer can check compliance:
+
+1. **One source of truth per domain.** Every datum has exactly one authoritative home (almost always a Sheet tab). Anything else holding it is a cache or a view, and is allowed to be lost.
+2. **Boring tech.** Google Sheets over a database; vanilla JS over a framework; cron-like timers over orchestration; JSONL files over message queues. A new dependency must remove a failure mode, not add a capability we merely like.
+3. **Alerts are a budget.** Hard cap 2 unsolicited messages per recipient per day, enforced at a single chokepoint (§8.1). Critical-safety messages bypass with an audit trail. Scheduled briefings are exempt — they are appointments, not interruptions.
+4. **Briefings > notifications.** The default unit of communication is a scheduled digest. Real-time messages are the exception that must justify itself.
+5. **Partner-symmetric.** Both adults see everything, can act on everything, and appear in the system as equals. No leaderboards.
+6. **Fail loud, degrade quiet.** Infrastructure failures surface in the next briefing ("bridge silent 14h"), never as silence. Feature degradation (LLM down → deterministic fallback) must not page anyone.
+7. **The system never promises an affordance it doesn't have.** No reply commands in messages until reply parsing ships; no buttons that don't write.
+
+## 4. Scope
+
+### v1 (committed)
+
+| Capability | One-line contract |
+|---|---|
+| Reminders engine | Daily 07:25: read Reminders tab, compute due/lead-time/overdue fires; the 07:30 digest delivers them as one message per recipient |
+| Weekly briefing | Sat 21:00: whole-Sheet narrative briefing rendered from a deterministic template. (LLM-written prose was specced but never wired — a deferred v1.1 candidate; see §7.2 / D-047) |
+| Hebcal enrichment | Friday/holiday awareness lines in briefings (candle-lighting, chagim, "tomorrow is a chag") |
+| WhatsApp group summarizer | Hourly: classify group messages ALERT/DIGEST/ROUTINE; alerts within budget; daily digest section at 07:30 |
+| Dashboard (PWA) | Today-first read view + write-back (done/snooze/note) with offline queue + tombstone race guard |
+| Delivery | Self-hosted Baileys bridge: 1:1 messages to the two adults only, via a durable outbox |
+
+### Non-goals (permanent, from principles)
+
+Money movement · credential storage *(except appliance-local, read-only financial portal logins — D-049)* · messaging anyone beyond the two adults · posting into any group · kid-facing surfaces · medical advice (scheduling only).
+
+### Frozen (explicitly out of v1)
+
+Finance ingestion, pediatric milestones, goal coaching, PDF/OCR/voice capture, Gmail parsing, Maccabi forwarders, WhatsApp reply parsing. Each has an unfreeze condition in `BACKLOG.md`. Frozen code lives in `attic/`, unmaintained. (2026-06-13, D-033/D-034: property tracking unfrozen → §12.1, M5; merchant categorization + anomaly detection killed.)
+
+## 5. System architecture
+
+```
+                       ┌─────────────────────────────────────────────┐
+                       │  GOOGLE (data plane)                        │
+                       │  Family_OS Google Sheet  ←  master DB       │
+                       │  Drive: /Briefings, /Documents              │
+                       └────────▲───────────────────────▲────────────┘
+                gspread (svc acct)│                      │ gapi (user OAuth)
+                                  │                      │
+┌─────────────────────────────────┴───────────┐   ┌──────┴───────────────────┐
+│  THE APPLIANCE (one VPS, Asia/Jerusalem)    │   │  DASHBOARD (PWA)         │
+│                                             │   │  GitHub Pages, vanilla   │
+│  systemd timers:                            │   │  JS, pinned to 2 iPhones │
+│   07:25 reminders_engine (compute)          │   │  read: batchGet          │
+│   07:30 daily digest (assemble+send)        │   │  write: batchUpdate +    │
+│   hourly whatsapp_summarizer                │   │   DoneAt/LastDoneBy/     │
+│   Sat 21:00 weekly briefing                 │   │   WriteQueue_Tombstone   │
+│                                             │   └──────────────────────────┘
+│  Baileys bridge (Node, systemd service):    │
+│   reads groups → inbox.jsonl                │         ┌──────────────────┐
+│   polls outbox.jsonl → sends 1:1            │────────▶│ Adar + Shanee    │
+│   recipients.json = hard scope guard        │ WhatsApp│ (the only        │
+│                                             │         │  recipients)     │
+│  lib/outbox.py = THE chokepoint:            │         └──────────────────┘
+│   budget ledger, dedup, kinds               │
+└─────────────────────────────────────────────┘
+```
+
+Key properties:
+
+- **One write path to phones.** Every script that wants to reach a human appends to the outbox via `lib/outbox.py`. Budget, dedup, quiet hours, and scope live there once (§8.1).
+- **One data plane.** All Python uses gspread with a service account; the dashboard uses gapi with each adult's own OAuth. The local `Family_OS.xlsx` is a seed template only — nothing reads it at runtime.
+- **One machine.** Bridge and automation share the VPS. Its failure mode is total and therefore obvious (heartbeat goes stale → next successful briefing says so; if >24h, email fallback fires).
+- **LLM calls are decoration, not structure.** Every LLM-dependent step has a deterministic fallback (templated briefing, keyword-rule classification). The system delivers value with the API key revoked.
+
+## 6. Data model — `Family_OS` Google Sheet
+
+Authoritative tab list. Column-level schema for the three tabs with code contracts; remaining tabs are human-edited and read loosely (missing columns tolerated, rows with unparseable dates surfaced as data-hygiene lines, never crash).
+
+### 6.1 `Reminders` (keystone)
+
+| Col | Field | Written by | Notes |
+|---|---|---|---|
+| A | Title | humans | used verbatim in messages |
+| B | Domain | humans | controlled vocab: Car/Health/Education/Finance/Contracts/Goals/Other |
+| C | Owner | humans | Adar / Shanee / Both |
+| D | Due Date | humans, engine (recurrence bump) | DD/MM/YYYY |
+| E | Lead Times | humans | CSV of day offsets, e.g. `60,30,7,1` |
+| F | Recurrence | humans | One-off / Yearly / Monthly / Quarterly / Weekly / Custom |
+| G | Status | engine, dashboard | Pending / Snoozed / Sent / Done / Skipped / Overdue |
+| H | Last Sent | engine | ISO datetime of last fire for this row |
+| I | Channel | humans | WhatsApp / Email / None |
+| J | Notes | humans, dashboard (append) | appended to message if ≤120 chars |
+| K | Days Until | sheet formula | `=D−TODAY()` |
+| L | Auto-flag | sheet formula | OVERDUE / FIRE TODAY / WEEK OUT / MONTH OUT |
+| M | LastDoneBy | dashboard | display name from `Settings.UserMap` |
+| N | DoneAt | dashboard | ISO datetime; feeds 7-day arc + ticker |
+| O | WriteQueue_Tombstone | dashboard | ISO datetime stamped on **every** dashboard write incl. queued-flush; engine skips rows tombstoned <6h (§8.3) |
+| P | Guide URL | humans | optional Kol-Zchut / how-to link, appended to messages |
+
+**Dashboard write contract:** every write-back is one `batchUpdate` touching its intent columns **plus M, N (when completing), and always O.** A dashboard that doesn't stamp O is non-conformant — this was the v1-blocking gap found 2026-06-11.
+
+### 6.2 `WhatsApp_Inbox` (hot, 30-day rolloff) + `WhatsApp_Archive` (text-only, forever)
+
+As built: msg_id, group_name, group_type, sender_name, sender_role, received_at, text, has_media, classification, one_liner, action_required, action_owner, critical, dispatched, dispatched_at, digested_at. Archive keeps msg_id/group/sender/received_at/text/one_liner only. Media is never stored — only the fact it existed. (critical/dispatched/dispatched_at are the outbox outcome record; budget enforcement itself lives only in the outbox ledger, §7.5.)
+
+### 6.3 `WhatsApp_Group_Config`
+
+group_name · group_type · importance_default (alert_eligible/digest_only/mute) · alert_recipients (both/adar/shanee/none) · close_contacts · alert_keywords (regex ;-list) · critical_keywords (regex ;-list, budget-bypassing). Seed: `Setup/12_WhatsApp_Group_Config_Seed.csv`.
+
+### 6.4 Other tabs
+
+`People`, `Calendar-Events`, `Finance-Budget`, `Finance-Accounts`, `Finance-Transactions` (finance landing zone, written by `finance_ingest.py` — schema in §12.2; standardized from the as-built `Finance-Bdgt`/`Finance-Accts`/`Finance-Txns` at the M6 build, D-052), `Goals`, `Health`, `Education`, `Car`, `Contracts`, `Contacts`, `Settings` (Key|Value rows: keys containing `@` are UserMap entries email→display-name; key `lang` is the chrome default), `Reminders-Archive` (one-offs roll here monthly), `Property-Listings` (scraper-written — schema in §12.1). Money values are **ILS only**; legacy USD figures from the kickoff are restated in ILS in the Sheet.
+
+## 7. Component contracts
+
+### 7.1 Reminders engine (daily 07:25 — computes, does not send)
+
+```
+validate header row against the §6.1 column map; on mismatch: abort the run,
+  log schema_drift, surface it in the next briefing (guards the dual write-path:
+  dashboard and engine must agree on columns before anything fires; write-backs
+  validate BEFORE the batch is issued — a drifted sheet is never partially
+  written by position)
+read Reminders where Status ∉ {Done, Skipped} — Sent rows stay eligible, or a
+  60,30,7,1 lead-time chain would die at its first fire (errata 2026-06-12;
+  same-day re-fires are blocked by the Last-Sent guard, §8.4)
+  skip if WriteQueue_Tombstone within 6h        → log skipped_due_to_tombstone + age
+  fire if: days_until < 0 AND last sent ≥3d ago → OVERDUE
+        or days_until ∈ Lead Times              → LEAD-TIME
+        or days_until == 0                      → DUE TODAY
+hand fires to the 07:30 daily digest (§7.2), which renders ONE message per
+recipient (DESIGN.md §6) → outbox(kind=alert)
+on send success: Last Sent = now; Status = Sent | Overdue
+recurrence on Done: bump Due Date by period, Status → Pending, Last Sent cleared;
+  Feb-29-class failures → last day of target month + flag for review
+heartbeat: append one line to logs/reminders_log.csv every run (fired/sent/skipped + reasons)
+```
+
+### 7.2 Weekly briefing (Sat 21:00) + daily digest assembly (07:30)
+
+Weekly: read all tabs → render a 5-scene narrative from a **deterministic template** (DESIGN.md §6) → `Briefings/` + outbox(kind=briefing). (The original spec read "LLM writes the narrative, template fallback," but the LLM path was never wired — the briefing has been template-only since v1-live. Wiring it would send whole-Sheet context to DeepSeek, well beyond §8.6's "one message + ≤3 context" classification bound, so LLM-written prose is a **deferred v1.1 candidate** pending a privacy call; the template itself is due a content review in a future session — D-047.) Daily: one short message assembled from engine fires + WhatsApp digest section + Hebcal line (Fridays/erev chag), queued as outbox(**kind=briefing** — budget-exempt and never deferrable, like every briefing; was kind=alert until D-027, which made the §8.1 deferral circular). **One morning message, not several** — assembly happens before queuing; on send success the digest stamps each fired row's Last Sent/Status per §7.1. **Recipients: both adults, every day (§3 principle 5, D-045).** The digest is assembled and queued for adar AND shanee on every run — an adult with no fires that day still gets the briefing (the quiet-day line plus the shared WhatsApp-groups / property sections), so an asymmetric day (one adult has reminders, the other none) never leaves one partner silent. Because it is kind=briefing the message is budget-exempt, so briefing the empty-handed adult never spends an alert slot. The fully-quiet day (neither adult has fires, D-036e/D-044) is the both-empty case of this same rule. The briefing also carries a compact **Classifier accuracy** section (Phase F, D-048) — the week's WhatsApp ALERT-tier counts + by-rule tally + the <1/week false-positive target — a sibling of the §8.1 "budget is biting" self-report; the full per-ALERT review surface is `automation/accuracy_review.py` (§7.3).
+
+### 7.3 WhatsApp summarizer (hourly)
+
+Reads new inbox lines → classification = hard rules first (the 5 rules as built: keyword match, teacher-evening, vaad-utilities, media-only→ROUTINE, muted-group), LLM (Haiku) for the rest with 3-message group context, deterministic keyword fallback without API → writes Inbox + Archive rows → ALERT rows route per group config → outbox(kind=alert, or kind=critical on critical_keywords match). Digest-only groups with a critical match → "⚠ NEEDS A LOOK" block at the top of the next digest (family-group override is an open PO call, `BACKLOG.md` M4). **Weekly accuracy review (Phase F, D-048):** `automation/accuracy_review.py` re-reads the week's Inbox rows and **re-derives each ALERT's triggering rule by reusing `hard_rule_alert`** (the Inbox stores the classification + outcome, not the rule — §6.2; the hard rules are deterministic over the persisted fields, so no schema change is needed) to surface ALERT-tier false positives against the **<1/week** bar. It folds a compact pulse into the weekly briefing (§7.2) and writes a full operator surface to `Briefings/`. The "purge" is narrowing the offending keyword pattern (group-config seed); a *machine-measured* FP rate (a human-mark channel) is deferred (D-048).
+
+### 7.4 Bridge (Baileys, Node, systemd service)
+
+Listens to **groups only** → `inbox.jsonl`. Polls `outbox.jsonl` every 15s → sends **1:1 only** to JIDs present in `recipients.json` (machine-local, gitignored); any other target is refused and logged. Per-(id,target) dedup against a sent ledger. Heartbeat file on connect/message/15-min idle. Never posts to groups. Never reads 1:1 chats (until reply parsing v1.1, which will lift the guard for exactly two JIDs).
+
+### 7.5 Outbox (`lib/outbox.py`) — the chokepoint
+
+```
+queue(to: "adar"|"shanee"|"both", body, kind: "alert"|"critical"|"briefing", source, id)
+  briefing → exempt from budget, subject to quiet hours (22:00–07:00 → hold to 07:00)
+  alert    → consult ledger[date][recipient]; if ≥2 → downgrade: append to tomorrow's
+             digest, log alert_suppressed_by_budget; else send + increment
+  critical → send immediately, any hour, log budget_bypassed_critical
+  all      → idempotent by (id, target); ledger + queue are durable JSONL on disk
+```
+
+The ledger is shared across **all** senders — engine and summarizer can no longer each spend 2/day.
+
+### 7.6 Dashboard (PWA)
+
+Read: `batchGet` all bound ranges (DESIGN.md carries the UI contract). Write: per §6.1 write contract, optimistic UI, offline queue in `localStorage.pendingWrites[]` (cap 50), flush on reconnect in tap order, failed flushes retry next online event. Identity: Google sign-in → `Settings.UserMap` → display name. Demo mode renders `mock_data.json` and never calls gapi.
+
+## 8. Cross-cutting policies
+
+### 8.1 Alert budget
+
+2 unsolicited messages / recipient / day, enforced only in `lib/outbox.py`. Trim priority when over: OVERDUE and kids' Health always survive; WEEK/MONTH-OUT bump first; Goals never alert (briefing-only). >10% of fires suppressed over rolling 14 days → next weekly briefing says "budget is biting — raise cap or tighten rules?".
+
+### 8.2 Quiet hours
+
+22:00–07:00 Asia/Jerusalem. Alerts and briefings hold; criticals do not.
+
+### 8.3 Offline write / engine race (tombstone)
+
+Dashboard stamps `WriteQueue_Tombstone` (ISO-T datetime) on every write — queued offline writes re-stamp it at flush, so the cell always carries the moment the write *landed* on the Sheet. The engine compares that cell value against its own `now()` and skips the row while `cell + 6h > now()` (one clock semantics: the window starts at flush, not at the tap). Residual accepted race: phone offline with a queued tap that flushes inside the same minute the engine reads → at most one duplicate alert; the flush itself is idempotent. **Tuning is data-driven, not anecdotal:** every skip is logged with tombstone age, and the weekly briefing reports "N tombstone skips · max age seen" — widen the window when the age distribution approaches 6h, not when someone remembers a duplicate.
+
+### 8.4 Idempotency & dedup
+
+Outbox messages carry stable ids: engine = `rem-{row}-{date}`, summarizer = `wa-{msg_id}`, briefings = `brief-{type}-{date}`. Bridge dedups per (id, target). Engine re-runs on the same day are no-ops (Last Sent guard).
+
+### 8.5 Time & locale
+
+All schedules in Asia/Jerusalem (DST-correct via system TZ, never UTC offsets). Dates DD/MM/YYYY; week starts Sunday; money `Intl.NumberFormat('he-IL', ILS)` / `₪{n:,}` in Python. Chrome strings Hebrew-default with English fallback; data values stay Hebrew always. Machine-written datetime stamps (Last Sent, DoneAt, WriteQueue_Tombstone) are ISO-8601 `T`-form text in both surfaces — the T keeps Sheets from coercing them into locale-formatted date cells, so they round-trip byte-exact and keep the hour resolution the 6h tombstone window needs.
+
+### 8.6 Privacy & security
+
+- WhatsApp plaintext exists in places we don't fully control — Meta's servers (inherent) and the configured LLM provider — plus the VPS we do. The single permitted external message processor is **DeepSeek** (wired M4, D-044); no others. LLM classification sends one message + ≤3 context messages, never whole threads or cross-group context. *(This amends the original "no third-party message processors": the joint call was confirmed by Shanee, D-036e, and the OpenAI-compatible backend shipped at M4 wiring, D-044/D-032. The key is `FAMILY_INC_DEEPSEEK_API_KEY` in `/etc/family-inc/env`; absent → the system runs keyless on keyword classification, degrade-quiet §3.6.)*
+- **Finance categorization (D-051, M6.4):** DeepSeek may assign a category to the **rules-miss remainder only** — a transaction's **description + amount**, never account numbers, balances, credentials, identifiers, or the whole ledger. The on-box rules engine tags first, so most transactions never leave the box. Joint call, Shanee-approved (D-051); same key as above — absent it, categorization is rules-only (degrade-quiet §3.6).
+- Secrets (`recipients.json`, service-account JSON, `FAMILY_INC_DEEPSEEK_API_KEY` / `ANTHROPIC_API_KEY`, `FAMILY_INC_APIFY_TOKEN` — the property secondary source, D-040) live in `/etc/family-inc/`, mode 600, never in the repo. The repo is public-safe by construction: personal values only in the Sheet and gitignored files.
+- Phone numbers/JIDs appear nowhere except `recipients.json` on the VPS.
+- The service account has access to exactly one spreadsheet (shared to it explicitly), nothing else in Drive.
+- Known accepted risk: Baileys is an unofficial client — account-ban risk, elevated somewhat on datacenter IPs. Mitigations: household volume (≤10 msg/day), person-to-person pattern, dedicated paired session. Fallback chain in §10.
+
+### 8.7 LLM usage
+
+One wrapper (`lib/llm.py`), model ids in config not call sites, per-call cost logged to `logs/llm_costs.csv`. **Provider = DeepSeek** (wired M4, D-044): `lib/llm` calls DeepSeek's OpenAI-compatible `/chat/completions` over stdlib urllib (no SDK), model ids in `config.MODELS` (`deepseek-chat` for classification; the weekly briefing is **template-only** — §7.2 — so it makes no LLM call, and the `briefing` model-id entry is reserved for the deferred v1.1 prose path). The active provider is chosen by key presence — DeepSeek (`FAMILY_INC_DEEPSEEK_API_KEY`) first, the Haiku-class Anthropic path (`config.ANTHROPIC_MODELS`) as fallback, else the deterministic fallback. Monthly cost line appears in the first weekly briefing of each month. **Until the PO places the key the live system runs keyless** (keyword classification + template briefing), unchanged from v1. (Direction set in D-032, confirmed by Shanee in D-036e.)
+
+## 9. Failure modes
+
+| Failure | Detection | Behavior |
+|---|---|---|
+| VPS down | heartbeat stale (external check optional, v1.1) | total outage; on recovery, outbox flushes; missed runs reported in next briefing |
+| Bridge logged out / WA protocol break | heartbeat stale >12h | digest prepends "⚠ BRIDGE SILENT Nh"; >24h → email fallback digest to both adults |
+| WhatsApp account banned | send failures + logout | switch to email digests same-day (one-line config); decide Twilio/SMS path per §10 |
+| Sheet API 5xx / quota | gspread retries w/ backoff, then skip run | "missed yesterday" line in next successful run |
+| LLM API down/keyless | exception → fallback path | templated briefing / keyword classification; logged, not alerted |
+| Bad row data (unparseable date) | per-row try/except | row skipped + listed under "data hygiene" in weekly briefing |
+| Sheet header drift (column added/renamed out of contract) | engine header validation, every run | run aborts before firing anything; schema_drift logged + surfaced in next briefing |
+| Outbox/inbox JSONL torn line | reader skips malformed tail | self-heals next poll (single-writer appends) |
+| Clock skew / future tombstone | tombstone > now | treat as valid for full window, log anomaly |
+| Both adults edit same row | last-writer-wins | acceptable at household scale, by decision |
+
+## 10. Fallback chain (delivery)
+
+1. **Baileys bridge** (primary).
+2. **Email digest** to both adults — automatic, and mechanically specified: the daily-digest task checks the bridge heartbeat before queuing; if stale >24h it sends the identical rendered content via SMTP (app-password in `/etc/family-inc/env`) and notes "delivered by email — bridge down Nh" in the body. No watcher process; the sender itself degrades. Every send-run logs its transport (`logs/delivery_log.csv`); email-fallback days are **degraded, not green** — the weekly briefing surfaces them, so a dying bridge can't hide behind a working fallback (D-028).
+3. **Twilio WhatsApp** — documented fallback, not in code. Adopt only if Baileys proves unworkable (ban recurrence); accepts template-approval constraints.
+4. **Inforu SMS** — deep fallback, Hebrew-capable, ILS billing; revisit only on 2+ failures above.
+
+## 11. Acceptance criteria (v1 = done when all true)
+
+1. Both phones receive the 07:30 digest **3 consecutive days** — no manual intervention, **via WhatsApp** (email-fallback days don't count toward acceptance, D-028).
+2. One reminder completes a full cycle: fires → marked done on the dashboard → recurrence bumps → next year's row visible.
+3. A daycare-group message with an alert keyword reaches the right recipients within 10 minutes; a family-group meme reaches no one.
+4. A critical keyword fires after the daily budget is spent (bypass proven in production, not mock).
+5. Dashboard write-back from an offline phone flushes on reconnect; engine logs `skipped_due_to_tombstone` ≥1 time without a duplicate alert.
+6. Weekly briefing arrives Sat 21:00 with Hebcal line and budget/goal sections; LLM-down fallback verified once by revoking the key.
+7. `logs/` show 7 days of green runs; pytest suite green; zero Twilio references in code.
+8. Total monthly run cost confirmed ≤ ₪120.
+
+## 12. Data ingestion lanes
+
+Specs for ingestion lanes that have been **unfrozen**. Frozen lanes (finance, pediatric, goal coaching, Gmail/Maccabi parsing, PDF/OCR/voice) carry no spec here until unfrozen; their dispositions — and the pre-resolved finance build architecture — live in `DECISIONS.md` (D-031–D-034). All ingestion obeys the same rules: one runtime (the VPS, D-018), `lib/sheet` is the only Sheet writer (D-016), no new path bypasses `lib/outbox.py` (§8.1), secrets only in `/etc/family-inc/` (§8.6).
+
+### 12.1 Property listings — Yad2 / Madlan (unfrozen 2026-06-13, D-034)
+
+Active house search. Build scheduled **after the v1 3-day acceptance window closes (earliest 2026-06-16)**, not during it; independent of any other lane.
+
+| Facet | Spec |
+|---|---|
+| **Source** | Saved-search result pages on Yad2 (primary) and Madlan (optional). One or more saved-search URLs per portal, each encoding the criteria (area, price, rooms). No public API for either portal: the **primary** path scrapes (below); a permitted **secondary** source (Apify) backs it up when the scrape is blocked and fills missing fields (D-040). |
+| **Mechanism** | Headless Chromium on the VPS (the same browser dependency the frozen finance scraper will use — one shared dep, provisioned once in `provision.sh`). A small scraper loads each saved-search URL, extracts listing cards (`listing_id`, price, rooms, size, location, url, posted-at), and diffs the `listing_id` set against the last-seen set persisted at `/var/lib/family-inc/property/seen.json`. New ids = new listings. |
+| **Secondary source (D-040)** | Apify is a SECONDARY/supplementary source, never a replacement: `automation/lib/apify.py` (the only Apify client) is consulted **per saved-search only when the primary is blocked/empty (backup) or returned listings with missing fields (gap-fill)**, then merged with the **primary always winning** (`merge_listings` — Apify only adds missed listings + fills blanks, never overwrites). Actors: `amit123~yadscraper` (Yad2, ingests the saved-search URL directly) and `swerve~madlan-scraper` (Madlan, parametric — the search needs a `{city,dealType,…}` `apify` block; params are never guessed from the url). Strict, fail-loud, never-invent: a dataset item missing its id or carrying a corrupt numeric is skipped **and** surfaced (→ fail-flag); an absent optional field is honest-empty, never fabricated; a missing token/HTTP/timeout is a loud `ApifyError`. Apify runs from its own residential proxy pool, clearing the anti-bot wall the VPS datacenter IP cannot (D-039). **Cost-bounded:** priced per result, so it lands at most **once/calendar-day** (the on-box primary keeps its free 2×/day; the digest is morning-only) with per-search item/page caps — governed by the §11 ≤₪120/mo ceiling (D-040 amends D-010's ₪0). |
+| **Runtime** | One `systemd` timer (`family-property.timer`), Asia/Jerusalem, 1–2×/day (not real-time — listings don't churn by the minute and tighter polling raises ban risk). `TimeoutStartSec` + `MemoryMax` bound a stuck or runaway browser; the unit is independent of the bridge service. No second runtime (D-018). |
+| **Auth model** | None for the portals (public listings). Secrets: the saved-search config at `/etc/family-inc/property_searches.json` (mode 600, personal criteria, never in the repo — D-024), and — for the secondary source — `FAMILY_INC_APIFY_TOKEN` in `/etc/family-inc/env` (mode 600; a SERVICE api key, not a portal login, so "no credential storage" holds; absent → the Apify path is inert, primary-only). Sheet writes use the existing `Family_OS` service account (access scoped to the one spreadsheet, §8.6). |
+| **Sheet landing zone** | New `Property-Listings` tab. Columns: `listing_id` (dedup key) · `portal` · `first_seen` (ISO-T) · `price_ils` · `rooms` · `size_sqm` · `location` · `url` · `status` (human-edited: new/seen/contacted/dismissed). Append-only via `lib/sheet`; dedup on `listing_id`; a listing that drops out of results is left in place (no delisting tracking in v1 of the lane). |
+| **Delivery** | New listings land **silently** in the Sheet and surface in a "🏠 דירות חדשות / New listings" section of the 07:30 daily digest. They never fire an alert and never bypass the budget — property is not critical-safety (briefings > notifications, §3 principle 4, §8.1). |
+| **Failure handling** | A scrape error or anti-bot block (Yad2 runs Cloudflare; scraper fragility is rising across 2026 Israeli portals) sets the fail-flag (`OnFailure` → `logs/fail.flag`); the next delivered digest reports "property scrape failed" and the weekly briefing surfaces persistent failures — fail loud, never silent (§9, §10.2). Persistent block → the realized escape hatch is the Apify secondary source (D-040), which runs from a residential proxy pool off-box; an anti-detect browser (e.g. a Camoufox-based fork) on the one VPS remains a further fallback. |
+| **Unfreeze ordering** | Independent of finance. Build after acceptance (≥2026-06-16). The first scraper to land (property or, later, finance) pays the one-time Chromium provisioning cost; the second reuses it. |
+
+### 12.2 Finance — Mizrahi / Max / Cal (unfrozen 2026-06-17, D-049)
+
+A committed monthly finance review is the standing consumer. Build = **M6**; **categorized + trends** (D-050; anomaly detection stays killed, D-033). Reuses the M5 browser dependency; investments/brokerage out of scope.
+
+| Facet | Spec |
+|---|---|
+| **Source** | The online portals of Mizrahi-Tefahot (bank) + Max + Cal (cards), read via `israeli-bank-scrapers` (Puppeteer/headless-Linux, pinned 6.7.3, Node ≥ 22.12). No public API; the library drives each portal's web session. **Read-only by nature** — it fetches balances + transactions but cannot move money (the §4 "money movement" non-goal stays absolute). |
+| **Mechanism** | A `systemd` timer runs `automation/finance/scrape.js`: logs into each provider with creds from `/etc/family-inc/bank_creds.json`, fetches balances + the transaction window (since last success, with a few-days overlap), writes one CSV per provider to `/var/lib/family-inc/finance/<provider>_<YYYY-MM-DD>.csv`. `automation/finance_ingest.py` then normalizes, dedups on `Txn-ID`, and writes via `lib/sheet` (sole Sheet writer, D-016). Node scrapes; **Python owns every Sheet write**. The local CSV is the only staging — no Drive (D-031). Same-day reruns overwrite the day's CSV and dedup on ingest → idempotent; the import advance gates on a successful Sheet write (mirrors §12.1 / D-037). **Categorization (D-050):** an on-box keyword→category rules engine (`seeds/14_Finance_Category_Rules.csv`, gitignored) tags each transaction at ingest; an LLM (DeepSeek) review/gap-fill assigns the categories the rules miss (**approved D-051** — §8.6 amended, Shanee; the rules-miss remainder's description + amount only, never the whole ledger). |
+| **Runtime** | One `systemd` timer (`family-finance.timer`), Asia/Jerusalem, **~06:00 daily** — before the 07:25 engine read, so fresh balances feed the 07:30 digest + the weekly briefing and the >35d staleness stays accurate. `TimeoutStartSec` + `MemoryMax` bound a stuck browser. Puppeteer runs **headless — NO Xvfb** (anti-bot is clean for this mix, unlike the headed property browser, D-039); the scraper carries its own Chromium, installed by `npm ci` in `automation/finance` (`provision.sh`). The unit is two steps: `node automation/finance/scrape.js` then `uv run python automation/finance_ingest.py`. No second runtime (D-018) — the scraper is the only new Node besides the bridge. Cadence is the first tuning knob — if Max/Cal OTP challenges prove noisy, drop the cards to 2–3×/week and keep the bank daily. |
+| **Auth model** | **The D-049 amendment.** Read-only portal logins for the three institutions live at `/etc/family-inc/bank_creds.json` (mode 600, family-inc-owned, never in the repo, never logged; optional `systemd LoadCredentialEncrypted` hardening). This **narrows** the §4/§1 "no credential storage" non-goal to permit *appliance-local, read-only financial portal logins* — distinct from the service keys already stored (D-040) — while "no money movement" stays absolute (the scrapers cannot transfer). **2FA** (Max/Cal challenge new devices): M6.1's scraper logs in **fresh each run** (no persisted browser session yet); an OTP re-challenge **fails loud** (§10.2 fail-flag → next digest), never silent, and the operator re-runs interactively. Persisting a login session to cut repeat OTPs (`/var/lib/family-inc/finance/<provider>_session/`) is an **M6.2 hardening**, taken only if the cards prove noisy — not built yet. Sheet writes use the existing `Family_OS` service account (§8.6). |
+| **Sheet landing zone** | Two tabs, written via `lib/sheet` (the only Sheet writer, D-016). **`Finance-Accounts`** — one row per account/card, **current-state** (upserted on `Account Name`): `Account Name` · `Type` (bank/card) · `Bank/Provider` · `Last 4` · `Owner` · `Currency` · `Last Imported` (col 7 — drives the briefing's >35d stale-import warning) · `Balance Snapshot` · `Notes`. The importer overwrites only the machine-owned `Last Imported`/`Balance Snapshot`, so a human's `Owner`/`Notes`/label survive a re-import. **`Finance-Transactions`** — one row per transaction, append-only, **Txn-ID dedup**: `Date` · `Account` · `Description` · `Amount (ILS)` (signed) · `Category` · `Cat-Source` (rule/llm) · `Txn-ID` (provider id, else a stable hash of date+amount+description+account) · `Imported-At`. **Column ORDER is load-bearing** — the `Finance-Budget` actuals are `SUMIFS` over Date (A) / Amount (D) / Category (E). **M6.1 writes the raw fields and leaves `Category`/`Cat-Source` BLANK; the M6.4 categorizer (on-box rules + DeepSeek gap-fill, D-050/051) populates them in place** (so M6.4 adds no column — they ship present-but-empty from M6.1). Retention: keep all (low volume; the monthly review + trend KPIs want history). Money values ILS only (§6). *(Name standardization — **D-052**: the as-built short `Finance-Bdgt`/`Finance-Accts`/`Finance-Txns` became `Finance-Budget`/`Finance-Accounts`/`Finance-Transactions` at the M6.1 build — the §6.4 names, the two `weekly_briefing` reads, the seed tabs, and the budget `SUMIFS` refs were updated in lockstep; the §6.4 drift flagged in code since 2026-06-12 is closed. The live Sheet's three tabs are renamed at deploy — `section_money`/`section_hygiene` tolerate the absent tab until then. Schema additive-only.)* |
+| **Delivery** | Finance lands **silently**: balances, **per-category spend, month-over-month trends, and actuals-vs-`Finance-Budget`** surface in the weekly briefing **Money** section + the dashboard **Money** drawer, alongside the >35d stale-import hygiene line — **never an alert, never a budget bypass** (briefings > notifications, §3 principle 4). The only finance *message* is fail-loud (below). The kickoff "ouch > ₪500 single charge" threshold is **not** wired in this lane (an alert path + a product call that brushes the killed anomaly lane, D-033 — deferred to a deliberate PO decision). |
+| **Failure handling** | An OTP re-challenge, a scraper/site-change error, or a Sheet-write failure sets the fail-flag (`OnFailure` → `logs/fail.flag`); the next delivered digest reports it ("⚠ <provider> צריך אימות מחדש" / "finance scrape failed") and the weekly briefing surfaces persistent failures + the >35d stale line — fail loud, never silent (§9, §10.2). CSVs are retained on disk on a Sheet-write failure (no data loss; retry next run). Anti-bot: clean for this mix (the 2026 Cloudflare wall is on Isracard/Amex, not ingested); if a wall ever appears the escape hatch is the maintained anti-detect fork (Camoufox) on-box, then a managed-proxy pivot (the D-040 precedent). A box compromise leaks read-only financial visibility only — no transfer capability. |
+| **Unfreeze ordering** | Unfrozen D-049 on a committed monthly-review habit; acceptance of the lane = the first real monthly review. The one-time Chromium provisioning cost was already paid by M5 (§12.1) — finance reuses it. Shanee's budget migration (manual budget → `Finance-Budget`) is a parallel track that gives the raw actuals a target to read against. |
+
+## 13. References
+
+`ENGINEERING.md` — runtime, repo layout, migration plan, testing, ops. `DESIGN.md` — dashboard UI, message design system, i18n. `DECISIONS.md` — rationale history. `BACKLOG.md` — sequencing. `Archive/` — superseded docs, kept for the paper trail.
