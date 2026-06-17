@@ -144,6 +144,15 @@ def section_money(wb, today: date) -> str:
     if config.FINANCE_BUDGET_TAB not in wb.sheetnames:
         return "_No budget data yet._"
     ws = wb[config.FINANCE_BUDGET_TAB]
+    # Optional month-over-month column, located by HEADER (the live read handle
+    # has no .max_column — scan a bounded range and stop at the name). Older
+    # sheets / test stubs lack it → no MoM lines, output stays byte-identical.
+    prev_col = None
+    for c in range(1, 21):
+        h = ws.cell(1, c).value
+        if h and str(h).strip().casefold() == "last month (ils)":
+            prev_col = c
+            break
     rows = []
     for r in range(2, ws.max_row + 1):
         cat = ws.cell(r, 1).value
@@ -153,10 +162,12 @@ def section_money(wb, today: date) -> str:
         actual = ws.cell(r, 3).value
         if target in (None, 0):
             continue
+        prev = ws.cell(r, prev_col).value if prev_col else None
         rows.append({
             "cat": cat,
             "target": float(target),
             "actual": float(actual or 0),
+            "prev": float(prev) if prev not in (None, "") else None,
         })
     # Show top 3 over-budget and totals
     over = sorted([r for r in rows if r["actual"] > r["target"]],
@@ -172,7 +183,28 @@ def section_money(wb, today: date) -> str:
             lines.append(f"- {r['cat']}: {fmt_money(r['actual'])} / {fmt_money(r['target'])}  (+{fmt_money(o)})")
     else:
         lines.append("\nNo categories over budget this month.")
+    movers = _money_movers(rows)
+    if movers:
+        lines.append("\n**vs. last month:**")
+        lines.extend(movers)
     return "\n".join(lines)
+
+
+def _money_movers(rows, top: int = 3) -> list[str]:
+    """Per-category month-over-month lines (M6.4) — the biggest absolute ₪ moves
+    among categories whose last-month spend is known and non-zero. Empty when no
+    'Last Month (ILS)' column is present (older sheets / stubs), so the Money
+    section renders byte-identically there."""
+    cand = sorted((r for r in rows if r["prev"] not in (None, 0)),
+                  key=lambda r: abs(r["actual"] - r["prev"]), reverse=True)
+    out = []
+    for r in cand[:top]:
+        delta = r["actual"] - r["prev"]
+        arrow = "▲" if delta > 0 else ("▼" if delta < 0 else "→")
+        change = pct(abs(delta), r["prev"])
+        out.append(f"- {r['cat']}: {fmt_money(r['actual'])} "
+                   f"({arrow} {(change or 0)*100:.0f}% from {fmt_money(r['prev'])})")
+    return out
 
 
 def section_goals(wb, today: date) -> str:

@@ -199,6 +199,13 @@ FINANCE_PROVIDER_TYPES = {"mizrahi": "bank", "max": "card", "cal": "card"}
 # The briefing's data-hygiene line warns when an account hasn't imported in this
 # many days (§12.2 stale-import). One definition — section_hygiene reads it.
 FINANCE_STALE_IMPORT_DAYS = 35
+# On-box categorization rules (M6.4, D-050): keyword→category, applied to every
+# transaction at ingest so most never reach the LLM (§8.6). NON-personal (public
+# merchant tokens + generic category labels) → committed, unlike the personal
+# seeds (a `!`-exception in .gitignore overrides `seeds/*.csv`). PROVISIONAL
+# vocab until Shanee's budget migration fixes the category set; the distinct
+# categories here are also the only labels the gap-fill LLM may return.
+FINANCE_CATEGORY_RULES = SEEDS_DIR / "14_Finance_Category_Rules.csv"
 
 # ---------------------------------------------------------------------------
 # LLM (SPEC.md §8.6–8.7 — model ids live here, not at call sites)
@@ -216,13 +223,15 @@ ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY"      # legacy / fallback provider
 LLM_TIMEOUT_S = 30                               # per-call HTTP budget (seconds)
 # Active-provider (DeepSeek) model ids, keyed by task.
 MODELS = {
-    "classify": "deepseek-chat",   # WhatsApp triage (DeepSeek-V3)
-    "briefing": "deepseek-chat",   # weekly-briefing prose
+    "classify": "deepseek-chat",    # WhatsApp triage (DeepSeek-V3)
+    "briefing": "deepseek-chat",    # weekly-briefing prose
+    "categorize": "deepseek-chat",  # finance gap-fill — rules-miss remainder (§8.6)
 }
 # Fallback-provider (Anthropic, the v1 Haiku-class path, §8.7) model ids.
 ANTHROPIC_MODELS = {
     "classify": "claude-haiku-4-5",
     "briefing": "claude-haiku-4-5",
+    "categorize": "claude-haiku-4-5",
 }
 LLM_FAKE_ENV = "FAMILY_INC_LLM_FAKE"  # tests inject a canned response here
 

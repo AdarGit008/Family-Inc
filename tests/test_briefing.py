@@ -166,6 +166,35 @@ class TestSectionMoney:
         result = section_money(wb, today)
         assert "TOTAL" not in result
 
+    def test_no_mom_block_without_last_month_column(self):
+        # The 3-col stubs (no header row / no MoM column) must render no MoM —
+        # this is what keeps the golden fixture byte-identical (M6.4).
+        wb = _make_wb({"Finance-Budget": [["Groceries", 3000, 2500]]})
+        result = section_money(wb, date(2026, 6, 10))
+        assert "vs. last month" not in result
+
+    def test_month_over_month_when_last_month_column_present(self):
+        # A header row with "Last Month (ILS)" at col 10 (the live seed layout)
+        # turns on per-category MoM. Groceries 2000→3000 (▲50%), Transport
+        # 1000→500 (▼50%).
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Finance-Budget"
+        headers = ["Category", "Monthly Target (ILS)", "Actual (current month)",
+                   "Variance", "% of Target", "YTD Actual", "Notes",
+                   "As-of date", "", "Last Month (ILS)"]
+        for c, h in enumerate(headers, start=1):
+            ws.cell(1, c, h)
+        for r, (cat, tgt, act, prev) in enumerate(
+                [("Groceries", 4000, 3000, 2000), ("Transport", 1500, 500, 1000)],
+                start=2):
+            ws.cell(r, 1, cat); ws.cell(r, 2, tgt)
+            ws.cell(r, 3, act); ws.cell(r, 10, prev)
+        result = section_money(wb, date(2026, 6, 10))
+        assert "vs. last month" in result
+        assert "▲ 50% from ₪2,000" in result
+        assert "▼ 50% from ₪1,000" in result
+
 
 # ---------------------------------------------------------------------------
 # section_goals

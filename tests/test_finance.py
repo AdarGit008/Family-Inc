@@ -96,8 +96,13 @@ def test_mock_csv_ingests_to_sheet(tmp_path):
     assert len(txns) - 1 == 3
     assert set(_col(txns, "Txn-ID")) == {"abc123"} | {
         t for t in _col(txns, "Txn-ID") if str(t).startswith("h:")}
-    # raw pipeline — Category/Cat-Source left blank for M6.4
-    assert all((c in (None, "")) for c in _col(txns, "Category"))
+    # M6.4: the on-box rules engine categorizes at ingest (no LLM key in tests
+    # → rules only). SHUFERSAL→Groceries, SUPERPHARM→Health, PAZ→Transport.
+    cat_by_desc = dict(zip(_col(txns, "Description"), _col(txns, "Category")))
+    assert cat_by_desc["SHUFERSAL DEAL"] == "Groceries"
+    assert cat_by_desc["SUPERPHARM"] == "Health"
+    assert cat_by_desc["PAZ GAS"] == "Transport"
+    assert set(_col(txns, "Cat-Source")) == {"rules"}
     assert "abc123" in _col(txns, "Txn-ID")
     assert -432.5 in _col(txns, "Amount (ILS)")
 
@@ -257,3 +262,116 @@ def test_multiple_provider_csvs_merge_in_one_run(tmp_path):
     accts = _rows(sp, cfg.FINANCE_ACCOUNTS_TAB)
     max_row = [r for r in accts[1:] if r[0] == "MAX-1234"][0]
     assert max_row[sheet.FINANCE_ACCOUNTS_COLUMNS.index("Type")] == "card"
+
+
+# ---------------------------------------------------------------------------
+# Categorization — on-box rules + DeepSeek gap-fill (M6.4, §8.6; D-050/051)
+# ---------------------------------------------------------------------------
+from automation.lib import categorize  # noqa: E402
+from automation.lib import llm  # noqa: E402
+
+
+def test_rules_engine_maps_known_merchants():
+    rules = categorize.load_rules()
+    assert categorize.apply_rules("SHUFERSAL DEAL TLV", rules) == "Groceries"
+    assert categorize.apply_rules("פז חיפה דרום", rules) == "Transport"
+    # Ordering is load-bearing: SUPERPHARM must resolve to Health, not Groceries.
+    assert categorize.apply_rules("SUPERPHARM 123", rules) == "Health"
+    assert categorize.apply_rules("totally unknown vendor", rules) is None
+
+
+def test_rules_vocabulary_is_distinct_and_seeded():
+    vocab = categorize.vocabulary(categorize.load_rules())
+    assert {"Groceries", "Health", "Transport"} <= set(vocab)
+    assert len(vocab) == len(set(vocab))            # no dupes — the LLM vocab
+
+
+def test_missing_rules_file_degrades_quiet(tmp_path):
+    # No file → rules engine no-ops (returns []), categorize leaves blanks.
+    txns = [{"Description": "SHUFERSAL", "Amount (ILS)": -10,
+             "Category": "", "Cat-Source": ""}]
+    categorize.categorize_transactions(
+        txns, allow_llm=False, rules_path=tmp_path / "nope.csv")
+    assert txns[0]["Category"] == "" and txns[0]["Cat-Source"] == ""
+
+
+def test_unknown_stays_blank_without_llm(monkeypatch):
+    monkeypatch.setattr(llm, "available", lambda: False)
+    txns = [{"Description": "ZZZ MYSTERY", "Amount (ILS)": -10,
+             "Category": "", "Cat-Source": ""}]
+    categorize.categorize_transactions(txns, allow_llm=True)   # key-less → rules only
+    assert txns[0]["Category"] == "" and txns[0]["Cat-Source"] == ""
+
+
+def test_gapfill_sends_only_description_and_amount(monkeypatch):
+    """§8.6 privacy: the gap-fill prompt carries description + amount only —
+    never the account, the Txn-ID, or any other field of the row."""
+    seen = {}
+
+    def fake_complete(prompt, **kw):
+        seen["prompt"] = prompt
+        seen["system"] = kw.get("system", "")
+        return '{"results":[{"i":0,"category":"Shopping"}]}'
+
+    monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "complete", fake_complete)
+    txns = [{
+        "Date": "2026-06-15", "Account": "MIZ-SECRET-9999",
+        "Description": "MYSTERY VENDOR QX", "Amount (ILS)": -54.30,
+        "Category": "", "Cat-Source": "",
+        "Txn-ID": "secret-identifier-123", "Imported-At": "z",
+    }]
+    categorize.categorize_transactions(txns, allow_llm=True)
+    assert txns[0]["Category"] == "Shopping" and txns[0]["Cat-Source"] == "llm"
+    blob = seen["prompt"] + seen["system"]
+    assert "MYSTERY VENDOR QX" in blob          # description: allowed
+    assert "54.3" in blob                        # amount: allowed
+    assert "MIZ-SECRET-9999" not in blob         # account: NEVER leaves the box
+    assert "secret-identifier-123" not in blob   # Txn-ID: NEVER leaves the box
+
+
+def test_gapfill_rejects_offvocab_answer(monkeypatch):
+    # A category not in the rules vocab is dropped — the txn stays blank.
+    monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "complete",
+                        lambda p, **k: '{"results":[{"i":0,"category":"Crypto"}]}')
+    txns = [{"Description": "ZZZ MYSTERY", "Amount (ILS)": -10,
+             "Category": "", "Cat-Source": ""}]
+    categorize.categorize_transactions(txns, allow_llm=True)
+    assert txns[0]["Category"] == "" and txns[0]["Cat-Source"] == ""
+
+
+# ---------------------------------------------------------------------------
+# Budget reconciliation — the SUMIFS landmine (M6.4 build note; D-050)
+# ---------------------------------------------------------------------------
+def test_seed_budget_uses_text_prefix_not_serial_sumifs():
+    """The landmine: a serial DATE() window over the RAW ISO-text Date column
+    reads ₪0. Pin the seed's actuals to the locale-independent text-prefix form
+    so the serial form can't silently return, and pin the MoM column."""
+    b = load_workbook(cfg.SHEET_PATH)[cfg.FINANCE_BUDGET_TAB]
+    c2 = b["C2"].value
+    assert '$I$2&"*"' in c2               # current-month TEXT prefix
+    assert '">="&DATE(' not in c2         # NOT the broken serial window
+    assert 'TEXT($I$1,"yyyy")&"*"' in b["F2"].value          # YTD = year prefix
+    assert b["J1"].value == "Last Month (ILS)"               # MoM column present
+    assert b["I3"].value == '=TEXT(EDATE($I$1,-1),"yyyy-mm")'  # prev-month tag
+
+
+def test_text_prefix_month_window_sums_iso_text_dates():
+    """Prove the LOGIC the SUMIFS encodes works on the ISO-TEXT dates ingest
+    writes (openpyxl can't evaluate formulas; live evaluation is the M6.3
+    check). This is the value that read ₪0 before the fix."""
+    txns = [
+        {"Date": "2026-06-03", "Category": "Groceries", "Amount (ILS)": -432.50},
+        {"Date": "2026-06-20", "Category": "Groceries", "Amount (ILS)": -100.00},
+        {"Date": "2026-05-28", "Category": "Groceries", "Amount (ILS)": -999.00},
+        {"Date": "2026-06-10", "Category": "Transport", "Amount (ILS)": -280.00},
+    ]
+
+    def month_actual(cat, tag):   # mirrors -SUMIFS(D, E=cat, A like tag&"*")
+        return -sum(t["Amount (ILS)"] for t in txns
+                    if t["Category"] == cat and t["Date"].startswith(tag))
+
+    assert month_actual("Groceries", "2026-06") == 532.50   # non-zero, this month
+    assert month_actual("Groceries", "2026-05") == 999.00   # prev month isolated
+    assert month_actual("Transport", "2026-06") == 280.00

@@ -17,17 +17,17 @@ Open items:
 
 - M6.2 — appliance deploy + first interactive auth (the "VPS hour"). Place `bank_creds.json` (mode 600); rename the 3 live-Sheet tabs to the f…
 - M6.3 — consumer wiring + close. Briefing Money section + dashboard Money drawer read live; the >35d stale-import warning fires. Acceptance =…
-- M6.4 — analysis layer. The on-box rules engine (`seeds/14_Finance_Category_Rules.csv`) populates `Category`/`Cat-Source` at ingest; DeepSeek…
+- M6.4 — analysis layer. *Repo half built + tested (2026-06-18).* The on-box rules engine (`automation/lib/categorize.py` + committed `seeds/1…
 - Parallel (Shanee). Budget migration — her manual budget → `Finance-Budget`; gives the actuals a target and defines the category vocab the ru…
 
 Recent commits (the dated decision record — decisions fold into the canon, not a separate log):
 
+- 2026-06-18 tools: repoint review.py + session_kickoff.py off the retired D-NN log
 - 2026-06-18 docs: consolidate canon (SPEC bump) — present-tense rewrite; D-NN log retired to Archive/
 - 2026-06-17 M6.1 review fixes (D-052): .gitignore bank_creds Blocker, SPEC 12.2 auth honesty, +tests
 - 2026-06-17 M6.1: finance ingestion repo half + finance tab standardization (D-052)
 - 2026-06-17 plan: finance LLM gap-fill approved (D-051) - 8.6 amended, Shanee
 - 2026-06-17 plan: finance analysis layer (D-050) - categories and trends, LLM gap-fill gated on Shanee
-- 2026-06-17 plan: finance ingestion thaw (D-049 co-signed); M6 + SPEC 12.2
 
 Session contract: don't open lanes outside the current focus without a PO call ·
 constants → config, utilities → `automation/lib/`, message copy → templates ·

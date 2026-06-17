@@ -1,0 +1,163 @@
+# Family inc. — finance category rules (SPEC §12.2 / §8.6, M6.4; D-050).
+#
+# pattern,category
+#   pattern  = case-insensitive SUBSTRING matched against a transaction's
+#              Description (Hebrew or English). First match wins, so rows are
+#              ordered specific -> general.
+#   category = the bucket written to Finance-Transactions.Category. The DISTINCT
+#              categories below are ALSO the only labels the DeepSeek gap-fill
+#              may return (lib/categorize derives the vocab from this file).
+#
+# NON-personal by construction: public merchant brands + generic labels only —
+# never an account number, a household-specific payee, or any value. Committed
+# (a `!`-exception in .gitignore) so a fresh checkout categorizes on-box and the
+# tests are hermetic.
+#
+# PROVISIONAL: the category set mirrors the seed Finance-Budget rows; Shanee's
+# budget migration is the vocabulary authority and may rename/extend these. An
+# unmatched transaction stays blank (Cat-Source ""), never force-fit to "Other".
+# Lines starting with # and blank lines are ignored; '#' is not a wildcard.
+pattern,category
+# --- Health (before any grocery rule: SUPERPHARM must not fall to Groceries) ---
+SUPERPHARM,Health
+סופר-פארם,Health
+סופרפארם,Health
+BE PHARM,Health
+ביופארם,Health
+NEWPHARM,Health
+ניופארם,Health
+PHARM,Health
+בית מרקחת,Health
+מכבי,Health
+כללית,Health
+מאוחדת,Health
+לאומית,Health
+CLALIT,Health
+MACCABI HEALTH,Health
+שיניים,Health
+DENTAL,Health
+אופטיקה,Health
+# --- Groceries ---
+SHUFERSAL,Groceries
+שופרסל,Groceries
+RAMI LEVY,Groceries
+רמי לוי,Groceries
+TIV TAAM,Groceries
+טיב טעם,Groceries
+VICTORY,Groceries
+ויקטורי,Groceries
+OSHER AD,Groceries
+אושר עד,Groceries
+YOHANANOF,Groceries
+יוחננוף,Groceries
+מחסני השוק,Groceries
+חצי חינם,Groceries
+מכולת,Groceries
+# --- Transport ---
+PAZ,Transport
+פז,Transport
+DELEK,Transport
+דלק,Transport
+SONOL,Transport
+סונול,Transport
+DOR ALON,Transport
+דור אלון,Transport
+רכבת ישראל,Transport
+אגד,Transport
+EGGED,Transport
+רב קו,Transport
+רב-קו,Transport
+RAV KAV,Transport
+PANGO,Transport
+פנגו,Transport
+CELLOPARK,Transport
+סלופארק,Transport
+חניון,Transport
+GETT,Transport
+UBER,Transport
+מוניות,Transport
+# --- Childcare ---
+מעון,Childcare
+צהרון,Childcare
+קייטנה,Childcare
+בייביסיטר,Childcare
+DAYCARE,Childcare
+KINDERGARTEN,Childcare
+חוג,Childcare
+# --- Utilities ---
+חברת חשמל,Utilities
+חשמל,Utilities
+מקורות,Utilities
+תאגיד המים,Utilities
+BEZEQ,Utilities
+בזק,Utilities
+HOT,Utilities
+הוט,Utilities
+PARTNER,Utilities
+פרטנר,Utilities
+CELLCOM,Utilities
+סלקום,Utilities
+גולן טלקום,Utilities
+אינטרנט,Utilities
+# --- Housing ---
+ארנונה,Housing
+ARNONA,Housing
+משכנתא,Housing
+MORTGAGE,Housing
+שכר דירה,Housing
+ועד בית,Housing
+# --- Dining ---
+WOLT,Dining
+וולט,Dining
+תן ביס,Dining
+10BIS,Dining
+מסעדה,Dining
+RESTAURANT,Dining
+קפה,Dining
+CAFE,Dining
+AROMA,Dining
+ארומה,Dining
+LANDWER,Dining
+פיצה,Dining
+PIZZA,Dining
+המבורגר,Dining
+MCDONALD,Dining
+COFFEE,Dining
+# --- Entertainment ---
+NETFLIX,Entertainment
+נטפליקס,Entertainment
+SPOTIFY,Entertainment
+DISNEY,Entertainment
+YOUTUBE,Entertainment
+סינמה סיטי,Entertainment
+רב חן,Entertainment
+תיאטרון,Entertainment
+STEIMATZKY,Entertainment
+סטימצקי,Entertainment
+STEAM,Entertainment
+# --- Shopping ---
+ZARA,Shopping
+זארה,Shopping
+CASTRO,Shopping
+קסטרו,Shopping
+FOX,Shopping
+TERMINAL X,Shopping
+טרמינל,Shopping
+AMAZON,Shopping
+אמזון,Shopping
+ALIEXPRESS,Shopping
+עליאקספרס,Shopping
+IKEA,Shopping
+איקאה,Shopping
+KSP,Shopping
+המשביר,Shopping
+# --- Income (positive amounts; description-driven, sign is only a hint) ---
+משכורת,Income
+SALARY,Income
+ביטוח לאומי,Income
+קצבת ילדים,Income
+# --- Bank / card fees ---
+עמלת,Fees
+דמי כרטיס,Fees
+ריבית,Fees
+COMMISSION,Fees

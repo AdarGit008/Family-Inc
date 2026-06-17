@@ -18,8 +18,10 @@ scrape failure (recorded by scrape.js in _scrape_errors.json) raises after the
 good CSVs are ingested, so systemd OnFailure raises the fail-flag the next
 digest reports (§9/§10.2).
 
-Raw pipeline (M6.1): Category + Cat-Source are written BLANK; the M6.4
-categorizer (on-box rules + DeepSeek gap-fill, D-050/051) fills them in place.
+Categorization (M6.4, D-050/051): `_parse_rows` writes Category + Cat-Source
+BLANK; `lib/categorize` then fills them on the NEW (post-dedup) transactions —
+on-box rules first, DeepSeek gap-fill on the rules-miss remainder (description +
+amount only, §8.6). Degrade-quiet: keyless / off-vocab leaves a row blank.
 
 CSV contract (written by scrape.js) — header, one row per transaction:
     account,balance,date,identifier,amount,description
@@ -53,6 +55,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
+from automation.lib import categorize
 from automation.lib import config as cfg
 from automation.lib import sheet
 
@@ -236,6 +239,7 @@ def run(csv_dir: Optional[Path] = None, sheet_path: Optional[Path] = None,
               "(nothing is written without a live Sheet)")
         res.is_mock = True
         parsed = _parse_text(_mock_csv_text(), "mizrahi", today, now)
+        categorize.categorize_transactions(parsed.txns, allow_llm=False)  # rules-only smoke
         res.txns_new, res.accounts = len(parsed.txns), len(parsed.accounts)
         _print_summary(res, parsed)
         return res
@@ -261,6 +265,12 @@ def run(csv_dir: Optional[Path] = None, sheet_path: Optional[Path] = None,
         new_txns.append(t)
     res.txns_new = len(new_txns)
     res.accounts = len(account_rows)
+
+    # Categorize the NEW transactions in place before the write (M6.4, §12.2/
+    # §8.6): on-box rules first, then DeepSeek gap-fills the rules-miss
+    # remainder (description + amount only). Rules always run; the LLM stage is
+    # skipped on a dry-run preview and whenever no provider key is configured.
+    categorize.categorize_transactions(new_txns, allow_llm=not dry_run)
 
     print(f"\nParsed {len(txns)} transaction(s) from {len(paths)} CSV(s) · "
           f"{res.txns_new} new · {res.txns_seen} already on the tab · "

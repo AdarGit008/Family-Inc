@@ -49,6 +49,10 @@ logs/*
 # lives only on PO machines + backups (deploy/publish.sh refuses to run without it)
 seeds/*.csv
 seeds/redact.txt
+# Exception: the finance category rules are NON-personal (public merchant tokens
+# + generic category labels) and load-bearing for the on-box-first privacy
+# property (§8.6) + hermetic CI, so they ARE committed (M6.4, D-050).
+!seeds/14_Finance_Category_Rules.csv
 
 # Archive docs carrying personal data (kid names, health backlog, money
 # baseline) — untracked at M3 session 1 (D-027 follow-up to D-024; files stay
