@@ -98,3 +98,24 @@ def test_unknown_task_returns_none(tmp_runtime, monkeypatch):
     monkeypatch.setattr(llm, "_http_post",
                         lambda *a, **k: (_ for _ in ()).throw(AssertionError("called")))
     assert llm.complete("x", task="does-not-exist") is None
+
+
+def test_json_mode_sets_response_format_only_when_asked(tmp_runtime, monkeypatch):
+    """json_mode=True forces a strict JSON object on the DeepSeek body (D-046);
+    the default leaves it off so non-JSON tasks (briefing prose) are unaffected."""
+    monkeypatch.setenv(config.LLM_FAKE_ENV, "")
+    monkeypatch.setenv(config.DEEPSEEK_API_KEY_ENV, "sk-deepseek")
+    seen = {}
+
+    def fake_post(url, body, headers, timeout):
+        seen["payload"] = json.loads(body.decode("utf-8"))
+        return {"choices": [{"message": {"content": "{}"}}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 2}}
+
+    monkeypatch.setattr(llm, "_http_post", fake_post)
+
+    llm.complete("x", task="classify", source="t")
+    assert "response_format" not in seen["payload"]
+
+    llm.complete("x", task="classify", source="t", json_mode=True)
+    assert seen["payload"]["response_format"] == {"type": "json_object"}

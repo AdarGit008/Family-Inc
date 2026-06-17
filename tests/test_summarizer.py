@@ -2,6 +2,7 @@
 per-group routing (incl. none → NEEDS-A-LOOK), and the deterministic fallback
 that keeps classification working with the API key revoked."""
 
+import json
 import re
 from datetime import date
 
@@ -162,6 +163,28 @@ class TestRouting:
         result = classify(_msg(text="טקסט חופשי"), cfg, recent=[], use_llm=True)
         assert result["classification"] == "DIGEST"
         assert result["one_liner"] == "סיכום קצר"
+
+    def test_llm_reply_with_trailing_prose_still_parses(self, tmp_runtime, monkeypatch):
+        """DeepSeek sometimes appends commentary after the JSON object; the parse
+        must tolerate it instead of dropping to the keyword fallback (D-046)."""
+        monkeypatch.setenv("FAMILY_INC_LLM_FAKE",
+                           '{"classification":"DIGEST","one_liner":"סיכום","action_required":false,"reason":"x"}'
+                           "\n\nHere is my reasoning: the message is informational.")
+        cfg = _cfg()
+        result = classify(_msg(text="טקסט חופשי"), cfg, recent=[], use_llm=True)
+        assert result["classification"] == "DIGEST"
+        assert result["one_liner"] == "סיכום"
+
+    def test_first_json_obj_tolerates_fences_and_trailing_data(self):
+        from automation.whatsapp_summarizer import _first_json_obj
+        obj = {"classification": "ALERT", "one_liner": "x", "action_required": True, "reason": "r"}
+        base = json.dumps(obj)
+        assert _first_json_obj(base) == obj
+        assert _first_json_obj(base + "\n\ntrailing words") == obj          # the live bug
+        assert _first_json_obj("```json\n" + base + "\n```") == obj
+        assert _first_json_obj("Sure —\n" + base) == obj
+        assert _first_json_obj("no object here") is None
+        assert _first_json_obj("[1, 2, 3]") is None
 
 
 # ---------------------------------------------------------------------------

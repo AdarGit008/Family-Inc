@@ -249,10 +249,27 @@ def _one_liner_fallback(text: str) -> str:
     t = re.sub(r"\s+", " ", text.strip())
     return t[:117] + "…" if len(t) > 120 else t
 
+def _first_json_obj(raw: str) -> Optional[dict]:
+    """First JSON object in an LLM reply, tolerating ```fences``` and trailing
+    prose. DeepSeek occasionally appends commentary after the object; a plain
+    json.loads then raises 'Extra data' and we'd needlessly drop to the keyword
+    fallback (observed live 2026-06-17, D-046). raw_decode reads just the leading
+    object and ignores the rest. None when there is no JSON object."""
+    s = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.MULTILINE).strip()
+    start = s.find("{")
+    if start == -1:
+        return None
+    try:
+        obj, _ = json.JSONDecoder().raw_decode(s[start:])
+    except ValueError:
+        return None
+    return obj if isinstance(obj, dict) else None
+
 def llm_classify(msg: dict, cfg: dict, recent: list[dict]) -> Optional[dict]:
-    """Haiku classification via lib/llm.py (the only Anthropic wrapper).
-    None if unavailable or unparseable (caller falls back). Sends one message
-    + ≤3 context messages, never whole threads (SPEC §8.6)."""
+    """LLM classification via lib/llm.py (the one provider wrapper — DeepSeek by
+    default, Anthropic fallback). None if unavailable or unparseable (caller
+    falls back). Sends one message + ≤3 context messages, never whole threads
+    (SPEC §8.6)."""
     c = group_cfg(cfg, msg["group_name"])
     is_close = msg.get("sender_name", "") in c["close_contacts"] or \
         msg.get("sender_jid", "") in c["close_contacts"]
@@ -270,14 +287,13 @@ def llm_classify(msg: dict, cfg: dict, recent: list[dict]) -> Optional[dict]:
         '{"classification":"ROUTINE|DIGEST|ALERT","one_liner":"<=120 char Hebrew or English summary",'
         '"action_required":true|false,"reason":"short"}'
     )
-    raw = llm.complete(prompt, task="classify", max_tokens=200, source="whatsapp_summarizer")
+    raw = llm.complete(prompt, task="classify", max_tokens=200,
+                       source="whatsapp_summarizer", json_mode=True)
     if raw is None:
         return None
-    try:
-        raw = re.sub(r"^```(?:json)?|```$", "", raw.strip(), flags=re.MULTILINE).strip()
-        data = json.loads(raw)
-    except ValueError as e:
-        log.warning("Haiku classify unparseable (%s) — deterministic fallback", e)
+    data = _first_json_obj(raw)
+    if data is None:
+        log.warning("classify reply not JSON-parseable — deterministic fallback")
         return None
     if data.get("classification") not in CLASSES:
         return None

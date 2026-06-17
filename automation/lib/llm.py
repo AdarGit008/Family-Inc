@@ -60,15 +60,18 @@ def available() -> bool:
 
 
 def complete(prompt: str, *, task: str = "classify", system: Optional[str] = None,
-             max_tokens: int = 400, source: str = "") -> Optional[str]:
-    """One completion. None means 'use your deterministic fallback'."""
+             max_tokens: int = 400, source: str = "", json_mode: bool = False) -> Optional[str]:
+    """One completion. None means 'use your deterministic fallback'.
+    json_mode=True asks the provider for a strict JSON object (DeepSeek
+    response_format); callers that parse JSON should set it AND still tolerate
+    stray prose on parse, since the Anthropic fallback has no such switch."""
     fake = os.environ.get(config.LLM_FAKE_ENV)
     if fake:
         _log_cost(source or task, task, "fake", 0, 0)
         return fake
     provider = _provider()
     if provider == "deepseek":
-        return _complete_deepseek(prompt, task, system, max_tokens, source)
+        return _complete_deepseek(prompt, task, system, max_tokens, source, json_mode)
     if provider == "anthropic":
         return _complete_anthropic(prompt, task, system, max_tokens, source)
     return None
@@ -85,15 +88,18 @@ def _http_post(url: str, body: bytes, headers: dict, timeout: int) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def _complete_deepseek(prompt, task, system, max_tokens, source) -> Optional[str]:
+def _complete_deepseek(prompt, task, system, max_tokens, source, json_mode=False) -> Optional[str]:
     model = config.MODELS.get(task)
     if not model:
         log.warning("unknown LLM task %r (config.MODELS) — deterministic fallback", task)
         return None
     messages = [{"role": "system", "content": system}] if system else []
     messages.append({"role": "user", "content": prompt})
-    body = json.dumps({"model": model, "messages": messages,
-                       "max_tokens": max_tokens, "stream": False}).encode("utf-8")
+    payload = {"model": model, "messages": messages,
+               "max_tokens": max_tokens, "stream": False}
+    if json_mode:  # strict JSON object — kills the trailing-prose parse failures (D-046)
+        payload["response_format"] = {"type": "json_object"}
+    body = json.dumps(payload).encode("utf-8")
     headers = {"Content-Type": "application/json",
                "Authorization": f"Bearer {os.environ[config.DEEPSEEK_API_KEY_ENV]}"}
     try:
