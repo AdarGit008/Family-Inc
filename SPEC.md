@@ -216,15 +216,15 @@ All schedules in Asia/Jerusalem (DST-correct via system TZ, never UTC offsets). 
 
 ### 8.6 Privacy & security
 
-- WhatsApp plaintext exists in two places: Meta's servers (inherent) and the VPS we control. No third-party message processors. LLM classification sends one message + ≤3 context messages, never whole threads or cross-group context. *(Provider direction set 2026-06-13: at M4 wiring the single configured LLM provider becomes DeepSeek, which permits one external processor under this clause — pending Shanee's confirm of the joint call; see §8.7 and D-032. v1 is keyless until then, so this clause holds as written today.)*
-- Secrets (`recipients.json`, service-account JSON, `ANTHROPIC_API_KEY`, `FAMILY_INC_APIFY_TOKEN` — the property secondary source, D-040) live in `/etc/family-inc/`, mode 600, never in the repo. The repo is public-safe by construction: personal values only in the Sheet and gitignored files.
+- WhatsApp plaintext exists in places we don't fully control — Meta's servers (inherent) and the configured LLM provider — plus the VPS we do. The single permitted external message processor is **DeepSeek** (wired M4, D-044); no others. LLM classification sends one message + ≤3 context messages, never whole threads or cross-group context. *(This amends the original "no third-party message processors": the joint call was confirmed by Shanee, D-036e, and the OpenAI-compatible backend shipped at M4 wiring, D-044/D-032. The key is `FAMILY_INC_DEEPSEEK_API_KEY` in `/etc/family-inc/env`; absent → the system runs keyless on keyword classification, degrade-quiet §3.6.)*
+- Secrets (`recipients.json`, service-account JSON, `FAMILY_INC_DEEPSEEK_API_KEY` / `ANTHROPIC_API_KEY`, `FAMILY_INC_APIFY_TOKEN` — the property secondary source, D-040) live in `/etc/family-inc/`, mode 600, never in the repo. The repo is public-safe by construction: personal values only in the Sheet and gitignored files.
 - Phone numbers/JIDs appear nowhere except `recipients.json` on the VPS.
 - The service account has access to exactly one spreadsheet (shared to it explicitly), nothing else in Drive.
 - Known accepted risk: Baileys is an unofficial client — account-ban risk, elevated somewhat on datacenter IPs. Mitigations: household volume (≤10 msg/day), person-to-person pattern, dedicated paired session. Fallback chain in §10.
 
 ### 8.7 LLM usage
 
-One wrapper (`lib/llm.py`), model ids in config not call sites, per-call cost logged to `logs/llm_costs.csv`. Current assignments: classification + briefing prose = Haiku-class; nothing in v1 needs more. Monthly cost line appears in the first weekly briefing of each month. **Provider direction (D-032, 2026-06-13):** the open M4 provider call is set toward DeepSeek (OpenAI-compatible backend); not wired in v1 — the system stays keyless (keyword classification + template briefing) until M4 wires it and Shanee confirms, at which point this line and §8.6 update to name DeepSeek.
+One wrapper (`lib/llm.py`), model ids in config not call sites, per-call cost logged to `logs/llm_costs.csv`. **Provider = DeepSeek** (wired M4, D-044): `lib/llm` calls DeepSeek's OpenAI-compatible `/chat/completions` over stdlib urllib (no SDK), model ids in `config.MODELS` (`deepseek-chat` for classification + briefing prose). The active provider is chosen by key presence — DeepSeek (`FAMILY_INC_DEEPSEEK_API_KEY`) first, the Haiku-class Anthropic path (`config.ANTHROPIC_MODELS`) as fallback, else the deterministic fallback. Monthly cost line appears in the first weekly briefing of each month. **Until the PO places the key the live system runs keyless** (keyword classification + template briefing), unchanged from v1. (Direction set in D-032, confirmed by Shanee in D-036e.)
 
 ## 9. Failure modes
 

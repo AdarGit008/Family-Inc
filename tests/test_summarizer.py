@@ -12,7 +12,9 @@ from automation.whatsapp_summarizer import (
     deterministic_classify,
     hard_rule_alert,
     load_config,
+    load_roster,
     owner_from_recipients,
+    resolve_role,
 )
 
 
@@ -317,6 +319,39 @@ class TestPersistence:
         assert not persist_rows(self._rows(), sheet_path=None, live_override=False)
         assert "NOT appended" in capsys.readouterr().out
 
+    def test_run_appends_then_rolls_off_old_inbox_rows(self, tmp_runtime, tmp_path):
+        """End-to-end of the rolloff wiring (D-044): run() appends this run's
+        rows, then rolls the WhatsApp_Inbox 30-day window — an old row already
+        in the tab is gone, today's stays. Archive is untouched."""
+        import json
+
+        from openpyxl import Workbook
+        from automation.lib import sheet
+        from automation.whatsapp_summarizer import run
+
+        p = tmp_path / "s.xlsx"
+        wb = Workbook(); wb.active.title = "README"; wb.save(p)
+        # An old Inbox row, well past the 30-day horizon.
+        sheet.append_rows("WhatsApp_Inbox",
+                          ["msg_id", "received_at", "text"],
+                          [{"msg_id": "old", "received_at": "2026-01-01T08:00:00",
+                            "text": "ישן"}], p)
+
+        today = date(2026, 6, 10)  # cutoff = 2026-05-11 → 'old' rolls off
+        inbox = tmp_path / "inbox.jsonl"
+        inbox.write_text(json.dumps({
+            "msg_id": "new", "group_name": "הגן", "sender_name": "מישהי",
+            "sender_role": "unknown", "received_at": "2026-06-10T08:00:00",
+            "text": "הודעה חדשה", "has_media": False}) + "\n", encoding="utf-8")
+
+        run(inbox, tmp_path / "no_groups.csv", today, dry_run=False,
+            sheet_path=p, roster_path=tmp_path / "no_roster.csv")
+
+        ids = sheet.read_column("WhatsApp_Inbox", "msg_id", p)
+        assert "new" in ids and "old" not in ids
+        # Archive keeps text forever — the old message is NOT rolled off there.
+        assert "new" in sheet.read_column("WhatsApp_Archive", "msg_id", p)
+
 
 # ---------------------------------------------------------------------------
 # Group-config CSV loading
@@ -337,3 +372,50 @@ class TestLoadConfig:
 
     def test_missing_file_returns_empty(self, tmp_path):
         assert load_config(tmp_path / "nope.csv") == {}
+
+
+# ---------------------------------------------------------------------------
+# Sender → role roster (M4, D-044): makes hard rules 2–3 reliable when the
+# bridge can't label sender_role
+# ---------------------------------------------------------------------------
+class TestSenderRoster:
+    def test_load_keys_on_jid_and_name_skips_blank_role(self, tmp_path):
+        p = tmp_path / "roster.csv"
+        p.write_text(
+            "sender_jid,sender_name,role\n"
+            "111@s.whatsapp.net,הגננת,teacher\n"
+            ",דני ועד,vaad_bayit\n"
+            "222@s.whatsapp.net,,parent\n"
+            "333@s.whatsapp.net,ללא תפקיד,\n",   # blank role → skipped
+            encoding="utf-8")
+        r = load_roster(p)
+        assert r["111@s.whatsapp.net"] == "teacher"
+        assert r["הגננת"] == "teacher"
+        assert r["דני ועד"] == "vaad_bayit"
+        assert r["222@s.whatsapp.net"] == "parent"
+        assert "333@s.whatsapp.net" not in r
+
+    def test_missing_file_is_empty(self, tmp_path):
+        assert load_roster(tmp_path / "nope.csv") == {}
+
+    def test_existing_known_role_wins(self):
+        msg = _msg(sender_role="teacher", sender_jid="x", sender_name="y")
+        assert resolve_role(msg, {"x": "parent"}) == "teacher"
+
+    def test_unknown_role_filled_from_roster_jid_first(self):
+        msg = _msg(sender_role="unknown", sender_jid="j1", sender_name="n1")
+        assert resolve_role(msg, {"j1": "vaad_bayit", "n1": "teacher"}) == "vaad_bayit"
+
+    def test_falls_back_to_name_then_unknown(self):
+        assert resolve_role(_msg(sender_role="", sender_name="n1"), {"n1": "teacher"}) == "teacher"
+        assert resolve_role(_msg(sender_role="unknown", sender_name="ghost"), {}) == "unknown"
+
+    def test_roster_makes_teacher_evening_rule_fire(self):
+        """The whole point: a real-traffic message with no role, resolved via
+        the roster to 'teacher', trips hard rule 2 in the evening window."""
+        roster = {"teacher-jid@s.whatsapp.net": "teacher"}
+        msg = _msg(sender_role="unknown", sender_jid="teacher-jid@s.whatsapp.net",
+                   received_at="2026-06-09T21:30:00", text="מחר להביא כובע")
+        msg["sender_role"] = resolve_role(msg, roster)
+        reason, _ = hard_rule_alert(msg, _cfg())  # _cfg() group_type=daycare
+        assert reason == "daycare teacher, evening window"

@@ -15,9 +15,14 @@ Pipeline:
                   the ONLY budget enforcement — D-015. Over-budget alerts are
                   deferred to tomorrow's digest by the outbox itself.)
               ->  append WhatsApp_Inbox + WhatsApp_Archive tabs via lib/sheet
-                  (live Sheet when configured; skipped loudly otherwise —
-                  rolloff of old hot-tab rows lands in M4)
+                  (live Sheet when configured; skipped loudly otherwise), then
+                  roll the Inbox tab's 30-day window (SPEC §6.2; Archive keeps
+                  text forever — D-044)
               ->  build digest markdown (Hebrew, DESIGN §6)
+
+Sender roles (the §7.3 hard rules 2–3 key off them) are resolved from a roster
+(seeds/13_Sender_Roster_Seed.csv, gitignored) when the bridge can't label them
+— it only knows a JID and a push-name. See load_roster/resolve_role (D-044).
 
 Config: seeds/12_WhatsApp_Group_Config_Seed.csv (group routing + keywords;
 gitignored — group names are personal). List columns are ';'-separated.
@@ -53,6 +58,7 @@ from automation.lib.config import DIGEST_GROUP_LABEL, DIGEST_GROUP_ORDER
 
 INBOX_DEFAULT = cfg.INBOX_FILE
 CONFIG_DEFAULT = cfg.WA_GROUP_CONFIG
+ROSTER_DEFAULT = cfg.SENDER_ROSTER
 BRIEFINGS_DIR = cfg.BRIEFINGS_DIR
 
 log = logging.getLogger("wa")
@@ -95,6 +101,41 @@ def group_cfg(cfg: dict, group_name: str) -> dict:
         "alert_recipients": "none", "close_contacts": [],
         "alert_keywords": [], "critical_keywords": [],
     })
+
+# ---------------------------------------------------------------------------
+# Sender → role roster (M4, D-044). The §7.3 hard rules 2–3 fire on sender_role
+# (daycare teacher in the evening; vaad_bayit utility), but the Baileys bridge
+# can't reliably label a sender's role — it knows a JID and a push-name. The
+# roster maps either to a role so the rules trip on real traffic. Personal →
+# gitignored seed (seeds/README.md documents the format); absent → empty roster,
+# and a message simply keeps whatever role it already carries.
+# ---------------------------------------------------------------------------
+def load_roster(path: Path) -> dict[str, str]:
+    """sender JID OR display name -> role. Blank-role rows are skipped."""
+    roster: dict[str, str] = {}
+    if not path.exists():
+        return roster
+    with path.open(encoding="utf-8") as fh:
+        for row in csv.DictReader(fh):
+            role = (row.get("role") or "").strip()
+            if not role:
+                continue
+            for key in (row.get("sender_jid"), row.get("sender_name")):
+                key = (key or "").strip()
+                if key:
+                    roster[key] = role
+    return roster
+
+def resolve_role(msg: dict, roster: dict[str, str]) -> str:
+    """The message's own role wins when it is a real one; otherwise fill it from
+    the roster (JID before display name). Messages that already carry an explicit
+    role (mock data, tests, a future smarter bridge) are left untouched."""
+    have = (msg.get("sender_role") or "").strip()
+    if have and have != "unknown":
+        return have
+    jid = (msg.get("sender_jid") or "").strip()
+    name = (msg.get("sender_name") or "").strip()
+    return roster.get(jid) or roster.get(name) or have or "unknown"
 
 # ---------------------------------------------------------------------------
 # Inbox loading (real JSONL from Baileys, or mock)
@@ -344,8 +385,8 @@ def dispatch_alert(msg: dict, one_liner: str, recipients: str, group_type: str,
 # Persistence — WhatsApp_Inbox + WhatsApp_Archive tabs of the master Sheet
 # (lib/sheet.py; the CSV staging buffer is gone since M2). Without a live
 # backend (mock/dev) appends are skipped loudly — never written to the seed
-# template. Rolloff of old hot-tab rows (SPEC §6.2) lands in M4: there is
-# nothing to roll off before ~3 months of live data.
+# template. The Inbox tab's 30-day rolloff (SPEC §6.2) runs in run() after a
+# successful append (sheet.roll_off_old_rows; D-044) — Archive is never rolled.
 # ---------------------------------------------------------------------------
 INBOX_COLS = sheet.WA_INBOX_COLUMNS
 ARCHIVE_COLS = sheet.WA_ARCHIVE_COLUMNS
@@ -429,12 +470,13 @@ def build_digest(processed: list[dict], today: date, warning: Optional[str] = No
 # Run
 # ---------------------------------------------------------------------------
 def run(inbox_path: Path, config_path: Path, today: date, dry_run: bool,
-        sheet_path: Optional[Path] = None) -> Path:
+        sheet_path: Optional[Path] = None, roster_path: Optional[Path] = None) -> Path:
     cfg_groups = load_config(config_path)
+    roster = load_roster(roster_path or ROSTER_DEFAULT)
     messages, is_mock = load_inbox(inbox_path)
     use_llm = llm.available()
     if not use_llm:
-        print("(no ANTHROPIC_API_KEY — using deterministic classifier; hard rules still fire)")
+        print("(no LLM provider key — using deterministic classifier; hard rules still fire)")
 
     # process in chronological order so 'recent context' is correct
     messages = sorted(messages, key=lambda m: _parse_dt(m.get("received_at", "")))
@@ -452,6 +494,7 @@ def run(inbox_path: Path, config_path: Path, today: date, dry_run: bool,
     alerts_queued = 0
 
     for msg in messages:
+        msg["sender_role"] = resolve_role(msg, roster)  # roster fills what the bridge can't
         gname = msg["group_name"]
         c = group_cfg(cfg_groups, gname)
         recent = seen_by_group.get(gname, [])
@@ -516,6 +559,14 @@ def run(inbox_path: Path, config_path: Path, today: date, dry_run: bool,
         if persist_rows(processed, sheet_path):
             print(f"appended {len(processed)} row(s) to "
                   f"{cfg.WA_INBOX_SHEET_TAB} + {cfg.WA_ARCHIVE_SHEET_TAB}")
+            # 30-day hot-tab rolloff (SPEC §6.2) — only after a real append, so
+            # the seed is never touched; Archive keeps text forever.
+            cutoff = today - timedelta(days=cfg.WA_INBOX_RETENTION_DAYS)
+            rolled = sheet.roll_off_old_rows(
+                cfg.WA_INBOX_SHEET_TAB, "received_at", cutoff, sheet_path)
+            if rolled:
+                print(f"rolled off {rolled} {cfg.WA_INBOX_SHEET_TAB} row(s) "
+                      f"older than {cutoff} ({cfg.WA_INBOX_RETENTION_DAYS}d)")
         print(f"wrote {digest_path}")
     else:
         print("(dry-run — no files written)")

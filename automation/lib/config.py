@@ -59,6 +59,12 @@ HEARTBEAT_FILE = BRIDGE_STATE_DIR / "inbox" / "heartbeat.txt"
 # Seeds (personal values → gitignored, stay on the machines that need them)
 SEEDS_DIR = ROOT / "seeds"
 WA_GROUP_CONFIG = SEEDS_DIR / "12_WhatsApp_Group_Config_Seed.csv"
+# Sender → role roster (M4, D-044): maps a sender JID or display name to a role
+# (teacher / vaad_bayit / …) so the §7.3 hard rules 2–3 don't depend on the
+# bridge labelling sender_role — it only knows a JID and a push-name. PERSONAL →
+# gitignored seed (format documented in seeds/README.md); absent → empty roster,
+# and a message keeps whatever role it already carries.
+SENDER_ROSTER = SEEDS_DIR / "13_Sender_Roster_Seed.csv"
 
 # Misc caches (gitignored)
 CACHE_DIR = AUTOMATION_DIR / "cache"
@@ -78,6 +84,10 @@ DIGEST_MAX_ITEMS = 5                  # keep the morning message short
 DROP_FIRST_DOMAINS = {"Goals"}        # de-prioritised — covered by the weekly briefing
 ALWAYS_INCLUDE_DOMAINS = {"Health"}   # never trimmed
 NOTES_MAX_CHARS = 120                 # DESIGN §6: notes ride along only when short
+# The two adults — the ONLY message recipients (SPEC §3: no messages beyond the
+# two adults). A fully quiet day briefs both (D-036e/D-044: partner-symmetric —
+# neither is left without the morning message).
+DIGEST_RECIPIENTS = ("adar", "shanee")
 
 # ---------------------------------------------------------------------------
 # Weekly briefing
@@ -91,7 +101,7 @@ STALE_GOAL_UPDATE_DAYS = 21     # warn if goal Last Update older than 3 weeks
 # ---------------------------------------------------------------------------
 BRIDGE_STALE_HOURS = 12          # group silence this long is suspect
 HEARTBEAT_STALE_MINUTES = 45     # bridge heartbeat is written at least every 15m
-WA_INBOX_RETENTION_DAYS = 30     # hot-tab rolloff horizon — 30d confirmed (D-036, 2026-06-15); SPEC 6.2 aligned. Rolloff code lands M4.
+WA_INBOX_RETENTION_DAYS = 30     # hot-tab rolloff horizon — 30d confirmed (D-036, 2026-06-15); SPEC §6.2 aligned. Rolloff implemented M4 (D-044, sheet.roll_off_old_rows).
 DIGEST_GROUP_ORDER = ["daycare", "building", "family", "neighborhood", "student", "other"]
 # Hebrew short labels, used inline per digest item (DESIGN §6: "גן — מחר יום פרי…").
 # Real group names stay in the gitignored seed; these label the TYPE.
@@ -149,11 +159,28 @@ PROPERTY_APIFY_ONCE_PER_DAY = True  # Apify lands at most once/calendar-day (cos
 PROPERTY_APIFY_STAMP_FILE = PROPERTY_STATE_DIR / "apify_last_run.json"
 
 # ---------------------------------------------------------------------------
-# LLM (SPEC.md §8.7 — model ids live here, not at call sites)
+# LLM (SPEC.md §8.6–8.7 — model ids live here, not at call sites)
+#
+# Provider direction (D-032, wired M4/D-044): DeepSeek is the single configured
+# provider, reached over its OpenAI-compatible /chat/completions endpoint with
+# stdlib urllib (no new dependency). lib/llm picks the provider by which key is
+# present — DeepSeek first, Anthropic if only that key is set, neither → the
+# deterministic fallback (the system stays useful keyless, SPEC §3.6/§5).
+# Keys live in /etc/family-inc/env (mode 600), never the repo (SPEC §8.6).
 # ---------------------------------------------------------------------------
+DEEPSEEK_API_KEY_ENV = "FAMILY_INC_DEEPSEEK_API_KEY"
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"   # OpenAI-compatible base URL
+ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY"      # legacy / fallback provider
+LLM_TIMEOUT_S = 30                               # per-call HTTP budget (seconds)
+# Active-provider (DeepSeek) model ids, keyed by task.
 MODELS = {
-    "classify": "claude-haiku-4-5",   # WhatsApp triage
-    "briefing": "claude-haiku-4-5",   # weekly-briefing prose (wired at M2)
+    "classify": "deepseek-chat",   # WhatsApp triage (DeepSeek-V3)
+    "briefing": "deepseek-chat",   # weekly-briefing prose
+}
+# Fallback-provider (Anthropic, the v1 Haiku-class path, §8.7) model ids.
+ANTHROPIC_MODELS = {
+    "classify": "claude-haiku-4-5",
+    "briefing": "claude-haiku-4-5",
 }
 LLM_FAKE_ENV = "FAMILY_INC_LLM_FAKE"  # tests inject a canned response here
 

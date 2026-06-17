@@ -374,20 +374,25 @@ class TestSendStamping:
         from automation import daily_digest
 
         day = date(2026, 6, 10)  # Wednesday — no Hebcal fetch in assemble()
+        # Owner "Both" so the first run briefs BOTH adults — then the rerun is a
+        # true no-op even after the quiet-day digest went partner-symmetric
+        # (D-036e/D-044): a fully quiet day briefs adar AND shanee, so a row
+        # owned by only one of them would leave the other un-briefed and the
+        # rerun would (correctly) queue them, which isn't what this test checks.
         p = make_sheet([
-            ["Car test", "Car", "Adar", day, "7,1", "One-off", "Pending"],
+            ["Car test", "Car", "Both", day, "7,1", "One-off", "Pending"],
         ])
         messages = daily_digest.run(day, send=True, sheet_path=p)
-        assert "Car test" in messages["adar"]
+        assert "Car test" in messages["adar"] and "Car test" in messages["shanee"]
 
         r = read_reminders(p)[0]
         assert r.status == "Sent"
         assert r.last_sent == day
         first_queue = config.OUTBOX_FILE.read_text(encoding="utf-8").splitlines()
-        assert len(first_queue) == 1
+        assert len(first_queue) == 2  # one briefing row per adult
 
-        # Rerun the same morning: the row is stamped (classify guard) and the
-        # message id is spent (outbox dedup) — nothing moves anywhere.
+        # Rerun the same morning: the row is stamped (classify guard) and both
+        # message ids are spent (outbox dedup) — nothing moves anywhere.
         messages2 = daily_digest.run(day, send=True, sheet_path=p)
         assert "Car test" not in messages2["adar"]  # quiet heartbeat digest
         assert config.OUTBOX_FILE.read_text(encoding="utf-8").splitlines() == first_queue
@@ -421,3 +426,19 @@ class TestSendStamping:
         ])
         daily_digest.run(day, send=True, sheet_path=p)
         assert read_reminders(p)[0].last_sent is None
+
+
+# ---------------------------------------------------------------------------
+# Quiet-day digest is partner-symmetric (D-036e/D-044): a day with no fires for
+# anyone briefs BOTH adults, each with the quiet-day line + shared sections
+# ---------------------------------------------------------------------------
+class TestQuietDaySymmetry:
+    def test_fully_quiet_day_briefs_both_partners(self, tmp_runtime, make_sheet):
+        from automation import daily_digest
+        from automation import templates as T
+
+        day = date(2026, 6, 10)  # Wednesday — no Hebcal fetch in assemble()
+        asm = daily_digest.assemble(day, sheet_path=make_sheet([]))  # no reminders
+        assert set(asm.messages) == {"adar", "shanee"}
+        for body in asm.messages.values():
+            assert T.DIGEST_QUIET_DAY in body

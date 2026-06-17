@@ -199,11 +199,13 @@ def assemble(today: date, now: Optional[datetime] = None,
     result = engine.compute(today, now=now, sheet_path=sheet_path)
     digests = batch_deduplicate(result.digests, now)
 
-    # Quiet day still produces one heartbeat message file for adar (pre-M1
-    # behavior preserved): the digest's silence must be distinguishable from
-    # the digest being broken.
+    # A fully quiet day (no fires for anyone) still briefs BOTH adults: the
+    # message's silence must be distinguishable from the digest being broken,
+    # and the briefing is partner-symmetric (D-036e/D-044) — each gets the
+    # quiet-day line and the shared WA-groups / property sections, not adar
+    # alone (the pre-M1 adar-only heartbeat broke symmetry).
     if not digests:
-        digests = {"adar": engine.Digest(recipient="adar")}
+        digests = {r: engine.Digest(recipient=r) for r in config.DIGEST_RECIPIENTS}
 
     if deferred is None:
         deferred = outbox.read_deferred(today)

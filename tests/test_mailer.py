@@ -259,7 +259,11 @@ class TestReviewD028:
     def test_delivery_log_baileys_and_rerun_adds_nothing(self, tmp_runtime,
                                                          make_sheet, fake_smtp):
         _beat()
-        p = make_sheet([list(self.ROW)])
+        # Owner "Both" so the first run briefs both adults; the rerun is then a
+        # true no-op even after the quiet-day digest went partner-symmetric
+        # (D-036e/D-044) — an adar-only row would leave the quiet rerun briefing
+        # shanee for the first time, which is correct but not what this checks.
+        p = make_sheet([["Car test", "Car", "Both", DAY, "7,1", "One-off", "Pending"]])
         daily_digest.run(DAY, send=True, sheet_path=p)
         rows = config.DELIVERY_LOG.read_text(encoding="utf-8").strip().splitlines()
         assert rows[0] == "date,transport,recipients"

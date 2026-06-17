@@ -29,6 +29,12 @@ def _hermetic_no_live_sheet(monkeypatch):
         SMTP branch instead of the WhatsApp outbox. D-041: 2 TestSendStamping
         failures surfaced at the M5 deploy — green on every dev box, red only on
         the appliance, where the env file exists.
+      • FAMILY_INC_DEEPSEEK_API_KEY / ANTHROPIC_API_KEY → lib/llm would pick a
+        live provider and `complete()` would hit the network (D-044 wires
+        DeepSeek into /etc/family-inc/env). Same lesson as the two above,
+        extended to the LLM transport — a test must reach the deterministic
+        fallback, not a real model. Tests that exercise a provider set the key
+        themselves and monkeypatch the _http_post seam (test_llm).
     Setting each EMPTY (not delenv / `-u`) makes load_env's setdefault keep it
     empty so the file can't repopulate it. Tests that need a backend pass an
     explicit xlsx path / live_override=; the email-path tests (test_mailer) set
@@ -37,6 +43,8 @@ def _hermetic_no_live_sheet(monkeypatch):
     monkeypatch.setenv("SMTP_USER", "")
     monkeypatch.setenv("SMTP_PASS", "")
     monkeypatch.setenv(config.EMAIL_TO_ENV, "")
+    monkeypatch.setenv(config.DEEPSEEK_API_KEY_ENV, "")
+    monkeypatch.setenv(config.ANTHROPIC_API_KEY_ENV, "")
     from automation.lib import sheet
     sheet.reset_backend()
 

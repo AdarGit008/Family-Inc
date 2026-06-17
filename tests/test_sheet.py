@@ -12,12 +12,14 @@ from automation.lib.dates import add_months, bump_due, fmt_date_he, to_date, to_
 from automation.lib.sheet import (
     CellWrite,
     SchemaDriftError,
+    _contiguous_runs,
     append_rows,
     encode_value,
     parse_lead_times,
     read_column,
     read_reminders,
     read_settings,
+    roll_off_old_rows,
     schema_drift_flag,
     update_reminders,
     validate_reminders_header,
@@ -378,3 +380,62 @@ class TestSettings:
         p = _write_sheet(tmp_path, [])
         s = read_settings(p)
         assert s.lang == "he" and s.usermap == {}
+
+
+# ---------------------------------------------------------------------------
+# Hot-tab rolloff (SPEC §6.2, M4/D-044): WhatsApp_Inbox keeps a 30-day window;
+# delete-by-date, header kept, undatable rows kept, seed never touched
+# ---------------------------------------------------------------------------
+def _write_wa_inbox(tmp_path, rows):
+    p = _write_sheet(tmp_path, [])  # gives a workbook with a Reminders tab
+    append_rows("WhatsApp_Inbox", ["msg_id", "received_at", "text"],
+                [{"msg_id": m, "received_at": r, "text": t} for m, r, t in rows], p)
+    return p
+
+
+class TestContiguousRuns:
+    def test_collapses_runs(self):
+        assert _contiguous_runs([2, 3, 4, 7, 9, 10]) == [(2, 4), (7, 7), (9, 10)]
+
+    def test_empty(self):
+        assert _contiguous_runs([]) == []
+
+
+class TestRollOff:
+    def test_deletes_only_rows_before_cutoff(self, tmp_path):
+        p = _write_wa_inbox(tmp_path, [
+            ("m1", "2026-05-01T08:00:00", "old"),
+            ("m2", "2026-05-20T08:00:00", "old2"),
+            ("m3", "2026-06-10T08:00:00", "keep"),
+        ])
+        assert roll_off_old_rows("WhatsApp_Inbox", "received_at", date(2026, 5, 25), p) == 2
+        assert read_column("WhatsApp_Inbox", "msg_id", p) == ["m3"]
+
+    def test_keeps_blank_and_unparseable_dates(self, tmp_path):
+        p = _write_wa_inbox(tmp_path, [
+            ("m1", "", "no date"),
+            ("m2", "garbage", "bad date"),
+            ("m3", "2026-01-01T00:00:00", "old"),
+        ])
+        assert roll_off_old_rows("WhatsApp_Inbox", "received_at", date(2026, 6, 1), p) == 1
+        assert set(read_column("WhatsApp_Inbox", "msg_id", p)) == {"m1", "m2"}
+
+    def test_scattered_old_rows_delete_correctly(self, tmp_path):
+        p = _write_wa_inbox(tmp_path, [
+            ("m1", "2026-01-01T00:00:00", "old"),
+            ("m2", "2026-06-10T00:00:00", "new"),
+            ("m3", "2026-01-02T00:00:00", "old"),
+            ("m4", "2026-06-11T00:00:00", "new"),
+        ])
+        assert roll_off_old_rows("WhatsApp_Inbox", "received_at", date(2026, 6, 1), p) == 2
+        assert read_column("WhatsApp_Inbox", "msg_id", p) == ["m2", "m4"]
+
+    def test_missing_tab_or_column_is_noop(self, tmp_path):
+        p = _write_wa_inbox(tmp_path, [("m1", "2026-01-01T00:00:00", "x")])
+        assert roll_off_old_rows("Nope", "received_at", date(2026, 6, 1), p) == 0
+        assert roll_off_old_rows("WhatsApp_Inbox", "nope_col", date(2026, 6, 1), p) == 0
+
+    def test_skips_without_live_backend_or_path(self):
+        """No explicit path + not live (conftest blanks SHEET_ID) → 0, and the
+        committed seed is never opened (same posture as the write-backs)."""
+        assert roll_off_old_rows("WhatsApp_Inbox", "received_at", date(2026, 6, 1)) == 0

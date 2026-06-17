@@ -188,6 +188,18 @@ class XlsxBackend:
             ws.append(r)
         wb.save(self.path)
 
+    def delete_rows(self, tab: str, indices: list[int]) -> None:
+        from openpyxl import load_workbook
+        if not indices:
+            return
+        wb = load_workbook(self.path)
+        if tab not in wb.sheetnames:
+            return
+        ws = wb[tab]
+        for i in sorted(set(indices), reverse=True):  # high→low: indices stay valid
+            ws.delete_rows(i, 1)
+        wb.save(self.path)
+
 
 class GSheetBackend:
     """The only gspread client (ENGINEERING §1). Small retry on quota/5xx.
@@ -254,10 +266,32 @@ class GSheetBackend:
             self._retry(ws.append_rows, encoded, value_input_option="RAW",
                         table_range="A1")
 
+    def delete_rows(self, tab: str, indices: list[int]) -> None:
+        if not indices:
+            return
+        try:
+            ws = self._ws(tab)
+        except self._gspread.exceptions.WorksheetNotFound:
+            return
+        # Delete contiguous runs high→low so an earlier delete never shifts the
+        # index of one still to come (one API call per run, not per row).
+        for start, end in reversed(_contiguous_runs(sorted(set(indices)))):
+            self._retry(ws.delete_rows, start, end)
+
 
 # ---------------------------------------------------------------------------
 # Backend selection
 # ---------------------------------------------------------------------------
+def _contiguous_runs(sorted_indices: list[int]) -> list[tuple[int, int]]:
+    """Collapse a sorted-ascending index list into inclusive (start, end) runs:
+    [2,3,4,7,9,10] → [(2,4),(7,7),(9,10)]."""
+    runs: list[list[int]] = []
+    for i in sorted_indices:
+        if runs and i == runs[-1][1] + 1:
+            runs[-1][1] = i
+        else:
+            runs.append([i, i])
+    return [(a, b) for a, b in runs]
 _default_backend = None
 
 
@@ -435,6 +469,40 @@ def read_column(tab: str, column: str, path: Optional[Path] = None) -> list:
     except ValueError:
         return []
     return [row[i] for row in grid[1:] if i < len(row) and row[i] not in (None, "")]
+
+
+def roll_off_old_rows(tab: str, date_column: str, cutoff: date,
+                      path: Optional[Path] = None) -> int:
+    """Delete rows of `tab` whose `date_column` parses to a date strictly before
+    `cutoff` (SPEC §6.2 hot-tab rolloff — WhatsApp_Inbox keeps 30 days, Archive
+    keeps text forever). The header is kept; rows whose date is blank or
+    unparseable are KEPT (never delete what we can't date). Live backend or an
+    explicit path only — refuses to mutate the committed seed, exactly like the
+    write-backs. Returns the number of rows deleted."""
+    if path is None and not is_live():
+        log.info("roll_off skipped for %s — no live backend (won't touch the seed)", tab)
+        return 0
+    b = backend(path)
+    if tab not in b.tabs():
+        return 0
+    grid = b.grid(tab)
+    if len(grid) < 2:
+        return 0
+    try:
+        ci = [_norm(h) for h in grid[0]].index(_norm(date_column))
+    except ValueError:
+        log.warning("roll_off: column %r absent in %s — nothing rolled off",
+                    date_column, tab)
+        return 0
+    stale = []
+    for idx, row in enumerate(grid[1:], start=2):
+        d = to_date(row[ci] if ci < len(row) else None)
+        if d is not None and d < cutoff:
+            stale.append(idx)
+    if stale:
+        b.delete_rows(tab, stale)
+        log.info("rolled off %d row(s) from %s older than %s", len(stale), tab, cutoff)
+    return len(stale)
 
 
 # ---------------------------------------------------------------------------
