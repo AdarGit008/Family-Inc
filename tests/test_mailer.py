@@ -170,7 +170,11 @@ class TestDigestDegrade:
         p = make_sheet([list(self.ROW)])
         daily_digest.run(DAY, send=True, sheet_path=p)
         rows = _outbox_rows()
-        assert len(rows) == 1 and rows[0]["kind"] == "briefing"
+        # D-045: an Adar-only fire still briefs BOTH adults — two briefing rows
+        # (adar's fire + shanee's quiet-day), both budget-exempt (D-027).
+        assert len(rows) == 2
+        assert all(r["kind"] == "briefing" for r in rows)
+        assert {r["to"] for r in rows} == {"adar", "shanee"}
 
     def test_fresh_bridge_queues_kind_briefing_no_email(self, tmp_runtime,
                                                         make_sheet, fake_smtp):
@@ -179,7 +183,11 @@ class TestDigestDegrade:
         daily_digest.run(DAY, send=True, sheet_path=p)
         assert not FakeSMTP.sent
         rows = _outbox_rows()
-        assert len(rows) == 1 and rows[0]["kind"] == "briefing"  # D-027
+        # D-027: kind=briefing (budget-exempt). D-045: both adults briefed, so
+        # two rows (adar's fire + shanee's quiet-day), neither via email.
+        assert len(rows) == 2
+        assert all(r["kind"] == "briefing" for r in rows)
+        assert {r["to"] for r in rows} == {"adar", "shanee"}
 
 
 # ---------------------------------------------------------------------------

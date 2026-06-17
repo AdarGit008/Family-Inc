@@ -1,6 +1,6 @@
 # Next session — Family Inc
 
-*Generated 2026-06-16 by `automation/session_kickoff.py`. Regenerated at every session end — do not edit by hand.*
+*Generated 2026-06-17 by `automation/session_kickoff.py`. Regenerated at every session end — do not edit by hand.*
 
 **Before pasting (on your machine):** `git pull --ff-only`
 
@@ -20,11 +20,11 @@ Open items:
 
 Recent decisions (full log in `DECISIONS.md`):
 
+- D-045 (2026-06-17): Daily briefing is partner-symmetric every day — an asymmetric day (one adult has reminders, the other none) now briefs BOTH adults (PO call,…
 - D-044 (2026-06-16): M4 gate-free build items pulled forward (DeepSeek wired · WhatsApp_Inbox rolloff · quiet-day symmetry · sender-role roster); the two review …
 - D-043 (2026-06-16): M5 (property tracker) CLOSED — live on the appliance. Deployed the same day as the local build (D-037) and verified end-to-end on the VPS: t…
 - D-042 (2026-06-16): Apify item-level error policy relaxed: skip junk rows everywhere, fail loud only when a call returns items but ZERO usable listings (broken …
 - D-041 (2026-06-16): Test suite made hermetic vs the appliance's email-fallback creds (extends D-038 from the Sheet to the SMTP transport). Caught at the M5 depl…
-- D-040 (2026-06-16): Apify added as the property lane's SECONDARY data source (managed-unblocker rung; the on-box scraper stays primary). D-039's verdict stood —…
 
 Session contract: don't open lanes outside this milestone without a PO call
 logged in `DECISIONS.md` · constants → config, utilities → `automation/lib/`,

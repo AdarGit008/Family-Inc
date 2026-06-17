@@ -429,10 +429,12 @@ class TestSendStamping:
 
 
 # ---------------------------------------------------------------------------
-# Quiet-day digest is partner-symmetric (D-036e/D-044): a day with no fires for
-# anyone briefs BOTH adults, each with the quiet-day line + shared sections
+# Brief BOTH adults every day (D-045). The morning briefing is partner-symmetric
+# in every shape: a fully-quiet day (D-036e/D-044) AND an asymmetric day (one
+# adult has fires, the other none) both reach adar AND shanee — the empty-handed
+# adult gets the quiet-day line plus the shared WA-groups / property sections.
 # ---------------------------------------------------------------------------
-class TestQuietDaySymmetry:
+class TestBriefBothEveryDay:
     def test_fully_quiet_day_briefs_both_partners(self, tmp_runtime, make_sheet):
         from automation import daily_digest
         from automation import templates as T
@@ -442,3 +444,36 @@ class TestQuietDaySymmetry:
         assert set(asm.messages) == {"adar", "shanee"}
         for body in asm.messages.values():
             assert T.DIGEST_QUIET_DAY in body
+
+    def test_asymmetric_day_briefs_both_partners(self, tmp_runtime, make_sheet):
+        """One adult owns a fire, the other none → BOTH still get the morning
+        briefing (D-045). Pre-D-045 the empty-handed adult got no message at all."""
+        from automation import daily_digest
+        from automation import templates as T
+
+        day = date(2026, 6, 10)  # Wednesday — no Hebcal fetch in assemble()
+        p = make_sheet([["Car test", "Car", "Adar", day, "7,1", "One-off", "Pending"]])
+        asm = daily_digest.assemble(day, sheet_path=p)
+        assert set(asm.messages) == {"adar", "shanee"}
+        assert "Car test" in asm.messages["adar"]            # the one with a fire
+        assert "Car test" not in asm.messages["shanee"]      # the empty-handed adult
+        assert T.DIGEST_QUIET_DAY in asm.messages["shanee"]  # still briefed
+
+    def test_asymmetric_day_shares_sections_with_empty_handed_adult(
+            self, tmp_runtime, make_sheet):
+        """The empty-handed adult's briefing carries the shared sections too
+        (D-045: quiet-day line PLUS shared WA-groups / property), not a bare
+        'quiet day' line. Proves the shared content isn't gated on having a fire."""
+        from automation import daily_digest
+        from automation import templates as T
+
+        day = date(2026, 6, 10)  # Wednesday — no Hebcal fetch in assemble()
+        bd = tmp_runtime / "Briefings"
+        bd.mkdir(parents=True, exist_ok=True)
+        (bd / f"property_listings_{day.isoformat()}.md").write_text(
+            T.PROPERTY_SECTION_HEAD + "\nהרצליה — ₪1,850,000 (yad2)\n", encoding="utf-8")
+        p = make_sheet([["Car test", "Car", "Adar", day, "7,1", "One-off", "Pending"]])
+        asm = daily_digest.assemble(day, sheet_path=p, briefings_dir=bd,
+                                    shabbat_times=None)
+        assert T.DIGEST_QUIET_DAY in asm.messages["shanee"]
+        assert T.PROPERTY_SECTION_HEAD in asm.messages["shanee"]

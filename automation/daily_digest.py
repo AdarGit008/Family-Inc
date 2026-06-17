@@ -199,13 +199,17 @@ def assemble(today: date, now: Optional[datetime] = None,
     result = engine.compute(today, now=now, sheet_path=sheet_path)
     digests = batch_deduplicate(result.digests, now)
 
-    # A fully quiet day (no fires for anyone) still briefs BOTH adults: the
-    # message's silence must be distinguishable from the digest being broken,
-    # and the briefing is partner-symmetric (D-036e/D-044) — each gets the
-    # quiet-day line and the shared WA-groups / property sections, not adar
-    # alone (the pre-M1 adar-only heartbeat broke symmetry).
-    if not digests:
-        digests = {r: engine.Digest(recipient=r) for r in config.DIGEST_RECIPIENTS}
+    # Brief BOTH adults EVERY day (D-045). A recipient with no fires today still
+    # gets the morning briefing — the quiet-day line plus the shared WA-groups /
+    # property sections. This generalizes the partner-symmetric quiet-day rule
+    # (D-036e/D-044, which only covered a FULLY-quiet day) to the asymmetric day:
+    # when one adult has fires and the other none, the empty-handed adult is no
+    # longer left with no morning message at all. Briefings are budget-exempt
+    # (kind=briefing), so the extra message never spends an alert slot, and the
+    # message's silence stays distinguishable from a broken digest. Canonical
+    # (adar, shanee) order; engine.compute only ever keys these two (§7.3 routing).
+    digests = {r: digests[r] if r in digests else engine.Digest(recipient=r)
+               for r in config.DIGEST_RECIPIENTS}
 
     if deferred is None:
         deferred = outbox.read_deferred(today)

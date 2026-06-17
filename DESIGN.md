@@ -88,6 +88,7 @@ Offline: same writes queued (`localStorage.pendingWrites[]`, cap 50 with a one-s
 The most-used UI in the product. Rules:
 
 - **One morning message.** Engine fires, group digest, and Hebcal line are assembled into a single 07:30 message per recipient — never 2–3 separate sends.
+- **Both adults, every day (D-045).** Each adult gets their own 07:30 message every day — partner-symmetric (§1, no scoring). An adult with no reminders that day still receives the briefing: the quiet-day line `אין תזכורות להיום — יום שקט.` followed by whatever shared groups / property sections exist. A truly empty day for that adult is just the head + quiet-day line — never *no* message (silence must stay distinguishable from a broken digest) and never a scold (quiet is a success state, §1).
 - **Line economy.** One line per item: flag emoji · title · due phrase. Notes only if ≤120 chars. >5 items → top 5 by priority + "+N more — בלוח" (in the dashboard).
 - **Emoji are semantics, not decoration**: 🔴 overdue · 🟠 today · 🟡 week-out · 🟢 month-out · ⚠ needs-a-look · 🕯 Shabbat line. No other emoji in generated copy.
 - **No reply affordances** until reply parsing ships (SPEC §3.7). Messages end with content, not instructions. When v1.1 lands, the reply grammar returns as a single footer line.
@@ -109,6 +110,16 @@ Daily digest (the only routine alert-channel message):
 ועד — מעלית מושבתת חמישי 09:00–12:00
 
 🕯 הדלקת נרות 19:24 · צאת שבת 20:35
+```
+
+Quiet day for this adult (no reminders of their own; shared sections still ride along — D-045):
+
+```
+🏠 Family inc. · יום ג׳ 17/6
+אין תזכורות להיום — יום שקט.
+
+קבוצות (24ש׳):
+ועד — מעלית מושבתת חמישי 09:00–12:00
 ```
 
 Critical (budget-bypassing, rare): single line, no frame — `⚠ {group}: {one_liner} ({sender}, {time})`.
