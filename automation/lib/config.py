@@ -110,6 +110,18 @@ DIGEST_GROUP_LABEL = {
     "neighborhood": "שכונה", "student": "לימודים", "other": "אחר",
 }
 
+# --- Weekly classifier accuracy review (Phase F, D-048) --------------------
+# The summarizer records each message's classification + outcome in WhatsApp_Inbox
+# but not the rule that fired (§6.2 schema). The review surface re-derives the
+# triggering rule per ALERT from the persisted row by reusing the summarizer's
+# own hard_rule_alert (single source of truth) — so no Inbox schema change is
+# needed. The weekly briefing carries a compact pulse; automation/accuracy_review.py
+# is the full operator surface (the recurring cadence reuses family-weekly.timer).
+ACCURACY_REVIEW_DAYS = 7          # trailing window the weekly surface reviews
+ALERT_FP_TARGET_PER_WEEK = 1      # the bar (original WhatsApp design, Phase F):
+                                  # <1 ALERT-tier false positive per week
+ACCURACY_REVIEW_MAX_BRIEF = 12    # cap ALERT lines folded inline into the briefing
+
 # ---------------------------------------------------------------------------
 # Property tracker (SPEC.md §12.1, M5 — unfrozen D-034). Silent, digest-only:
 # new listings land in the Sheet and surface in the 07:30 digest, never an

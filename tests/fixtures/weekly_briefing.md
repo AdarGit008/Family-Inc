@@ -27,5 +27,8 @@ _Friday, June 12, 2026_  ·  week of 2026-06-12 → 2026-06-19
 ## Data hygiene
 _All clean._
 
+## Classifier accuracy
+_No classifier data yet._
+
 ---
 _Read together with coffee, ~20 minutes. Edits go into Family_OS — next week's briefing reflects them automatically._

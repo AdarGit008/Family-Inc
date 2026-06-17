@@ -32,6 +32,7 @@ if __package__ in (None, ""):  # direct `python3 automation/weekly_briefing.py`
 
 import argparse
 import json
+import logging
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -39,6 +40,8 @@ from automation import templates as T
 from automation.lib import config, outbox, sheet
 from automation.lib.dates import fmt_date, to_date
 from automation.lib.money import fmt_money, pct
+
+log = logging.getLogger("briefing")
 
 
 # ---------------------------------------------------------------------------
@@ -285,6 +288,25 @@ def section_hygiene(wb, today: date) -> str:
     return "\n".join(issues)
 
 
+def section_classifier_accuracy(wb, today: date) -> str:
+    """Phase F (D-048): a compact pulse of the WhatsApp classifier's week —
+    counts + ALERTs-by-rule + the <1/week false-positive target. The full
+    operator surface lives in automation/accuracy_review.py. Auxiliary and
+    fail-safe: the briefing carries load-bearing content, so any error here
+    degrades to a quiet line rather than taking the briefing down."""
+    try:
+        from automation import accuracy_review as ar
+        from automation.whatsapp_summarizer import CONFIG_DEFAULT, load_config
+        if config.WA_INBOX_SHEET_TAB not in wb.sheetnames:
+            return "_No classifier data yet._"
+        rows = ar._tab_rows(wb, config.WA_INBOX_SHEET_TAB)
+        m = ar.collect(rows, today, config.ACCURACY_REVIEW_DAYS, load_config(CONFIG_DEFAULT))
+        return ar.render_brief(m)
+    except Exception as e:  # noqa: BLE001 — an aux section must never break the briefing
+        log.warning("classifier-accuracy section skipped: %s", e)
+        return "_Classifier accuracy unavailable this week._"
+
+
 # ---------------------------------------------------------------------------
 # Render
 # ---------------------------------------------------------------------------
@@ -311,6 +333,9 @@ def render_briefing(wb, today: date) -> str:
 
     parts.append("\n## Data hygiene")
     parts.append(section_hygiene(wb, today))
+
+    parts.append("\n## Classifier accuracy")
+    parts.append(section_classifier_accuracy(wb, today))
 
     parts.append(T.WEEKLY_FOOTER)
     return "\n".join(parts) + "\n"
