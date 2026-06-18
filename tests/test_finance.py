@@ -125,6 +125,35 @@ def test_dedup_rerun_is_idempotent(tmp_path):
     assert len(_rows(sp, cfg.FINANCE_ACCOUNTS_TAB)) - 1 == 2       # upsert, not append
 
 
+def test_idless_collision_drops_second_charge_as_phantom_dup(tmp_path):
+    """Documented edge case (finance_ingest.py txn_id docstring): two genuinely
+    distinct same-day charges with an identical account+amount+description and
+    NO provider identifier hash to one Txn-ID, so the dedup treats the second as
+    a phantom duplicate and drops it. This LOCKS that behavior (it is silent data
+    loss) — changing the hash key to recover both must change this test, with a
+    PO call. Most providers supply `identifier`, so this is rare in practice."""
+    text = ("account,balance,date,identifier,amount,description\n"
+            "MIZ-0001,9000,2026-06-15,,-12.00,COFFEE KIOSK\n"
+            "MIZ-0001,9000,2026-06-15,,-12.00,COFFEE KIOSK\n")   # two real ₪12 coffees
+    sp = _sheet(tmp_path)
+    res = fin.run(csv_dir=_csv(tmp_path, text), sheet_path=sp, today=TODAY, now=NOW)
+    assert res.txns_new == 1 and res.txns_seen == 1              # second collapsed
+    assert len(_rows(sp, cfg.FINANCE_TRANSACTIONS_TAB)) - 1 == 1
+
+
+def test_idless_collision_avoided_when_provider_supplies_identifier(tmp_path):
+    """Control for the above: the SAME two charges keep both rows once the
+    provider tags them with distinct identifiers — proving the loss is the
+    id-less hash collision specifically, not a general dedup defect."""
+    text = ("account,balance,date,identifier,amount,description\n"
+            "MIZ-0001,9000,2026-06-15,txn-a,-12.00,COFFEE KIOSK\n"
+            "MIZ-0001,9000,2026-06-15,txn-b,-12.00,COFFEE KIOSK\n")
+    sp = _sheet(tmp_path)
+    res = fin.run(csv_dir=_csv(tmp_path, text), sheet_path=sp, today=TODAY, now=NOW)
+    assert res.txns_new == 2 and res.txns_seen == 0             # both kept
+    assert set(_col(_rows(sp, cfg.FINANCE_TRANSACTIONS_TAB), "Txn-ID")) == {"txn-a", "txn-b"}
+
+
 def test_balance_only_row_feeds_account_not_txn(tmp_path):
     sp = _sheet(tmp_path)
     text = ("account,balance,date,identifier,amount,description\n"
@@ -339,6 +368,35 @@ def test_gapfill_rejects_offvocab_answer(monkeypatch):
              "Category": "", "Cat-Source": ""}]
     categorize.categorize_transactions(txns, allow_llm=True)
     assert txns[0]["Category"] == "" and txns[0]["Cat-Source"] == ""
+
+
+def test_gapfill_chunks_so_large_import_is_fully_categorized(monkeypatch):
+    """B5: a rules-miss batch larger than GAPFILL_MAX_BATCH must be FULLY
+    categorized before the write — chunk-looped, not truncated at the per-prompt
+    cap. A blank-Category row keeps its real Txn-ID and is then excluded from
+    dedup forever (never re-presented to the LLM), so an overflow left blank was
+    permanent data loss on the first 45-day backlog."""
+    import json
+    budgets = []
+
+    def fake_complete(prompt, **kw):
+        budgets.append(kw.get("max_tokens"))
+        # Cover every within-chunk index (a chunk is <= GAPFILL_MAX_BATCH rows).
+        return json.dumps({"results": [{"i": i, "category": "Shopping"}
+                                       for i in range(categorize.GAPFILL_MAX_BATCH)]})
+
+    monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "complete", fake_complete)
+    n = categorize.GAPFILL_MAX_BATCH * 2 + 5    # 165 — well over one prompt's cap
+    txns = [{"Description": f"ZZZ MYSTERY {i}", "Amount (ILS)": -10,
+             "Category": "", "Cat-Source": ""} for i in range(n)]
+    categorize.categorize_transactions(txns, allow_llm=True)
+    assert all(t["Category"] == "Shopping" and t["Cat-Source"] == "llm" for t in txns)
+    assert len(budgets) == 3                     # ceil(165/80) chunks, not one truncated call
+    # A full 80-row chunk's reply (~1.5k tokens) must not be truncated by a fixed
+    # small cap — the reply budget scales with the chunk (else the whole chunk
+    # parses to {} and lands blank: the B5 data-loss in disguise).
+    assert max(budgets) >= categorize.GAPFILL_MAX_BATCH * 16
 
 
 # ---------------------------------------------------------------------------

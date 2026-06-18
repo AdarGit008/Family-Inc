@@ -12,6 +12,9 @@
   const CACHE_KEY = 'family_inc_cache_v1';
   const QUEUE_KEY = 'family_inc_writequeue_v1';
   const TOKEN_KEY = 'family_inc_token_v1';
+  const MAX_PENDING_WRITES = 50;   // offline-queue cap (SPEC §7.6 / DESIGN §6) —
+                                   // a one-shot warning fires at the cap, then
+                                   // further taps are dropped, not silently lost
 
   // ---------------- i18n ----------------
   // Single source of truth for chrome strings. Hebrew is canonical; English
@@ -136,6 +139,7 @@
       'toast.demoPrefix': '(הדגמה) {label}',
       'toast.queuedOffline': 'נשמר בתור לא מקוון: {label}',
       'toast.queued': 'נשמר בתור: {label}',
+      'toast.queueFull': 'התור מלא ({max}) — התחברו לאינטרנט כדי לסנכרן לפני שמירת פעולות נוספות',
       'toast.flushed': 'הוזרמו {n} פעולות מהתור',
       // Action labels (used in toasts after write-back)
       'action.markedDone': 'בוצע: {title}',
@@ -244,6 +248,7 @@
       'toast.demoPrefix': '(demo) {label}',
       'toast.queuedOffline': 'Queued offline: {label}',
       'toast.queued': 'Queued: {label}',
+      'toast.queueFull': 'Queue full ({max}) — reconnect to sync before queuing more',
       'toast.flushed': 'Flushed {n} queued action(s)',
       'action.markedDone': '{title} → done',
       'action.snoozed': '{title} → +{days}d',
@@ -294,6 +299,7 @@
     cachedAt: null,
     tab: 'today',
     pendingWrites: [],
+    queueFullWarned: false,   // one-shot: warn once at the cap, reset after a flush
     today: stripTime(new Date()),
     tokenClient: null,
     gapiReady: false,
@@ -1295,16 +1301,31 @@
     return new Date(y, m, Math.min(d.getDate(), lastDay));
   }
 
+  // Push writes onto the offline queue, capped at MAX_PENDING_WRITES (SPEC §7.6
+  // / DESIGN §6). At the cap we warn ONCE and drop the writes rather than grow
+  // the queue unboundedly — silent unbounded growth was the prior bug (B8).
+  // Returns true if the writes were queued, false if dropped at the cap.
+  function enqueueWrites(writes) {
+    if (state.pendingWrites.length >= MAX_PENDING_WRITES) {
+      if (!state.queueFullWarned) {
+        toast(t('toast.queueFull', { max: MAX_PENDING_WRITES }));
+        state.queueFullWarned = true;
+      }
+      return false;
+    }
+    writes.forEach(w => state.pendingWrites.push({ kind: 'update', row: extractRow(w.range), range: w.range, value: w.value, queuedAt: new Date().toISOString() }));
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(state.pendingWrites));
+    renderQueue();
+    return true;
+  }
+
   async function applyWrites(writes, label) {
     if (cfg.DEMO_MODE) {
       toast(t('toast.demoPrefix', { label }));
       return;
     }
     if (!navigator.onLine || !state.gapiReady) {
-      writes.forEach(w => state.pendingWrites.push({ kind: 'update', row: extractRow(w.range), range: w.range, value: w.value, queuedAt: new Date().toISOString() }));
-      localStorage.setItem(QUEUE_KEY, JSON.stringify(state.pendingWrites));
-      toast(t('toast.queuedOffline', { label }));
-      renderQueue();
+      if (enqueueWrites(writes)) toast(t('toast.queuedOffline', { label }));
       return;
     }
     try {
@@ -1316,10 +1337,7 @@
       toast(label);
     } catch (e) {
       console.error('Write failed', e);
-      writes.forEach(w => state.pendingWrites.push({ kind: 'update', row: extractRow(w.range), range: w.range, value: w.value, queuedAt: new Date().toISOString() }));
-      localStorage.setItem(QUEUE_KEY, JSON.stringify(state.pendingWrites));
-      toast(t('toast.queued', { label }));
-      renderQueue();
+      if (enqueueWrites(writes)) toast(t('toast.queued', { label }));
     }
   }
   function extractRow(range) { return (range.match(/(\d+)$/) || [])[1] || ''; }
@@ -1345,6 +1363,7 @@
         },
       });
       state.pendingWrites = [];
+      state.queueFullWarned = false;   // queue drained — re-arm the one-shot cap warning
       localStorage.setItem(QUEUE_KEY, JSON.stringify([]));
       toast(t('toast.flushed', { n: queue.length }));
       renderQueue();

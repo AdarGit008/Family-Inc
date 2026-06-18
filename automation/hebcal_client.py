@@ -177,6 +177,61 @@ def is_chag(d: date) -> bool:
     chagim = chagim_in_range(d, d)
     return any(h.get("yomtov") for h in chagim)
 
+
+def _candle_items(start: date, end: date) -> list[dict]:
+    """Sorted 'candles'/'havdalah' calendar items overlapping [start, end], each
+    {category, dt, iso}. The calendar endpoint emits these for chag eves too (it
+    is fetched with c=on) — chagim_in_range filters them out, so this is the seam
+    that surfaces them. Degrade quiet: a month that fails to fetch is skipped."""
+    months: set = set()
+    cur = date(start.year, start.month, 1)
+    while cur <= end:
+        months.add((cur.year, cur.month))
+        cur = date(cur.year + 1, 1, 1) if cur.month == 12 else date(cur.year, cur.month + 1, 1)
+    out: list[dict] = []
+    for y, m in sorted(months):
+        key = f"hebcal:{y}-{m:02d}"
+        data = _cache_get(key)
+        if data is None:
+            try:
+                data = _fetch_hebcal_month(y, m)
+                _cache_put(key, data)
+            except requests.RequestException as e:
+                log.warning("hebcal month fetch failed %s-%02d: %s", y, m, e)
+                continue
+        for item in data.get("items", []):
+            if item.get("category") not in {"candles", "havdalah"}:
+                continue
+            iso = item.get("date")
+            try:
+                dt = datetime.fromisoformat(iso)
+            except (TypeError, ValueError):
+                continue
+            if start <= dt.date() <= end:
+                out.append({"category": item["category"], "dt": dt, "iso": iso})
+    out.sort(key=lambda x: x["dt"])
+    return out
+
+
+def chag_candles(d: date) -> Optional[dict]:
+    """Candle-lighting + havdalah bracketing a CHAG whose candle-lighting falls on
+    `d` — a non-Shabbat yom-tov eve (Shabbat candles come from shabbat_times()).
+    Returns {candle_lighting, havdalah} ISO strings when `d` is such an eve, else
+    None. None also on a fetch failure: indistinguishable from no-chag here is
+    acceptable — the digest simply renders no candle line, never a wrong one
+    (degrade quiet, §3.6). Havdalah can be up to ~4 days out — a 2-day yom tov
+    adjacent to Shabbat (e.g. Rosh Hashana into Shabbat); the window covers it."""
+    items = _candle_items(d, d + timedelta(days=5))
+    candle = next((it for it in items
+                   if it["category"] == "candles" and it["dt"].date() == d), None)
+    if candle is None:
+        return None
+    havdalah = next((it for it in items
+                     if it["category"] == "havdalah" and it["dt"] > candle["dt"]), None)
+    if havdalah is None:
+        return None
+    return {"candle_lighting": candle["iso"], "havdalah": havdalah["iso"]}
+
 # ---------------------------------------------------------------------------
 # Smoke test
 # ---------------------------------------------------------------------------

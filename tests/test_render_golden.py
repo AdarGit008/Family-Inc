@@ -160,6 +160,38 @@ def test_weekly_briefing_golden(tmp_runtime):
 
 
 # ---------------------------------------------------------------------------
+# Hebcal candle line — fires on erev-Shabbat (Fridays) AND erev-chag (B2)
+# ---------------------------------------------------------------------------
+def _boom(_d):
+    raise AssertionError("wrong Hebcal path taken")
+
+
+def test_hebcal_line_friday_uses_shabbat_times():
+    line = daily_digest._hebcal_line(
+        date(2026, 6, 12),  # a Friday
+        lambda d: {"candle_lighting": "2026-06-12T19:26:00+03:00",
+                   "havdalah": "2026-06-13T20:37:00+03:00"},
+        chag_candles=_boom)
+    assert "🕯 הדלקת נרות 19:26" in line and "צאת שבת 20:37" in line
+
+
+def test_hebcal_line_erev_chag_uses_chag_candles():
+    erev = date(2026, 6, 10)            # a Wednesday — exercises the non-Friday path
+    assert erev.weekday() != 4
+    line = daily_digest._hebcal_line(
+        erev, _boom,
+        chag_candles=lambda d: {"candle_lighting": "2026-06-10T19:10:00+03:00",
+                                "havdalah": "2026-06-11T20:15:00+03:00"})
+    assert "🕯 הדלקת נרות 19:10" in line and "צאת החג 20:15" in line
+
+
+def test_hebcal_line_plain_weekday_renders_nothing():
+    line = daily_digest._hebcal_line(
+        date(2026, 6, 10), _boom, chag_candles=lambda d: None)
+    assert line == ""
+
+
+# ---------------------------------------------------------------------------
 # Deliberate regeneration
 # ---------------------------------------------------------------------------
 if __name__ == "__main__" and "--regen" in sys.argv:
@@ -169,9 +201,11 @@ if __name__ == "__main__" and "--regen" in sys.argv:
 
     FIXTURES.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory() as td:
-        # Hermetic regen: a real logs/reminders_log.csv on this machine must
-        # not leak batch-window dedup into the goldens.
+        # Hermetic regen: a real logs/*.csv on this machine must not leak into
+        # the goldens (reminders_log → run/tombstone counts; llm_costs → ₪ spend
+        # in the §System self-report line, B6).
         _config.REMINDERS_LOG = Path(td) / "reminders_log.csv"
+        _config.LLM_COSTS_LOG = Path(td) / "llm_costs.csv"
         outputs = {
             "digest_multi.md": digest_multi(),
             "digest_single.md": digest_single(),

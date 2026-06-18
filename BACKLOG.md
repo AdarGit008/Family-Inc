@@ -7,6 +7,8 @@
 
 **v1 is live and accepted** (since 2026-06-13, tagged `v1-live`): the morning WhatsApp digest, the weekly briefing, the dashboard write-back loop, and the group summarizer all run unattended on the appliance. The **property tracker** is live (Yad2 on-box + Madlan via Apify). The summarizer runs on **DeepSeek**. **Finance ingestion (M6)** is the current build — the repo half is done; the appliance step is next. Two summarizer-review items are **gated** until ~2026-06-20 (they need a week of live classifier output to judge).
 
+**✅ Audit fix lane — Brief 1 (blocker + 7 majors), landed 2026-06-18** (from the 2026-06-18 full-project audit in `reviews/`): bridge 1:1 chats are now **log-only, no ack** (B1, SPEC §7.4); the candle-lighting line fires on **erev-chag** too (B2); **criticals pierce mute** while non-critical rules are suppressed in muted groups, closing the budget-bypass (B3, SPEC §7.3); LLM privacy reconciled **provider-agnostic** (B4, SPEC §8.6/§8.7); finance gap-fill **chunk-loops** so a large first import is fully categorized (B5, M6); `deploy.sh` installs the **finance Node deps** + restores `--frozen` (B7, M6 — unblocks M6.2); the weekly briefing carries the **ENGINEERING §8 self-report line** (B6); the dashboard offline queue **caps at 50 with a one-shot warning** (B8). Tests green (350). **Brief 2** (10 gaps + minors + disputed) remains open. The fix touched privacy/delivery/budget → the `review.py` gate **ran 2026-06-18** (DeepSeek; `reviews/review_milestone_2026-06-18_16-41.md`): B1/B4/B5/B7/B8 affirmed; one false-positive defended (the mute short-circuit already follows the critical check), `chag_candles` window widened to +5d (Applied), and the dashboard-recurrence-bump finding routed to **Brief 2 GAP-4** (Open — pre-existing, out of lane).
+
 ## Shipped
 
 - **Keystone loop** — reminders engine (07:25) → daily digest (07:30) → WhatsApp, with dashboard write-back, the outbox budget chokepoint, quiet hours, and the offline-write tombstone guard.
@@ -35,7 +37,7 @@ Banks + cards, categorized + trends, delivered silently. Read-only logins permit
 
 ## v1.1 candidates (unordered — pick after v1 is boring)
 
-- **Reply parsing** (done/snooze via WhatsApp) — code exists (`reply_handler.py`, already on `queue()` with `wa-{msg_id}` ids); remaining: lift the bridge's 1:1 read guard for exactly the two adult JIDs, port its Sheet writes to `lib/sheet`, reinstate the reply footer, and a PO call on kinds (solicited acks would otherwise consume the unsolicited budget).
+- **Reply parsing** (done/snooze via WhatsApp) — the bridge already **logs** 1:1 replies from the two adult JIDs to `replies.jsonl` (no ack — B1); `reply_handler.py` exists (already on `queue()` with `wa-{msg_id}` ids). Remaining: consume those logged replies — port `reply_handler`'s Sheet writes to `lib/sheet`, resolve LID-addressing (`msg.key.remoteJidAlt`) so replies aren't dropped, reinstate the reply footer, and a PO call on kinds (solicited acks would otherwise consume the unsolicited budget).
 - **AI-written weekly briefing** — the briefing is template-only by design; wiring LLM prose needs a privacy call (whole-Sheet context → DeepSeek) with Shanee. Pair it with a content review of the template.
 - **Inbox-append trigger** for the classifier (inotify on `inbox.jsonl`) — sub-hour critical latency without changing the hourly digest cadence.
 - **Machine-measured classifier FP rate** — a human-mark channel (an Inbox `review` column or a dashboard control) to replace the by-eye accuracy read.

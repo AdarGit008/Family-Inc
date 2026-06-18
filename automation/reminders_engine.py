@@ -161,13 +161,17 @@ def apply_budget(d: Digest, max_items: int = config.DIGEST_MAX_ITEMS) -> None:
 LOG_HEADER = [
     "run_date", "recipient", "fires_sent", "fires_dropped",
     "skipped_due_to_tombstone", "dry_run", "titles_sent",
+    "tombstone_max_age_h",   # additive (B6): max skip age this run, for the
+                             # weekly self-report "max age seen" (SPEC §8.3)
 ]
 
 
 def append_log(today: date, digests: dict[str, Digest], log_path: Path | None = None,
-               skipped_tombstone: int = 0, dry_run: bool = False) -> None:
-    """One row per recipient per run. `skipped_due_to_tombstone` is the per-run
-    count and is repeated on each recipient row (it's a run-level metric)."""
+               skipped_tombstone: int = 0, dry_run: bool = False,
+               tombstone_max_age_h: float = 0.0) -> None:
+    """One row per recipient per run. `skipped_due_to_tombstone` /
+    `tombstone_max_age_h` are per-run metrics, repeated on each recipient row
+    (older rows predate the age column → read as 0)."""
     log_path = log_path or config.REMINDERS_LOG
     log_path.parent.mkdir(parents=True, exist_ok=True)
     new_file = not log_path.exists()
@@ -184,7 +188,7 @@ def append_log(today: date, digests: dict[str, Digest], log_path: Path | None = 
                 today.isoformat(), r,
                 len(d.fires), len(d.dropped),
                 skipped_tombstone, "yes" if dry_run else "no",
-                titles,
+                titles, f"{tombstone_max_age_h:.2f}",
             ])
 
 
@@ -319,7 +323,8 @@ def run(today: date, dry_run: bool = False, now: datetime | None = None,
                 print(f"    {f.reason:<10} {f.reminder.title}")
 
     append_log(today, result.digests, skipped_tombstone=len(result.tombstoned),
-               dry_run=dry_run)
+               dry_run=dry_run,
+               tombstone_max_age_h=max((a for _, a in result.tombstoned), default=0.0))
     return result.digests
 
 

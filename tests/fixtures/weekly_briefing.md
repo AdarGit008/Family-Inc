@@ -27,6 +27,9 @@ _Friday, June 12, 2026_  ·  week of 2026-06-12 → 2026-06-19
 ## Data hygiene
 _All clean._
 
+## System
+_No system activity logged this week yet._
+
 ## Classifier accuracy
 _No classifier data yet._
 

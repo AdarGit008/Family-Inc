@@ -149,14 +149,27 @@ def _property_text(today: date, briefings_dir: Path) -> str:
     return p.read_text(encoding="utf-8").strip()
 
 
-def _hebcal_line(today: date, shabbat_times: Optional[Callable]) -> str:
-    """Candle-lighting line on Fridays (SPEC §7.2). Degrades to nothing —
-    a missing Hebcal answer must not page anyone."""
-    if today.weekday() != 4 or shabbat_times is None:  # 4 = Friday
+def _hebcal_line(today: date, shabbat_times: Optional[Callable],
+                 chag_candles: Optional[Callable] = None) -> str:
+    """Candle-lighting line on erev-Shabbat (Fridays) AND erev-chag (yom-tov eves)
+    — SPEC §7.2/§4. Fridays read shabbat_times(); other days read chag_candles(),
+    which returns None on a plain (non-eve) day. Degrades to nothing — a missing
+    Hebcal answer must not page anyone, and a non-eve simply renders no line."""
+    if shabbat_times is None:
         return ""
+    # A chag whose eve falls on a Friday is handled as Shabbat (candle time is
+    # correct; for a Sat+Sun yom-tov block the havdalah shown is Saturday night).
+    is_friday = today.weekday() == 4  # 4 = Friday
     try:
-        st = shabbat_times(today)
+        if is_friday:
+            st = shabbat_times(today)
+        elif chag_candles is not None:
+            st = chag_candles(today)
+        else:
+            st = None
     except Exception:
+        return ""
+    if not st:
         return ""
     candles, havdalah = st.get("candle_lighting"), st.get("havdalah")
     if not candles or not havdalah:
@@ -166,7 +179,8 @@ def _hebcal_line(today: date, shabbat_times: Optional[Callable]) -> str:
             return datetime.fromisoformat(iso).strftime("%H:%M")
         except ValueError:
             return iso
-    return T.HEBCAL_LINE.format(candles=hhmm(candles), havdalah=hhmm(havdalah))
+    tmpl = T.HEBCAL_LINE if is_friday else T.HEBCAL_LINE_CHAG  # "צאת שבת" vs "צאת החג"
+    return tmpl.format(candles=hhmm(candles), havdalah=hhmm(havdalah))
 
 
 _DEFAULT = object()  # sentinel: "use the real hebcal client"
@@ -184,16 +198,20 @@ def assemble(today: date, now: Optional[datetime] = None,
              sheet_path: Optional[Path] = None,
              briefings_dir: Optional[Path] = None,
              shabbat_times: Optional[Callable] = _DEFAULT,
+             chag_candles: Optional[Callable] = _DEFAULT,
              deferred: Optional[list[dict]] = None,
              failed_units: Optional[list[str]] = None) -> Assembly:
     """One rendered message per recipient. Pure given its inputs (the Hebcal
-    fetcher and the deferred list are injectable so tests stay deterministic
+    fetchers and the deferred list are injectable so tests stay deterministic
     and dry runs never consume the deferred queue)."""
     if now is None:
         now = datetime.now() if today == date.today() else datetime.combine(today, time(7, 30))
-    if shabbat_times is _DEFAULT:
+    if shabbat_times is _DEFAULT or chag_candles is _DEFAULT:
         from automation import hebcal_client
-        shabbat_times = hebcal_client.shabbat_times
+        if shabbat_times is _DEFAULT:
+            shabbat_times = hebcal_client.shabbat_times
+        if chag_candles is _DEFAULT:
+            chag_candles = hebcal_client.chag_candles
     briefings_dir = briefings_dir or config.BRIEFINGS_DIR
 
     result = engine.compute(today, now=now, sheet_path=sheet_path)
@@ -215,7 +233,7 @@ def assemble(today: date, now: Optional[datetime] = None,
         deferred = outbox.read_deferred(today)
     wa_text = _wa_digest_text(today, briefings_dir)
     property_text = _property_text(today, briefings_dir)
-    hebcal = _hebcal_line(today, shabbat_times)
+    hebcal = _hebcal_line(today, shabbat_times, chag_candles)
 
     # Overnight unit failures prepend, never replace (DESIGN §6) — the humans
     # never check journald unless a message tells them to (ENGINEERING §8).

@@ -92,6 +92,26 @@ class TestHardRules:
         assert result["classification"] == "ROUTINE"
         assert result["reason"] == "muted group"
 
+    def test_muted_group_suppresses_noncritical_alert_keyword(self):
+        """B3: a non-critical alert_keyword must NOT fire in a muted group — this
+        is the budget-bypass leak being closed. Mute is a hard rule below the
+        critical tier (SPEC §7.3)."""
+        cfg = _cfg(importance_default="mute", alert_keywords=[re.compile("ביטול")])
+        reason, critical = hard_rule_alert(_msg(text="ביטול חוגים היום"), cfg)
+        assert reason is None and critical is False
+        result = classify(_msg(text="ביטול חוגים היום"), cfg, recent=[], use_llm=False)
+        assert result["classification"] == "ROUTINE"   # no ALERT, nothing dispatched
+
+    def test_critical_keyword_pierces_mute(self):
+        """B3: the one exception — a true critical/safety keyword still fires in a
+        muted group, budget-exempt (PO call 2026-06-18: criticals pierce mute)."""
+        cfg = _cfg(importance_default="mute", critical_keywords=[re.compile("חירום")])
+        reason, critical = hard_rule_alert(_msg(text="חירום: דליפת גז בבניין"), cfg)
+        assert reason and critical is True
+        result = classify(_msg(text="חירום: דליפת גז בבניין"), cfg, recent=[], use_llm=False)
+        assert result["classification"] == "ALERT"
+        assert result["critical"] is True
+
     def test_hard_rule_forces_alert_class(self):
         cfg = _cfg(alert_keywords=[re.compile("אסיפת הורים")])
         result = classify(_msg(text="אסיפת הורים ביום שני"), cfg, recent=[], use_llm=False)

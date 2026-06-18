@@ -4,13 +4,13 @@
  * Pairs as a WhatsApp Web "companion" to Adar's main number using Baileys
  * (the same QR-code flow as web.whatsapp.com). Two jobs:
  *
- * 1. LISTEN — group messages ONLY, normalized into the WhatsApp_Inbox schema,
+ * 1. LISTEN — group messages, normalized into the WhatsApp_Inbox schema,
  *    appended as JSON lines to ./state/inbox/whatsapp_inbox.jsonl.
- *    ALSO accepts 1:1 replies from Adar/Shanee (configurable JIDs), parses
- *    basic reminder-reply commands, writes them to ./state/inbox/replies.jsonl,
- *    and sends immediate acknowledgment. (Reply parsing is PARKED until v1.1 —
- *    SPEC §7.4: the bridge never reads 1:1 chats in v1; the guard below only
- *    lifts for the two adult JIDs once recipients.json names them.)
+ *    ALSO logs 1:1 replies from Adar/Shanee (configurable JIDs) to
+ *    ./state/inbox/replies.jsonl as raw material for the v1.1 reply-parsing
+ *    feature — it does NOT act on them and NEVER acks (reply parsing is PARKED
+ *    to v1.1; SPEC §7.4 / honest-affordance §3.7). The parse + ack helpers
+ *    below are the v1.1 scaffold, intentionally not called.
  * 2. SEND — polls ./state/outbox/whatsapp_outbox.jsonl (written by the Python
  *    automations via lib/outbox.py, the single chokepoint) and delivers each
  *    queued message to Adar/Shanee 1:1 (D-010: Baileys-first delivery).
@@ -40,8 +40,8 @@
  * --- Scope guard ---
  * Group messages (jid ends in @g.us) are always accepted.
  * 1:1 chats (@s.whatsapp.net) are accepted ONLY from configured recipient JIDs
- * (Adar + Shanee) and are treated as reminder-reply commands. All other 1:1
- * messages are dropped.
+ * (Adar + Shanee) and are LOGGED to replies.jsonl (no ack, no action — v1.1,
+ * SPEC §7.4). All other 1:1 messages are dropped.
  * Media bodies are never stored; only has_media=true is recorded.
  *
  * --- Baileys v7 / LID (D-029, 2026-06-12) ---
@@ -194,6 +194,11 @@ function parseReply(text) {
  * For done/snooze/mute this is a quick confirmation; the engine applies the
  * actual sheet change and may send a follow-up message.
  * For list/?, the engine will send the full digest separately.
+ *
+ * v1.1 STUB — intentionally NOT called: 1:1 replies are log-only until reply
+ * parsing ships (SPEC §7.4). Kept (with parseReply) as the scaffold that path
+ * will wire up; sending an ack today would promise an affordance that does
+ * nothing (§3.7). (B1, 2026-06-18.)
  */
 function ackText(parsed, rawText) {
   if (!parsed) {
@@ -357,7 +362,7 @@ async function start() {
       console.log('[pair] scan the QR above: WhatsApp → Settings → Linked devices → Link a device');
     }
     if (connection === 'open') {
-      console.log('[baileys] connected — listening to GROUP messages + 1:1 replies; outbox sender armed');
+      console.log('[baileys] connected — listening to GROUP messages + logging 1:1 replies (v1.1, no ack); outbox sender armed');
       beat();
       processOutbox(sock); // flush anything queued while we were down
       if (!global._beatTimer) {
@@ -385,12 +390,19 @@ async function start() {
         const jid = msg.key?.remoteJid;
         if (msg.key?.fromMe) continue;     // ignore our own sends
 
-        // --- 1:1 reply handling (reminder commands from Adar/Shanee) ---
+        // --- 1:1 replies: LOG ONLY, parked to v1.1 (SPEC §7.4) ---
+        // Reply *parsing* (acting on commands, acking the sender) is a v1.1
+        // feature whose prerequisites aren't met (LID-addressing below;
+        // reply_handler.py unwired). Until then the bridge only RECORDS replies
+        // from known senders to replies.jsonl as raw material for that feature —
+        // it never acts on them and NEVER acks. Acking would promise an
+        // affordance that does nothing (SPEC §3.7 honest-affordance). (B1, PO
+        // call 2026-06-18: "just log for now".)
         if (!isGroup(jid)) {
           // LID caveat (v7): inbound 1:1 chats may be addressed @lid while
           // recipients.json holds PN JIDs, so LID-addressed replies fall
-          // through this guard and are DROPPED. Replies are parked until
-          // v1.1 (SPEC §7.4) — resolve via msg.key.remoteJidAlt when unparking.
+          // through this guard and are DROPPED — resolve via
+          // msg.key.remoteJidAlt when the v1.1 feature is built.
           if (!isReplySender(jid)) continue; // drop unknown 1:1 messages
           const text = extractText(msg);
           if (!text) continue; // empty message, skip
@@ -398,9 +410,11 @@ async function start() {
           const senderName = msg.pushName || senderJid.split('@')[0];
           const tsSec = Number(msg.messageTimestamp?.toNumber?.() ?? msg.messageTimestamp) || Math.floor(Date.now() / 1000); // v7 protos may carry Long
 
-          const parsed = parseReply(text);
+          const parsed = parseReply(text); // recorded for v1.1; NOT acted on
 
-          // Write reply to replies.jsonl for the Python engine to process
+          // Append to replies.jsonl for the future reply-parsing feature. No
+          // engine consumes this yet (reply_handler.py is unwired) and no ack
+          // is sent — see the block comment above.
           const replyRow = {
             msg_id: msg.key?.id,
             sender_jid: senderJid,
@@ -411,14 +425,7 @@ async function start() {
             recognized: !!parsed,
           };
           fs.appendFileSync(REPLIES_FILE, JSON.stringify(replyRow) + '\n', 'utf-8');
-          console.log(`[reply] ${senderName}: "${text}" → ${parsed ? parsed.cmd : 'unrecognized'}`);
-
-          // Send immediate acknowledgment
-          const ack = ackText(parsed, text);
-          if (ack) {
-            await sock.sendMessage(jid, { text: ack });
-            console.log(`[reply-ack] → ${senderName}: ${ack.slice(0, 60)}`);
-          }
+          console.log(`[reply-log] ${senderName}: "${text}" → ${parsed ? parsed.cmd : 'unrecognized'} (logged, not acted on — v1.1)`);
           continue;
         }
 

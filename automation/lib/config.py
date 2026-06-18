@@ -235,6 +235,16 @@ ANTHROPIC_MODELS = {
 }
 LLM_FAKE_ENV = "FAMILY_INC_LLM_FAKE"  # tests inject a canned response here
 
+# Indicative LLM list prices (USD per 1M tokens, (input, output)) for the weekly
+# self-report spend line (ENGINEERING §8) — a health figure, NOT accounting.
+# Unknown models fall back to the default. Update when a provider reprices.
+LLM_PRICE_USD_PER_MTOK = {
+    "deepseek-chat": (0.27, 1.10),      # DeepSeek-V3 standard tier
+    "claude-haiku-4-5": (1.00, 5.00),   # Anthropic fallback (§8.7)
+}
+LLM_PRICE_DEFAULT_USD_PER_MTOK = (1.00, 5.00)
+USD_TO_ILS = 3.7                         # coarse FX — the spend line is indicative
+
 # ---------------------------------------------------------------------------
 # Hebcal
 # ---------------------------------------------------------------------------

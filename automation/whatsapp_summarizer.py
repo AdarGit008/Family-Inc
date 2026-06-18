@@ -229,10 +229,17 @@ def hard_rule_alert(msg: dict, cfg: dict) -> tuple[Optional[str], bool]:
     gtype = c["group_type"]
     when = _parse_dt(msg.get("received_at", ""))
 
-    # Rule 0 — critical/safety keywords: budget-exempt
+    # Rule 0 — critical/safety keywords: budget-exempt, and they PIERCE a mute.
+    # A critical match is the ONE signal a muted group still surfaces (SPEC §7.3).
     for pat in c["critical_keywords"]:
         if pat.search(text):
             return f"CRITICAL keyword /{pat.pattern}/", True
+    # Mute is otherwise a hard rule: below the critical tier a muted group raises
+    # NO alert (no alert-keyword / teacher-evening / vaad ALERT, no budget spend).
+    # This is what closes the "muted group still fires (and bypasses budget)" leak
+    # while honoring the PO call that criticals pierce mute (B3, SPEC §7.3).
+    if c["importance_default"] == "mute":
+        return None, False
     # Rule 1 — any alert_keyword regex match
     for pat in c["alert_keywords"]:
         if pat.search(text):
@@ -350,7 +357,10 @@ def classify(msg: dict, cfg: dict, recent: list[dict], use_llm: bool) -> dict:
         result["rule"] = reason
         return result
 
-    # Rule 5 — muted group never alerts (handled in deterministic too)
+    # Rule 5 — non-critical path. A muted group only reaches here for non-critical
+    # messages (a critical keyword already returned an ALERT above, piercing the
+    # mute); deterministic_classify then yields ROUTINE for the muted group, so no
+    # non-critical alert escapes a mute (SPEC §7.3).
     result = (llm_classify(msg, cfg, recent) if use_llm else None) \
         or deterministic_classify(msg, cfg)
     # digest_only groups can't auto-escalate to ALERT without a hard rule

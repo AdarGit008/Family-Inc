@@ -152,3 +152,5 @@ Tap targets ≥44px; contrast AA against both surfaces (the muted zinc fails on 
 4. Airplane mode → tap done → pill shows queued → reconnect → flush; the engine log shows a tombstone skip if within the window.
 5. The demo toggle never touches the live Sheet.
 6. Lighthouse PWA installable; an offline reload serves the shell + cached data.
+7. Offline, tap until the queue hits 50 → a one-shot "queue full" warning shows; further taps don't grow the queue; reconnect → flush re-arms the warning.
+8. (bridge) A 1:1 message to the bridge number from a known sender is logged to `replies.jsonl` but gets **no reply/ack** (reply-parsing is v1.1, SPEC §7.4); an unknown 1:1 sender is dropped.

@@ -1,6 +1,6 @@
 # Next session — Family Inc
 
-*Generated 2026-06-17 by `automation/session_kickoff.py`. Regenerated at every session end — do not edit by hand.*
+*Generated 2026-06-18 by `automation/session_kickoff.py`. Regenerated at every session end — do not edit by hand.*
 
 **Before pasting (on your machine):** `git pull --ff-only`
 
@@ -22,12 +22,12 @@ Open items:
 
 Recent commits (the dated decision record — decisions fold into the canon, not a separate log):
 
+- 2026-06-18 reviews: full-project audit + two self-contained fix briefs
+- 2026-06-18 M6.4: finance categorizer + budget reconciliation (D-050/051)
 - 2026-06-18 tools: repoint review.py + session_kickoff.py off the retired D-NN log
 - 2026-06-18 docs: consolidate canon (SPEC bump) — present-tense rewrite; D-NN log retired to Archive/
 - 2026-06-17 M6.1 review fixes (D-052): .gitignore bank_creds Blocker, SPEC 12.2 auth honesty, +tests
 - 2026-06-17 M6.1: finance ingestion repo half + finance tab standardization (D-052)
-- 2026-06-17 plan: finance LLM gap-fill approved (D-051) - 8.6 amended, Shanee
-- 2026-06-17 plan: finance analysis layer (D-050) - categories and trends, LLM gap-fill gated on Shanee
 
 Session contract: don't open lanes outside the current focus without a PO call ·
 constants → config, utilities → `automation/lib/`, message copy → templates ·

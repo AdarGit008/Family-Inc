@@ -13,6 +13,7 @@ from automation.weekly_briefing import (
     section_hygiene,
     section_money,
     section_reminders_week,
+    section_system,
     section_week_ahead,
 )
 
@@ -251,7 +252,7 @@ class TestSectionHygiene:
              "problems": ["col 5: expected 'Lead Times', found 'Lead Tymes'"]}),
             encoding="utf-8")
         wb = _make_wb({"Reminders": [], "Finance-Accounts": [], "People": []})
-        result = section_hygiene(wb, date(2026, 6, 10))
+        result = section_system(wb, date(2026, 6, 10))   # flags live in §System now (B6)
         assert "schema drift" in result
         assert "Lead Tymes" in result
 
@@ -262,7 +263,7 @@ class TestSectionHygiene:
             '{"at": "2026-06-10T07:25:00", "reason": "recurrence_clamped_to_month_end", '
             '"row": 7, "title": "Lease anniversary"}\n', encoding="utf-8")
         wb = _make_wb({"Reminders": [], "Finance-Accounts": [], "People": []})
-        result = section_hygiene(wb, date(2026, 6, 10))
+        result = section_system(wb, date(2026, 6, 10))   # flags live in §System now (B6)
         assert "recurrence_clamped_to_month_end" in result
         assert "Lease anniversary" in result
 
@@ -298,6 +299,43 @@ class TestSectionHygiene:
 
 
 # ---------------------------------------------------------------------------
+# section_system — the ENGINEERING §8 self-report line (B6)
+# ---------------------------------------------------------------------------
+class TestSectionSystem:
+    def test_no_data_renders_benign_line(self, tmp_runtime):
+        # Fresh box: no logs → a benign line, never a crash or alarming 0/7.
+        result = section_system(_make_wb({"Reminders": []}), date(2026, 6, 13))
+        assert "No system activity" in result
+
+    def test_self_report_line_from_logs(self, tmp_runtime):
+        from automation.lib import config
+        config.REMINDERS_LOG.parent.mkdir(parents=True, exist_ok=True)
+        rows = ["run_date,recipient,fires_sent,fires_dropped,skipped_due_to_tombstone,"
+                "dry_run,titles_sent,tombstone_max_age_h"]
+        for i in range(7):  # 7 daily runs; the latest skipped 2 (max age 1.4h)
+            d = (date(2026, 6, 13) - timedelta(days=i)).isoformat()
+            rows.append(f"{d},adar,1,0,{'2' if i == 0 else '0'},no,X,{'1.40' if i == 0 else '0.00'}")
+        config.REMINDERS_LOG.write_text("\n".join(rows) + "\n", encoding="utf-8")
+        config.LLM_COSTS_LOG.write_text(
+            "at,source,task,model,input_tokens,output_tokens\n"
+            "2026-06-12T10:00:00,whatsapp_summarizer,classify,deepseek-chat,1000000,200000\n",
+            encoding="utf-8")
+        result = section_system(_make_wb({"Reminders": []}), date(2026, 6, 13))
+        assert "7/7 runs green" in result
+        assert "2 tombstone skips (max age 1.4h)" in result
+        assert "messages classified" in result
+        assert "₪" in result and "LLM spend" in result
+
+    def test_fail_flag_warning_replaces_the_pulse(self, tmp_runtime):
+        from automation.lib import config
+        config.FAIL_FLAG.parent.mkdir(parents=True, exist_ok=True)
+        config.FAIL_FLAG.write_text("2026-06-13T07:25:00 family-reminders\n", encoding="utf-8")
+        result = section_system(_make_wb({"Reminders": []}), date(2026, 6, 13))
+        assert "runs green" not in result          # the pulse is replaced…
+        assert "unit failures unreported" in result  # …by the warning
+
+
+# ---------------------------------------------------------------------------
 # render_briefing (integration smoke)
 # ---------------------------------------------------------------------------
 class TestRenderBriefing:
@@ -319,4 +357,5 @@ class TestRenderBriefing:
         assert "Money" in result
         assert "Goals" in result
         assert "Data hygiene" in result
+        assert "## System" in result   # B6: the self-report section is rendered
         assert f"week of {today.isoformat()}" in result

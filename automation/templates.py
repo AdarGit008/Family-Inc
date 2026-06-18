@@ -41,6 +41,7 @@ FLAG_EMOJI = {
 SECTION_DEFERRED = "נשמרו מאתמול (מכסת הודעות):"            # [Shanee review]
 DEFERRED_ITEM = "• {body}"
 HEBCAL_LINE = "🕯 הדלקת נרות {candles} · צאת שבת {havdalah}"
+HEBCAL_LINE_CHAG = "🕯 הדלקת נרות {candles} · צאת החג {havdalah}"      # [Shanee review]
 
 # --- WhatsApp groups section (built hourly, folded into the digest) ---------
 WA_SECTION_HEAD = "קבוצות (24ש׳):"
@@ -76,5 +77,10 @@ EMAIL_SECTION_HEAD = "— {recipient} —"
 # Hebrew pass are still open — this stays the as-built English markdown until
 # that lane is scheduled.
 WEEKLY_TITLE = "# 🏠 Family inc. — Weekly Briefing"
+# System self-report (ENGINEERING §8): the one health line, shown when nothing
+# is wrong; a fail-flag / drift / stale-heartbeat warning replaces it.
+SELF_REPORT_LINE = ("{runs}/{expected} runs green · {classified} messages classified · "
+                    "{skips_phrase} · ₪{spend} LLM spend")
+SELF_REPORT_NO_DATA = "_No system activity logged this week yet._"
 WEEKLY_FOOTER = ("\n---\n_Read together with coffee, ~20 minutes. Edits go into "
                  "Family_OS — next week's briefing reflects them automatically._")

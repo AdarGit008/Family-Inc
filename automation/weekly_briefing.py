@@ -31,6 +31,7 @@ if __package__ in (None, ""):  # direct `python3 automation/weekly_briefing.py`
     _sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
 
 import argparse
+import csv
 import json
 import logging
 from datetime import date, datetime, timedelta
@@ -295,7 +296,9 @@ def _system_flags(today: "date | None" = None) -> list[str]:
 
 
 def section_hygiene(wb, today: date) -> str:
-    issues = _system_flags(today)
+    # System flags (drift / engine-review / fail-flag / delivery) now live in
+    # section_system (ENGINEERING §8) — this section is Sheet-data hygiene only.
+    issues: list[str] = []
     # Reminders missing due date
     r_ws = wb["Reminders"]
     missing = 0
@@ -324,6 +327,131 @@ def section_hygiene(wb, today: date) -> str:
     if not issues:
         return "_All clean._"
     return "\n".join(issues)
+
+
+# ---------------------------------------------------------------------------
+# System self-report line (ENGINEERING §8 / SPEC §8.3) — the one health line.
+# Reads the runtime logs; each helper degrades to zero when its log is absent so
+# a fresh box renders a benign "no activity yet" line, never a crash.
+# ---------------------------------------------------------------------------
+def _in_week(d, today: date) -> bool:
+    # Trailing 7-day window [today-6 .. today]; ACCURACY_REVIEW_DAYS is the named
+    # "trailing window the weekly surface reviews" — the same window every
+    # self-report metric uses (runs, tombstones, classified, spend).
+    return d is not None and 0 <= (today - d).days < config.ACCURACY_REVIEW_DAYS
+
+
+def _runs_logged_this_week(today: date) -> tuple[int, int]:
+    """(distinct REAL run-dates logged in the trailing week, expected). The engine
+    logs one heartbeat row per run — a logged non-dry-run date is a green run; a
+    dry-run-only date doesn't count toward green."""
+    expected = config.ACCURACY_REVIEW_DAYS
+    if not config.REMINDERS_LOG.exists():
+        return 0, expected
+    seen: set = set()
+    try:
+        with config.REMINDERS_LOG.open(encoding="utf-8") as fh:
+            for row in csv.DictReader(fh):
+                d = to_date(row.get("run_date"))
+                if _in_week(d, today) and (row.get("dry_run") or "no").strip().lower() != "yes":
+                    seen.add(d)
+    except OSError:
+        return 0, expected
+    return len(seen), expected
+
+
+def _tombstone_stats(today: date) -> tuple[int, float]:
+    """(tombstone skips this week, max skip age in hours). `skipped_due_to_tombstone`
+    is a per-run count repeated on each recipient row → counted once per run-date;
+    `tombstone_max_age_h` is the additive age column (0 on pre-B6 rows)."""
+    if not config.REMINDERS_LOG.exists():
+        return 0, 0.0
+    per_run: dict = {}
+    max_age = 0.0
+    try:
+        with config.REMINDERS_LOG.open(encoding="utf-8") as fh:
+            for row in csv.DictReader(fh):
+                d = to_date(row.get("run_date"))
+                if not _in_week(d, today):
+                    continue
+                try:
+                    per_run[d] = int(row.get("skipped_due_to_tombstone") or 0)
+                except (TypeError, ValueError):
+                    pass
+                try:
+                    max_age = max(max_age, float(row.get("tombstone_max_age_h") or 0))
+                except (TypeError, ValueError):
+                    pass
+    except OSError:
+        return 0, 0.0
+    return sum(per_run.values()), max_age
+
+
+def _llm_spend_ils(today: date) -> float:
+    """Indicative ₪ LLM spend (a health figure, not accounting): the trailing
+    week's logged tokens priced via config.LLM_PRICE_USD_PER_MTOK × FX, or
+    month-to-date on the first weekly briefing of the month (SPEC §8.7)."""
+    if not config.LLM_COSTS_LOG.exists():
+        return 0.0
+    # Same trailing 7-day window as the other metrics ([today-6 .. today]) — or
+    # month-to-date on the month's one first-week briefing (SPEC §8.7).
+    start = (today.replace(day=1) if today.day <= 7
+             else today - timedelta(days=config.ACCURACY_REVIEW_DAYS - 1))
+    usd = 0.0
+    try:
+        with config.LLM_COSTS_LOG.open(encoding="utf-8") as fh:
+            for row in csv.DictReader(fh):
+                d = to_date((row.get("at") or "")[:10])
+                if d is None or d < start or d > today:
+                    continue
+                pin, pout = config.LLM_PRICE_USD_PER_MTOK.get(
+                    row.get("model", ""), config.LLM_PRICE_DEFAULT_USD_PER_MTOK)
+                try:
+                    usd += int(row.get("input_tokens") or 0) / 1e6 * pin
+                    usd += int(row.get("output_tokens") or 0) / 1e6 * pout
+                except (TypeError, ValueError):
+                    pass
+    except OSError:
+        return 0.0
+    return usd * config.USD_TO_ILS
+
+
+def _classified_count(wb, today: date) -> int:
+    """WhatsApp messages classified in the trailing week — the summarizer's count,
+    read off the WhatsApp_Inbox tab via accuracy_review. 0 / degrade-quiet when the
+    tab or module is unavailable (an aux metric must never break the briefing)."""
+    try:
+        from automation import accuracy_review as ar
+        from automation.whatsapp_summarizer import CONFIG_DEFAULT, load_config
+        if config.WA_INBOX_SHEET_TAB not in wb.sheetnames:
+            return 0
+        rows = ar._tab_rows(wb, config.WA_INBOX_SHEET_TAB)
+        m = ar.collect(rows, today, config.ACCURACY_REVIEW_DAYS, load_config(CONFIG_DEFAULT))
+        return m.total_in_window
+    except Exception as e:  # noqa: BLE001 — aux metric, never break the briefing
+        log.warning("self-report classified count skipped: %s", e)
+        return 0
+
+
+def section_system(wb, today: date) -> str:
+    """The one system-health line (ENGINEERING §8): runs-green · messages
+    classified · tombstone skips (max age) · ₪ LLM spend. A fail-flag,
+    schema-drift, or stale-heartbeat warning REPLACES it — the humans only read
+    logs when the briefing tells them to."""
+    flags = _system_flags(today)
+    if flags:
+        return "\n".join(flags)
+    runs, expected = _runs_logged_this_week(today)
+    classified = _classified_count(wb, today)
+    skips, max_age = _tombstone_stats(today)
+    spend = _llm_spend_ils(today)
+    if not (runs or classified or skips or spend):
+        return T.SELF_REPORT_NO_DATA
+    skips_phrase = (f"{skips} tombstone skips (max age {max_age:.1f}h)"
+                    if skips else "0 tombstone skips")
+    return T.SELF_REPORT_LINE.format(runs=runs, expected=expected,
+                                     classified=classified, skips_phrase=skips_phrase,
+                                     spend=f"{spend:.2f}")
 
 
 def section_classifier_accuracy(wb, today: date) -> str:
@@ -371,6 +499,9 @@ def render_briefing(wb, today: date) -> str:
 
     parts.append("\n## Data hygiene")
     parts.append(section_hygiene(wb, today))
+
+    parts.append("\n## System")
+    parts.append(section_system(wb, today))
 
     parts.append("\n## Classifier accuracy")
     parts.append(section_classifier_accuracy(wb, today))
