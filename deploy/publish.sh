@@ -3,7 +3,9 @@
 # history, verify, force-push. Runs on the PO's Mac, never the VPS, and only
 # while the repo is still PRIVATE. Full sequence: deploy/README.md §6.
 #
-# Needs: git-filter-repo (brew install git-filter-repo) and seeds/redact.txt
+# Needs: git-filter-repo (brew install git-filter-repo), a PCRE-enabled git
+# (`git grep -P` — Homebrew git has it; some stock macOS gits don't), and
+# seeds/redact.txt
 # (gitignored — lives only on PO machines + backups; it carries the strings it
 # removes, so it can never be committed).
 set -euo pipefail
@@ -37,10 +39,22 @@ while IFS= read -r p; do
   if git log --all --oneline -- "$p" | grep -q .; then echo "FAIL path still in history: $p"; fail=1; fi
 done < "$WORK/paths.txt"
 
-echo "==> gauntlet 2/2: every redaction LHS absent from every blob of every ref"
+echo "==> gauntlet 2/2: every redaction (literal AND regex:) absent from every blob of every ref"
 ALL_REVS=$(git rev-list --all)
 while IFS= read -r line; do
-  case "$line" in \#*|""|regex:*) continue;; esac
+  case "$line" in \#*|"") continue;; esac
+  if [ "${line#regex:}" != "$line" ]; then
+    # deploy-systemd#4: regex: rules were silently skipped here — filter-repo
+    # APPLIED them but the gauntlet never VERIFIED them, so a regex PII redaction
+    # could fail unnoticed before the public force-push. Verify with PCRE (the
+    # closest grep flavor to filter-repo's Python regex). git grep -P exit codes:
+    # 0 = still matches (redaction incomplete), 1 = clean, >1 = no PCRE / error.
+    pat="${line#regex:}"; pat="${pat%%==>*}"
+    out=$(git grep -I -P -e "$pat" $ALL_REVS 2>&1); rc=$?
+    if [ "$rc" -eq 0 ]; then echo "FAIL regex still matches: $pat"; fail=1
+    elif [ "$rc" -ne 1 ]; then echo "FAIL cannot verify regex — install a PCRE-enabled git (brew install git): $pat — $out"; fail=1; fi
+    continue
+  fi
   needle="${line%%==>*}"
   if git grep -q -F -- "$needle" $ALL_REVS 2>/dev/null; then echo "FAIL string still present: $needle"; fail=1; fi
 done < "$WORK/redact.txt"

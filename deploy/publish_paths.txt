@@ -1,6 +1,13 @@
 # D-030 — paths stripped from ALL history by deploy/publish.sh (--invert-paths).
 # A bare directory line covers everything under it. Scan-derived 2026-06-12:
 # every line matched a personal-data token in at least one historical blob.
+#
+# NOT here (deliberate, GAP-5 / Lane S, audited 2026-06-18): the committed
+# binary seed `Family_OS.xlsx` is needed at HEAD as the hermetic test backend,
+# and a binary zip can't be string-scrubbed by --replace-text anyway. It is kept
+# SYNTHETIC by construction (placeholders only; the principals Adar/Shanee are
+# accepted-public per CLAUDE.md) and guarded by tests/test_seed_safety.py, which
+# fails CI if any real PII (email/phone/teudat-zehut/JID/account no.) is added.
 # The 8 personal Archive docs (gitignored on disk since D-027f):
 Archive/00_Runbook.md
 Archive/02_Kickoff_Output_2026-05-30.md
