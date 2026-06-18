@@ -47,6 +47,23 @@ class TestBudget:
         assert outbox.read_ledger(DAY) == {"adar": 2}
         assert any(e["event"] == "alert_suppressed_by_budget" for e in _events())
 
+    def test_corrupt_ledger_fails_closed(self, tmp_runtime, caplog):
+        """outbox-budget#1: a torn/corrupt ledger must NOT silently reopen the
+        day's cap (fail-OPEN flooded alerts). Fail CLOSED — read as cap-reached,
+        so alerts defer (never lost) until the operator inspects + deletes it."""
+        import logging
+        config.OUTBOX_LEDGER_DIR.mkdir(parents=True, exist_ok=True)
+        (config.OUTBOX_LEDGER_DIR / f"{DAY.isoformat()}.json").write_text(
+            "{ this is not valid json", encoding="utf-8")
+        with caplog.at_level(logging.ERROR, logger="outbox"):
+            assert outbox.read_ledger(DAY) == {"adar": config.ALERT_BUDGET_PER_DAY,
+                                               "shanee": config.ALERT_BUDGET_PER_DAY}
+        assert any("CORRUPT" in r.message for r in caplog.records)   # loud for the operator
+        res = outbox.queue("adar", "should defer", "alert", msg_id="z1", now=MORNING)
+        assert res.deferred == ["adar"] and not res.queued      # deferred, not flooded
+        # …but a critical still pierces — a corrupt ledger must never block safety.
+        assert outbox.queue("adar", "emergency", "critical", msg_id="z2", now=MORNING).queued
+
     def test_ledger_is_per_recipient(self, tmp_runtime):
         outbox.queue("adar", "x", "alert", msg_id="a1", now=MORNING)
         outbox.queue("adar", "y", "alert", msg_id="a2", now=MORNING)

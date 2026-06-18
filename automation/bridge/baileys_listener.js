@@ -293,8 +293,12 @@ async function processOutbox(sock) {
       console.log('[outbox] recipients.json missing/invalid — sending disabled');
       return;
     }
-    // dedup per (id, target) so a crash mid-"both" still delivers the second leg
-    const done = new Set(readJsonl(SENT_FILE).map((r) => `${r.id}:${r.to}`));
+    // dedup per (id, target) so a crash mid-"both" still delivers the second leg.
+    // Only TERMINAL outcomes (sent / refused) suppress a retry — a transient
+    // 'send_failed' must NOT mark the pair done, or GAP-10's retry never happens.
+    const done = new Set(readJsonl(SENT_FILE)
+      .filter((r) => r.status === 'sent' || r.status === 'refused_unknown_recipient')
+      .map((r) => `${r.id}:${r.to}`));
     for (const row of pending) {
       if (!row.id) continue;
       // Quiet-hours hold (lib/outbox.py stamps not_before as local-naive ISO;
@@ -313,12 +317,23 @@ async function processOutbox(sock) {
           console.log(`[outbox] REFUSED ${row.id} → "${name}" (not a configured recipient)`);
           continue;
         }
-        await sock.sendMessage(jid, { text: String(row.body || '').slice(0, 4096) });
-        fs.appendFileSync(SENT_FILE, JSON.stringify({
-          id: row.id, to: name, status: 'sent', at: new Date().toISOString(),
-        }) + '\n', 'utf-8');
-        console.log(`[outbox] sent ${row.id} → ${name}`);
-        done.add(`${row.id}:${name}`);
+        // GAP-10: per-row try/catch — one failed send must not abandon the rest of
+        // the batch (head-of-line block). Record the failure (transient, so NOT in
+        // `done` → retried next poll) and continue with the other rows/targets.
+        try {
+          await sock.sendMessage(jid, { text: String(row.body || '').slice(0, 4096) });
+          fs.appendFileSync(SENT_FILE, JSON.stringify({
+            id: row.id, to: name, status: 'sent', at: new Date().toISOString(),
+          }) + '\n', 'utf-8');
+          console.log(`[outbox] sent ${row.id} → ${name}`);
+          done.add(`${row.id}:${name}`);
+        } catch (e) {
+          fs.appendFileSync(SENT_FILE, JSON.stringify({
+            id: row.id, to: name, status: 'send_failed',
+            at: new Date().toISOString(), error: String(e && e.message || e).slice(0, 200),
+          }) + '\n', 'utf-8');
+          console.log(`[outbox] send FAILED ${row.id} → ${name} (will retry next poll): ${e && e.message || e}`);
+        }
       }
     }
   } catch (e) {

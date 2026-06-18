@@ -18,6 +18,8 @@ ledger, and skips rows whose `not_before` hasn't arrived.
 """
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import logging
 import uuid
@@ -64,13 +66,39 @@ def read_ledger(day: date) -> dict[str, int]:
     try:
         return {k: int(v) for k, v in json.loads(p.read_text(encoding="utf-8")).items()}
     except (json.JSONDecodeError, OSError, ValueError):
-        log.warning("outbox ledger unreadable (%s) — treating as empty, fail-open", p)
-        return {}
+        # FAIL-CLOSED (outbox-budget#1): a corrupt ledger must NOT silently reopen
+        # the day's 2/day cap. Treat the day as already at cap so alerts defer
+        # (never lost — they ride tomorrow's digest) instead of flooding. Loud so
+        # the operator inspects/deletes the file to reset. Atomic writes below make
+        # this rare (only true disk corruption, not a torn write).
+        log.error("outbox ledger CORRUPT (%s) — fail-closed: treating today as cap-reached "
+                  "(alerts will defer). Inspect and delete to reset.", p)
+        return {r: config.ALERT_BUDGET_PER_DAY for r in ("adar", "shanee")}
 
 
 def _write_ledger(day: date, ledger: dict[str, int]) -> None:
     config.OUTBOX_LEDGER_DIR.mkdir(parents=True, exist_ok=True)
-    _ledger_path(day).write_text(json.dumps(ledger, indent=1), encoding="utf-8")
+    p = _ledger_path(day)
+    # Atomic write (outbox-budget#1): tmp + replace, so a crash mid-write can't
+    # leave a torn ledger that read_ledger would have to fail-closed on.
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(ledger, indent=1), encoding="utf-8")
+    tmp.replace(p)
+
+
+@contextlib.contextmanager
+def _ledger_lock(day: date):
+    """Exclusive lock around a day's ledger read-modify-write (outbox-budget#2),
+    so two concurrent senders can't both pass the 2/day check and double-spend —
+    the exact race the single-shared-ledger rule (D-015) exists to prevent."""
+    config.OUTBOX_LEDGER_DIR.mkdir(parents=True, exist_ok=True)
+    lock_path = config.OUTBOX_LEDGER_DIR / f"{day.isoformat()}.lock"
+    with open(lock_path, "w", encoding="utf-8") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
 
 
 def _log_event(event: str, **fields) -> None:
@@ -130,8 +158,13 @@ def pop_deferred(upto: date) -> list[dict]:
     take = [r for r in rows if r.get("deferred_on", "") < upto.isoformat()]
     keep = [r for r in rows if r.get("deferred_on", "") >= upto.isoformat()]
     if take:
-        config.DEFERRED_FILE.write_text(
+        # Atomic rewrite (tmp + replace), same discipline as the ledger
+        # (outbox-budget#1) — a crash mid-rewrite must not corrupt the deferred
+        # queue and lose alerts that haven't ridden a digest yet.
+        tmp = config.DEFERRED_FILE.with_name(config.DEFERRED_FILE.name + ".tmp")
+        tmp.write_text(
             "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in keep), encoding="utf-8")
+        tmp.replace(config.DEFERRED_FILE)
     return take
 
 
@@ -178,25 +211,28 @@ def queue(to: str, body: str, kind: str = "alert", *, source: str = "unknown",
         return result
 
     # Budget (alerts only; briefings exempt by principle, criticals by design).
+    # The whole check+increment runs under an exclusive lock (outbox-budget#2) so
+    # concurrent senders can't each pass the 2/day check on a stale read.
     if kind == "alert":
-        ledger = read_ledger(now.date())
-        ok, over = [], []
-        for t in targets:
-            (ok if ledger.get(t, 0) < config.ALERT_BUDGET_PER_DAY else over).append(t)
-        for t in over:
-            _append_deferred({
-                "id": msg_id, "to": t, "body": body.strip(), "source": source,
-                "deferred_on": now.date().isoformat(),
-            })
-            _log_event("alert_suppressed_by_budget", id=msg_id, target=t, source=source)
-            log.info("alert suppressed by budget → tomorrow's digest (%s → %s)", msg_id, t)
-        result.deferred = over
-        if not ok:
-            return result
-        for t in ok:
-            ledger[t] = ledger.get(t, 0) + 1
-        _write_ledger(now.date(), ledger)
-        targets = ok
+        with _ledger_lock(now.date()):
+            ledger = read_ledger(now.date())
+            ok, over = [], []
+            for t in targets:
+                (ok if ledger.get(t, 0) < config.ALERT_BUDGET_PER_DAY else over).append(t)
+            for t in over:
+                _append_deferred({
+                    "id": msg_id, "to": t, "body": body.strip(), "source": source,
+                    "deferred_on": now.date().isoformat(),
+                })
+                _log_event("alert_suppressed_by_budget", id=msg_id, target=t, source=source)
+                log.info("alert suppressed by budget → tomorrow's digest (%s → %s)", msg_id, t)
+            result.deferred = over
+            if not ok:
+                return result
+            for t in ok:
+                ledger[t] = ledger.get(t, 0) + 1
+            _write_ledger(now.date(), ledger)
+            targets = ok
 
     # Quiet hours: alerts + briefings hold; criticals do not (SPEC §8.2).
     not_before = None
