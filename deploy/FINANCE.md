@@ -46,7 +46,7 @@ after the rename. Renaming a tab preserves its data and formulas.
 ```bash
 # /etc/family-inc/bank_creds.json  (mode 600, owner familyinc)
 # Copy deploy/bank_creds.example.json and fill ONLY the mizrahi block to start.
-# Read-only portal logins (D-049). Omit a provider block to skip it.
+# Read-only portal logins. Omit a provider block to skip it.
 sudo install -o familyinc -g familyinc -m 600 /dev/stdin /etc/family-inc/bank_creds.json <<'JSON'
 { "mizrahi": { "username": "…", "password": "…" } }
 JSON

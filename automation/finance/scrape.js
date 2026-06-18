@@ -37,6 +37,9 @@ const { CompanyTypes, createScraper } = require('israeli-bank-scrapers');
 const CREDS_FILE = process.env.FAMILY_INC_BANK_CREDS
   || '/etc/family-inc/bank_creds.json';
 const OUT_DIR = process.env.FAMILY_INC_FINANCE_DIR || '/var/lib/family-inc/finance';
+// Fixed lookback (NOT since-last-success): Txn-ID dedup on ingest makes an
+// overlapping rerun idempotent, so a fixed window needs no persisted cursor
+// (SPEC §12.2). 45d covers a missed run or two; widen via the env var if needed.
 const WINDOW_DAYS = parseInt(process.env.FAMILY_INC_FINANCE_WINDOW_DAYS || '45', 10);
 
 // provider key (in bank_creds.json) → israeli-bank-scrapers company id.
@@ -111,7 +114,9 @@ async function scrapeProvider(name, creds) {
     combineInstallments: false, // stable per-charge ids: combined rows mutate
                                 // their amount as installments post → hash churn
 
-    showBrowser: false,
+    showBrowser: false,   // headless: no interactive OTP prompt — an OTP
+                          // re-challenge fails loud (next digest) and the
+                          // operator re-runs the unit once it clears (SPEC §12.2)
     args: ['--no-sandbox', '--disable-dev-shm-usage'], // unprivileged systemd unit
   });
   const result = await scraper.scrape(creds);

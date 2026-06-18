@@ -186,7 +186,9 @@ def _mock_csv_text() -> str:
 @dataclass
 class RunResult:
     txns_new: int = 0
-    txns_seen: int = 0          # deduped against the tab
+    txns_seen: int = 0          # already on the durable tab (Txn-ID match)
+    txns_phantom_dup: int = 0   # dropped as an in-batch id collision (id-less rows
+                                # that hash alike) — NOT "already on the tab"
     accounts: int = 0
     is_mock: bool = False
     wrote: bool = False
@@ -258,8 +260,11 @@ def run(csv_dir: Optional[Path] = None, sheet_path: Optional[Path] = None,
     new_txns, batch = [], set()
     for t in txns:
         tid = t["Txn-ID"]
-        if tid in seen or tid in batch:
-            res.txns_seen += 1
+        if tid in seen:
+            res.txns_seen += 1          # genuinely already on the tab
+            continue
+        if tid in batch:
+            res.txns_phantom_dup += 1   # in-batch id collision (see Txn-ID docstring)
             continue
         batch.add(tid)
         new_txns.append(t)
@@ -275,6 +280,7 @@ def run(csv_dir: Optional[Path] = None, sheet_path: Optional[Path] = None,
     print(f"\nParsed {len(txns)} transaction(s) from {len(paths)} CSV(s) · "
           f"{res.txns_new} new · {res.txns_seen} already on the tab · "
           f"{len(account_rows)} account(s)"
+          + (f" · {res.txns_phantom_dup} in-batch dup(s) dropped" if res.txns_phantom_dup else "")
           + (f" · {len(res.scrape_errors)} scrape error(s)" if res.scrape_errors else ""))
 
     if dry_run:

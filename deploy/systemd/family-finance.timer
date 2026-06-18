@@ -1,7 +1,8 @@
-; 06:00 daily — before the 07:25 reminders engine read, so fresh balances feed
-; the 07:30 digest + the weekly briefing and the >35d stale-import line stays
-; accurate (SPEC §12.2). Cadence is the first tuning knob: if Max/Cal OTP
-; re-challenges prove noisy, drop the cards to 2–3×/week, keep the bank daily.
+; 06:00 daily — ahead of the 07:25/07:30 morning runs so balances are fresh for
+; the M6.3 finance consumers (the weekly-briefing Money section + dashboard
+; drawer + the >35d stale-import line; those go live at M6.3 — SPEC §12.2). The
+; 07:25 engine + 07:30 digest do not read finance. Cadence is the first tuning
+; knob: if Max/Cal OTP re-challenges prove noisy, drop the cards to 2–3×/week.
 [Unit]
 Description=Family inc. finance scraper timer (06:00 Asia/Jerusalem)
 

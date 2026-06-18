@@ -49,7 +49,7 @@ systemctl start family-bridge
 ## 4. Verify (~5 min)
 
 ```bash
-systemctl list-timers 'family-*'            # 5 timers, next fires sane
+systemctl list-timers 'family-*'            # 7 timers, next fires sane
 sudo -u familyinc -i sh -c 'cd /opt/family-inc && uv run --no-sync python automation/daily_digest.py --dry-run'
 journalctl -u family-bridge -n 20           # "connected", no QR loop
 ```

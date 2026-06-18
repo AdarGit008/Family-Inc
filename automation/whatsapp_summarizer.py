@@ -9,7 +9,7 @@ daily "WhatsApp groups (last 24h)" digest that daily_digest.py folds into the
 morning message.
 
 Pipeline:
-  inbox JSONL  ->  classify (hard rules -> lib/llm.py Haiku -> deterministic)
+  inbox JSONL  ->  classify (hard rules -> lib/llm.py DeepSeek -> deterministic)
               ->  per-group routing -> dispatch ALERTs via lib/outbox.queue()
                   (kind=alert|critical, id=wa-{msg_id}; the outbox ledger is
                   the ONLY budget enforcement — D-015. Over-budget alerts are

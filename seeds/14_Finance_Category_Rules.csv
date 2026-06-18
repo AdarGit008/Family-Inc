@@ -1,4 +1,4 @@
-# Family inc. — finance category rules (SPEC §12.2 / §8.6, M6.4; D-050).
+# Family inc. — finance category rules (SPEC §12.2 / §8.6, M6.4).
 #
 # pattern,category
 #   pattern  = case-insensitive SUBSTRING matched against a transaction's
@@ -13,9 +13,12 @@
 # (a `!`-exception in .gitignore) so a fresh checkout categorizes on-box and the
 # tests are hermetic.
 #
-# PROVISIONAL: the category set mirrors the seed Finance-Budget rows; Shanee's
-# budget migration is the vocabulary authority and may rename/extend these. An
-# unmatched transaction stays blank (Cat-Source ""), never force-fit to "Other".
+# PROVISIONAL: most categories mirror the seed Finance-Budget rows (GAP-1, fixed
+# 2026-06-18: "Dining"→"Dining out" to match the budget row). NOT YET aligned:
+# Fees / Income / Shopping have no Finance-Budget row, so their actuals SUMIFS
+# reads ₪0 until Shanee's budget migration (the vocabulary authority) adds rows
+# or remaps them — tests/test_finance.py guards rules.vocab ⊆ budget categories.
+# An unmatched transaction stays blank (Cat-Source ""), never force-fit to "Other".
 # Lines starting with # and blank lines are ignored; '#' is not a wildcard.
 pattern,category
 # --- Health (before any grocery rule: SUPERPHARM must not fall to Groceries) ---
@@ -106,23 +109,23 @@ ARNONA,Housing
 MORTGAGE,Housing
 שכר דירה,Housing
 ועד בית,Housing
-# --- Dining ---
-WOLT,Dining
-וולט,Dining
-תן ביס,Dining
-10BIS,Dining
-מסעדה,Dining
-RESTAURANT,Dining
-קפה,Dining
-CAFE,Dining
-AROMA,Dining
-ארומה,Dining
-LANDWER,Dining
-פיצה,Dining
-PIZZA,Dining
-המבורגר,Dining
-MCDONALD,Dining
-COFFEE,Dining
+# --- Dining out ---
+WOLT,Dining out
+וולט,Dining out
+תן ביס,Dining out
+10BIS,Dining out
+מסעדה,Dining out
+RESTAURANT,Dining out
+קפה,Dining out
+CAFE,Dining out
+AROMA,Dining out
+ארומה,Dining out
+LANDWER,Dining out
+פיצה,Dining out
+PIZZA,Dining out
+המבורגר,Dining out
+MCDONALD,Dining out
+COFFEE,Dining out
 # --- Entertainment ---
 NETFLIX,Entertainment
 נטפליקס,Entertainment

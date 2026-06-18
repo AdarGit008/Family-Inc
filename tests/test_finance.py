@@ -137,7 +137,9 @@ def test_idless_collision_drops_second_charge_as_phantom_dup(tmp_path):
             "MIZ-0001,9000,2026-06-15,,-12.00,COFFEE KIOSK\n")   # two real ₪12 coffees
     sp = _sheet(tmp_path)
     res = fin.run(csv_dir=_csv(tmp_path, text), sheet_path=sp, today=TODAY, now=NOW)
-    assert res.txns_new == 1 and res.txns_seen == 1              # second collapsed
+    # finance-ingest#3: the in-batch collision is a distinct counter, NOT
+    # mislabeled "already on the tab" (txns_seen). Drop behavior is unchanged.
+    assert res.txns_new == 1 and res.txns_phantom_dup == 1 and res.txns_seen == 0
     assert len(_rows(sp, cfg.FINANCE_TRANSACTIONS_TAB)) - 1 == 1
 
 
@@ -315,6 +317,24 @@ def test_rules_vocabulary_is_distinct_and_seeded():
     assert len(vocab) == len(set(vocab))            # no dupes — the LLM vocab
 
 
+def test_rules_vocab_within_budget_categories():
+    """GAP-1 (single highest-value audit fix): every category the rules engine /
+    LLM may emit MUST be a Finance-Budget row, or that category's actuals SUMIFS
+    reads ₪0 and the spend is invisible. 'Dining'→'Dining out' is now aligned.
+    KNOWN-PENDING — Shanee's budget-vocab migration is the authority: Fees/Income/
+    Shopping have no budget row yet, held as an explicit allow-list so this test
+    still catches any NEW drift and the gap can't be forgotten. When Shanee maps
+    them (add rows, or remap the rules), shrink `pending` toward empty."""
+    rules_vocab = set(categorize.vocabulary(categorize.load_rules()))
+    budget = {r[0] for r in _rows(cfg.SHEET_PATH, cfg.FINANCE_BUDGET_TAB)[1:]
+              if r[0] and r[0] != "TOTAL"}
+    pending = {"Fees", "Income", "Shopping"}        # GAP-1: awaiting Shanee's budget rows
+    unmapped = rules_vocab - budget - pending
+    assert not unmapped, f"rules emit categories with no Finance-Budget row: {unmapped}"
+    assert pending <= rules_vocab                   # keep the allow-list honest (no stale entries)
+    assert "Dining out" in rules_vocab and "Dining" not in rules_vocab   # the GAP-1 rename
+
+
 def test_missing_rules_file_degrades_quiet(tmp_path):
     # No file → rules engine no-ops (returns []), categorize leaves blanks.
     txns = [{"Description": "SHUFERSAL", "Amount (ILS)": -10,
@@ -417,8 +437,10 @@ def test_seed_budget_uses_text_prefix_not_serial_sumifs():
 
 def test_text_prefix_month_window_sums_iso_text_dates():
     """Prove the LOGIC the SUMIFS encodes works on the ISO-TEXT dates ingest
-    writes (openpyxl can't evaluate formulas; live evaluation is the M6.3
-    check). This is the value that read ₪0 before the fix."""
+    writes. This Python re-implementation is DELIBERATE (tests-quality#3 / GAP-6):
+    the seed backend reads formula cells as None offline (lib/sheet XlsxBackend
+    data_only caveat), so the real SUMIFS can't be evaluated here — it's verified
+    live at M6.3. This is the value that read ₪0 before the fix."""
     txns = [
         {"Date": "2026-06-03", "Category": "Groceries", "Amount (ILS)": -432.50},
         {"Date": "2026-06-20", "Category": "Groceries", "Amount (ILS)": -100.00},

@@ -180,7 +180,15 @@ def encode_value(v) -> object:
 # ---------------------------------------------------------------------------
 class XlsxBackend:
     """openpyxl against a local xlsx. Reads use data_only (cached formula
-    values); writes reopen WITHOUT data_only so formulas survive a save."""
+    values); writes reopen WITHOUT data_only so formulas survive a save.
+
+    GAP-6 caveat: data_only returns the value openpyxl LAST CACHED — a formula
+    cell that was never opened in Excel/Sheets (a freshly-written seed, or any
+    machine-computed column) reads **None**, not the computed result. So the
+    Finance-Budget actuals (SUMIFS) and Reminders K/L read None offline. A test
+    that needs the computed value must re-implement the formula in-test (see
+    tests/test_finance.py text-prefix SUMIFS), deliberately and with a comment —
+    the real formula is verified live (M6.3), not against this backend."""
 
     def __init__(self, path: Path):
         self.path = Path(path)

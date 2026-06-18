@@ -54,7 +54,7 @@ family-inc/
 └── logs/ Briefings/      # runtime output (gitignored except .gitkeep)
 ```
 
-Boundary rules (CI greps enforce the first): scripts never define a utility that belongs in `lib/` (no redefining `to_date`/`fmt_money`). Nothing outside `bridge/` and `finance/` touches a third-party site. Nothing outside `lib/sheet.py` constructs a gspread client. Nothing outside `lib/llm.py` imports an LLM SDK. Nothing outside `lib/outbox.py` reaches a human.
+Boundary rules (convention, reviewer-checked — no CI enforces them yet): scripts never define a utility that belongs in `lib/` (no redefining `to_date`/`fmt_money`). Each external-site touch is the sole, named function in its own module — the bridge listener, finance `scrape.js`, `property_scrape.py`, `lib/apify.py`, and `hebcal_client.py` — never scattered ad-hoc. Nothing outside `lib/sheet.py` constructs a gspread client. Nothing outside `lib/llm.py` imports an LLM SDK. Nothing outside `lib/outbox.py` reaches a human.
 
 ## 2. Toolchain
 

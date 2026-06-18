@@ -1,21 +1,26 @@
 # seeds/ — personal seed data (gitignored)
 
-CSV seeds for the Family_OS Sheet and the group-config. They contain personal
+CSV seeds for the Family_OS Sheet and the group-config. Most contain personal
 values (names, health schedules, group names), so `*.csv` here is gitignored —
-the files live on the machines that need them (PO laptops + the appliance) and
-in the Sheet itself once imported. The repo stays public-portfolio-safe by
-construction (CLAUDE.md guardrails).
+those files live on the machines that need them (PO laptops + the appliance) and
+in the Sheet itself once imported. **One exception is committed:**
+`14_Finance_Category_Rules.csv` (a `!`-exception in `.gitignore`) — it is
+non-personal by construction (public merchant brands + generic category labels
+only), so a fresh checkout categorizes finance on-box and the tests stay
+hermetic. The repo stays public-portfolio-safe by construction (CLAUDE.md
+guardrails).
 
 Expected files (M3 seeding, BACKLOG.md):
 
-| File | Feeds |
-| --- | --- |
-| `Reminders_Import_M3.csv` | **the go-live import** — Reminders tab, §6.1 column layout |
-| `08_Israeli_Reminders_Seed.csv` | source backlog the import was drafted from (kept for history) |
-| `09_Vaccine_Schedule_Seed.csv` | Health tab (Tipat Halav schedule) |
-| `10_Dashboard_Goals_Seed.csv` | Goals tab |
-| `12_WhatsApp_Group_Config_Seed.csv` | summarizer group routing + keywords |
-| `13_Sender_Roster_Seed.csv` | summarizer sender→role roster (M4, D-044) |
+| File | Feeds | Committed? |
+| --- | --- | --- |
+| `Reminders_Import_M3.csv` | **the go-live import** — Reminders tab, §6.1 column layout | no (gitignored) |
+| `08_Israeli_Reminders_Seed.csv` | source backlog the import was drafted from (kept for history) | no |
+| `09_Vaccine_Schedule_Seed.csv` | Health tab (Tipat Halav schedule) | no |
+| `10_Dashboard_Goals_Seed.csv` | Goals tab | no |
+| `12_WhatsApp_Group_Config_Seed.csv` | summarizer group routing + keywords | no |
+| `13_Sender_Roster_Seed.csv` | summarizer sender→role roster (M4, D-044) | no |
+| `14_Finance_Category_Rules.csv` | finance categorizer vocab (`lib/categorize`, M6.4) — keyword→category | **yes** (non-personal) |
 
 ## `13_Sender_Roster_Seed.csv` — sender → role roster (M4)
 
