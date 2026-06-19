@@ -364,13 +364,24 @@ class TestRecurrence:
         assert r.done_at is not None               # arc data intact
 
 
+def _seed_sent(msg_id, recipients, status="sent"):
+    """Simulate the Baileys bridge confirming delivery (GAP-2): append the
+    SENT_FILE rows it writes on a real send ({id, to, status, at})."""
+    config.SENT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with config.SENT_FILE.open("a", encoding="utf-8") as fh:
+        for r in recipients:
+            fh.write(json.dumps({"id": msg_id, "to": r, "status": status,
+                                 "at": "2026-06-10T07:30:05+03:00"}) + "\n")
+
+
 # ---------------------------------------------------------------------------
-# Send-success stamping, end to end (daily_digest --send against a tmp sheet):
-# queue → stamp → rerun is a no-op at every layer (ENGINEERING §7 Last-Sent
-# idempotency)
+# Confirmed-delivery stamping, end to end (daily_digest --send against a tmp
+# sheet): queue records a pending entry (NO stamp), the bridge confirms in
+# whatsapp_sent.jsonl, the next run's reconcile stamps → rerun is a no-op at
+# every layer (GAP-2 / ENGINEERING §7 Last-Sent idempotency).
 # ---------------------------------------------------------------------------
 class TestSendStamping:
-    def test_send_stamps_then_rerun_is_noop(self, tmp_runtime, make_sheet):
+    def test_send_stamps_on_confirm_then_rerun_is_noop(self, tmp_runtime, make_sheet):
         from automation import daily_digest
 
         day = date(2026, 6, 10)  # Wednesday — no Hebcal fetch in assemble()
@@ -385,20 +396,46 @@ class TestSendStamping:
         messages = daily_digest.run(day, send=True, sheet_path=p)
         assert "Car test" in messages["adar"] and "Car test" in messages["shanee"]
 
+        # Queue ≠ delivered: nothing is stamped until the bridge confirms.
         r = read_reminders(p)[0]
-        assert r.status == "Sent"
-        assert r.last_sent == day
+        assert r.status == "Pending"
+        assert r.last_sent is None
         first_queue = config.OUTBOX_FILE.read_text(encoding="utf-8").splitlines()
         assert len(first_queue) == 2  # one briefing row per adult
 
-        # Rerun the same morning: the row is stamped (classify guard) and both
-        # message ids are spent (outbox dedup) — nothing moves anywhere.
+        # Bridge confirms delivery to both adults → the next run reconciles and
+        # stamps, and both message ids are spent (outbox dedup) — nothing else
+        # moves anywhere.
+        _seed_sent(f"brief-daily-{day.isoformat()}", ["adar", "shanee"])
         messages2 = daily_digest.run(day, send=True, sheet_path=p)
-        assert "Car test" not in messages2["adar"]  # quiet heartbeat digest
+        r = read_reminders(p)[0]
+        assert r.status == "Sent"
+        assert r.last_sent == day
+        assert "Car test" not in messages2["adar"]  # stamped → quiet heartbeat digest
         assert config.OUTBOX_FILE.read_text(encoding="utf-8").splitlines() == first_queue
-        assert read_reminders(p)[0].last_sent == day
 
-    def test_overdue_send_stamps_overdue_status(self, tmp_runtime, make_sheet):
+    def test_unconfirmed_digest_does_not_stamp_and_refires(self, tmp_runtime, make_sheet):
+        """No confirmation in whatsapp_sent.jsonl → the row stays eligible and
+        re-fires next run (the GAP-2 fix's whole point: no silent loss)."""
+        from automation import daily_digest
+
+        day = date(2026, 6, 10)
+        p = make_sheet([["Car test", "Car", "Adar", day, "7,1", "One-off", "Pending"]])
+        daily_digest.run(day, send=True, sheet_path=p)
+        assert read_reminders(p)[0].last_sent is None
+
+        # Same day, still no bridge confirmation: reconcile finds nothing to
+        # stamp; the reminder is held by the outbox msg_id dedup (no double-send)
+        # but never marked Sent — so once it confirms it stamps, and if it never
+        # does the row remains firable.
+        messages2 = daily_digest.run(day, send=True, sheet_path=p)
+        assert read_reminders(p)[0].last_sent is None
+        # Pending entries persist (one per recipient) until confirmed or stale.
+        from automation.lib import outbox
+        assert {e["recipient"] for e in outbox.read_pending()} == {"adar", "shanee"}
+        assert "Car test" in messages2["adar"]  # unstamped → still in the digest
+
+    def test_overdue_stamps_overdue_status_on_confirm(self, tmp_runtime, make_sheet):
         from automation import daily_digest
 
         day = date(2026, 6, 10)
@@ -406,6 +443,9 @@ class TestSendStamping:
             ["Late thing", "Other", "Adar", day - timedelta(days=4), "7,1",
              "One-off", "Pending"],
         ])
+        daily_digest.run(day, send=True, sheet_path=p)
+        assert read_reminders(p)[0].last_sent is None  # not yet confirmed
+        _seed_sent(f"brief-daily-{day.isoformat()}", ["adar", "shanee"])
         daily_digest.run(day, send=True, sheet_path=p)
         r = read_reminders(p)[0]
         assert r.status == "Overdue"

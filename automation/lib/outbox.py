@@ -152,20 +152,86 @@ def read_deferred(upto: date) -> list[dict]:
             if r.get("deferred_on", "") < upto.isoformat()]
 
 
+def _rewrite_deferred(keep: list[dict]) -> None:
+    # Atomic rewrite (tmp + replace), same discipline as the ledger
+    # (outbox-budget#1) — a crash mid-rewrite must not corrupt the deferred
+    # queue and lose alerts that haven't ridden a digest yet.
+    tmp = config.DEFERRED_FILE.with_name(config.DEFERRED_FILE.name + ".tmp")
+    tmp.write_text(
+        "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in keep), encoding="utf-8")
+    tmp.replace(config.DEFERRED_FILE)
+
+
 def pop_deferred(upto: date) -> list[dict]:
     """Like read_deferred, but consumes what it returns (real digest runs)."""
     rows = _jsonl_rows(config.DEFERRED_FILE)
     take = [r for r in rows if r.get("deferred_on", "") < upto.isoformat()]
     keep = [r for r in rows if r.get("deferred_on", "") >= upto.isoformat()]
     if take:
-        # Atomic rewrite (tmp + replace), same discipline as the ledger
-        # (outbox-budget#1) — a crash mid-rewrite must not corrupt the deferred
-        # queue and lose alerts that haven't ridden a digest yet.
-        tmp = config.DEFERRED_FILE.with_name(config.DEFERRED_FILE.name + ".tmp")
-        tmp.write_text(
-            "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in keep), encoding="utf-8")
-        tmp.replace(config.DEFERRED_FILE)
+        _rewrite_deferred(keep)
     return take
+
+
+def drop_deferred(keys: set[tuple[str, str]]) -> None:
+    """Consume specific deferred rows by (id, to) — called when the digest that
+    carried them is CONFIRMED delivered (outbox-budget#3, GAP-2). Idempotent:
+    keys already absent are a no-op, so a re-run never loses a different
+    recipient's still-pending alert (deferred rows are single-target)."""
+    if not keys:
+        return
+    rows = _jsonl_rows(config.DEFERRED_FILE)
+    keep = [r for r in rows if (r.get("id", ""), r.get("to", "")) not in keys]
+    if len(keep) != len(rows):
+        _rewrite_deferred(keep)
+
+
+# ---------------------------------------------------------------------------
+# Pending bridge-digests awaiting delivery confirmation (GAP-2 cross-run
+# reconcile). The bridge delivers asynchronously, so "queued" ≠ "delivered":
+# the digest records a pending row per recipient here and the next run's
+# reconcile stamps Last Sent/Status once SENT_FILE confirms the delivery.
+# ---------------------------------------------------------------------------
+@contextlib.contextmanager
+def pending_lock():
+    """Exclusive lock around the digest-pending file's read→reconcile→rewrite
+    (and record_pending's append), so a concurrent --send run — a manual re-run
+    or a future timer overlap — can't double-process an entry or clobber a
+    freshly-recorded one on rewrite. Same fcntl discipline as _ledger_lock
+    (outbox-budget#2)."""
+    config.DIGEST_PENDING_FILE.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = config.DIGEST_PENDING_FILE.with_name(config.DIGEST_PENDING_FILE.name + ".lock")
+    with open(lock_path, "w", encoding="utf-8") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
+def record_pending(entry: dict) -> None:
+    """Append one pending-digest row (one per recipient queued this run).
+    Callers hold pending_lock() so the append can't race a concurrent rewrite."""
+    config.DIGEST_PENDING_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with config.DIGEST_PENDING_FILE.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def read_pending() -> list[dict]:
+    """Every pending-digest row not yet settled by reconcile."""
+    return _jsonl_rows(config.DIGEST_PENDING_FILE)
+
+
+def rewrite_pending(rows: list[dict]) -> None:
+    """Atomic rewrite after reconcile drops settled entries; removes the file
+    when nothing is left waiting."""
+    if not rows:
+        config.DIGEST_PENDING_FILE.unlink(missing_ok=True)
+        return
+    config.DIGEST_PENDING_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = config.DIGEST_PENDING_FILE.with_name(config.DIGEST_PENDING_FILE.name + ".tmp")
+    tmp.write_text(
+        "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+    tmp.replace(config.DIGEST_PENDING_FILE)
 
 
 # ---------------------------------------------------------------------------

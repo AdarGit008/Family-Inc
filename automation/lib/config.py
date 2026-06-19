@@ -60,6 +60,11 @@ BRIDGE_STATE_DIR = BRIDGE_DIR / "state"
 OUTBOX_FILE = BRIDGE_STATE_DIR / "outbox" / "whatsapp_outbox.jsonl"
 SENT_FILE = BRIDGE_STATE_DIR / "outbox" / "whatsapp_sent.jsonl"
 DEFERRED_FILE = BRIDGE_STATE_DIR / "outbox" / "deferred.jsonl"
+# Pending bridge-digests awaiting delivery confirmation (GAP-2). The bridge
+# delivers asynchronously and confirms in SENT_FILE; the daily digest does NOT
+# stamp on queue — it records a pending row per recipient here and stamps Last
+# Sent/Status at the next run's reconcile_deliveries() once the bridge confirms.
+DIGEST_PENDING_FILE = BRIDGE_STATE_DIR / "outbox" / "digest_pending.jsonl"
 INBOX_FILE = BRIDGE_STATE_DIR / "inbox" / "whatsapp_inbox.jsonl"
 HEARTBEAT_FILE = BRIDGE_STATE_DIR / "inbox" / "heartbeat.txt"
 
@@ -256,6 +261,12 @@ HEBCAL_TTL_SECONDS = 24 * 60 * 60
 # ---------------------------------------------------------------------------
 EMAIL_FALLBACK_AFTER_HOURS = 24       # heartbeat staler than this → the daily
                                       # digest degrades to SMTP (lib/mailer.py)
+# GAP-2 cross-run reconcile: a queued bridge-digest that the bridge never
+# confirms delivering within this horizon is dropped (its reminders stay
+# unstamped → they re-fire — fail loud, degrade quiet) and logged. 48h covers a
+# weekend bridge outage; beyond that the §10.2 email fallback would have taken
+# over on subsequent runs (PO call 2026-06-19).
+DIGEST_PENDING_STALE_HOURS = 48
 SMTP_DEFAULT_HOST = "smtp.gmail.com"  # overridable via SMTP_HOST/SMTP_PORT env;
 SMTP_DEFAULT_PORT = 587               # creds (SMTP_USER/SMTP_PASS) env-only
 EMAIL_TO_ENV = "FAMILY_INC_EMAIL_TO"  # comma-separated fallback recipients;

@@ -266,16 +266,22 @@ def recurrence_writes(reminders: list[Reminder], now: datetime) -> list[CellWrit
     return writes
 
 
+def stamp_cell_writes(row: int, now: datetime, overdue: bool) -> list[CellWrite]:
+    """The Last Sent/Status cell pair for one row (SPEC §7.1). One source of
+    truth for the stamp shape — stamp_writes (live fires) and the digest's
+    cross-run reconcile (persisted {row, overdue}) both build through here."""
+    return [
+        CellWrite(row, "Last Sent", now),
+        CellWrite(row, "Status", "Overdue" if overdue else "Sent"),
+    ]
+
+
 def stamp_writes(fires: list[Fire], now: datetime) -> list[CellWrite]:
-    """On send success (daily_digest --send): Last Sent = now,
+    """On confirmed delivery (daily_digest --send): Last Sent = now,
     Status = Sent | Overdue (SPEC §7.1)."""
     writes: list[CellWrite] = []
     for f in {f.reminder.row: f for f in fires}.values():  # one stamp per row
-        writes += [
-            CellWrite(f.reminder.row, "Last Sent", now),
-            CellWrite(f.reminder.row, "Status",
-                      "Overdue" if f.days_until < 0 else "Sent"),
-        ]
+        writes += stamp_cell_writes(f.reminder.row, now, f.days_until < 0)
     return writes
 
 

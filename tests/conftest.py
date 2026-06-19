@@ -121,6 +121,7 @@ def tmp_runtime(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "OUTBOX_FILE", tmp_path / "state" / "outbox" / "whatsapp_outbox.jsonl")
     monkeypatch.setattr(config, "SENT_FILE", tmp_path / "state" / "outbox" / "whatsapp_sent.jsonl")
     monkeypatch.setattr(config, "DEFERRED_FILE", tmp_path / "state" / "outbox" / "deferred.jsonl")
+    monkeypatch.setattr(config, "DIGEST_PENDING_FILE", tmp_path / "state" / "outbox" / "digest_pending.jsonl")
     monkeypatch.setattr(config, "INBOX_FILE", tmp_path / "state" / "inbox" / "whatsapp_inbox.jsonl")
     monkeypatch.setattr(config, "HEARTBEAT_FILE", tmp_path / "state" / "inbox" / "heartbeat.txt")
     monkeypatch.setattr(config, "SCHEMA_DRIFT_FLAG", tmp_path / "logs" / "schema_drift.flag")

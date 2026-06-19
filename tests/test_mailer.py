@@ -14,7 +14,7 @@ import pytest
 
 from automation import daily_digest
 from automation.lib import config, mailer, outbox
-from automation.lib.sheet import read_reminders
+from automation.lib.sheet import CellWrite, read_reminders, update_reminders
 
 
 DAY = date(2026, 6, 10)  # Wednesday — no Hebcal fetch in assemble()
@@ -63,6 +63,10 @@ def _outbox_rows():
             config.OUTBOX_FILE.read_text(encoding="utf-8").splitlines() if l.strip()]
 
 
+def _deferred_ids():
+    return [r["id"] for r in outbox._jsonl_rows(config.DEFERRED_FILE)]
+
+
 def _beat(age_hours: float = 0.0):
     """Write a heartbeat whose mtime is `age_hours` in the past (wall clock —
     infra health is never simulated, see outbox.heartbeat_age_hours)."""
@@ -72,6 +76,17 @@ def _beat(age_hours: float = 0.0):
     hb.write_text("beat", encoding="utf-8")
     ts = (datetime.now() - timedelta(hours=age_hours)).timestamp()
     os.utime(hb, (ts, ts))
+
+
+def _seed_sent(msg_id, recipients, status="sent"):
+    """Simulate the Baileys bridge confirming delivery (GAP-2): append the
+    SENT_FILE rows it writes on a real send ({id, to, status, at})."""
+    import json
+    config.SENT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with config.SENT_FILE.open("a", encoding="utf-8") as fh:
+        for r in recipients:
+            fh.write(json.dumps({"id": msg_id, "to": r, "status": status,
+                                 "at": "2026-06-10T07:30:05+03:00"}) + "\n")
 
 
 # ---------------------------------------------------------------------------
@@ -208,15 +223,21 @@ class TestFailFlag:
         assert daily_digest.read_fail_flag() == [
             "family-backup.service", "family-summarizer.service"]
 
-    def test_reported_and_cleared_when_queued(self, tmp_runtime, make_sheet,
-                                              fake_smtp):
+    def test_reported_and_cleared_when_confirmed(self, tmp_runtime, make_sheet,
+                                                 fake_smtp):
         _beat()
         _write_flag()
         p = make_sheet([["Car test", "Car", "Adar", DAY, "7,1", "One-off", "Pending"]])
         messages = daily_digest.run(DAY, send=True, sheet_path=p)
-        assert "family-backup.service" in messages["adar"]   # prepended line
+        assert "family-backup.service" in messages["adar"]   # prepended line (reported)
         assert messages["adar"].index("תקלה") < messages["adar"].index("Car test")
-        assert not config.FAIL_FLAG.exists()                 # reported → cleared
+        # GAP-2: the bridge digest is only queued, not yet confirmed — the flag
+        # must NOT clear until a digest actually lands (fail loud).
+        assert config.FAIL_FLAG.exists()
+        # Bridge confirms → the next run's reconcile clears exactly the reported lines.
+        _seed_sent(f"brief-daily-{DAY.isoformat()}", ["adar", "shanee"])
+        daily_digest.run(DAY, send=True, sheet_path=p)
+        assert not config.FAIL_FLAG.exists()                 # reported in a delivered digest → cleared
 
     def test_reported_and_cleared_when_emailed(self, tmp_runtime, make_sheet,
                                                fake_smtp):
@@ -264,8 +285,8 @@ class TestReviewD028:
         daily_digest._clear_fail_flag(daily_digest._read_fail_flag_lines())
         assert not config.FAIL_FLAG.exists()
 
-    def test_delivery_log_baileys_and_rerun_adds_nothing(self, tmp_runtime,
-                                                         make_sheet, fake_smtp):
+    def test_delivery_log_baileys_on_confirm_and_rerun_adds_nothing(self, tmp_runtime,
+                                                                    make_sheet, fake_smtp):
         _beat()
         # Owner "Both" so the first run briefs both adults; the rerun is then a
         # true no-op even after the quiet-day digest went partner-symmetric
@@ -273,10 +294,16 @@ class TestReviewD028:
         # shanee for the first time, which is correct but not what this checks.
         p = make_sheet([["Car test", "Car", "Both", DAY, "7,1", "One-off", "Pending"]])
         daily_digest.run(DAY, send=True, sheet_path=p)
+        # GAP-2: a healthy queue is unconfirmed — no transport line yet.
+        assert not config.DELIVERY_LOG.exists()
+        # Bridge confirms → the next run's reconcile logs one `baileys` line
+        # (both recipients) dated to the digest day.
+        _seed_sent(f"brief-daily-{DAY.isoformat()}", ["adar", "shanee"])
+        daily_digest.run(DAY, send=True, sheet_path=p)
         rows = config.DELIVERY_LOG.read_text(encoding="utf-8").strip().splitlines()
         assert rows[0] == "date,transport,recipients"
-        assert rows[1].startswith(f"{DAY.isoformat()},baileys,")
-        daily_digest.run(DAY, send=True, sheet_path=p)  # dedup rerun: 0 queued
+        assert rows[1] == f"{DAY.isoformat()},baileys,adar|shanee"
+        daily_digest.run(DAY, send=True, sheet_path=p)  # nothing pending, dedup: adds nothing
         assert len(config.DELIVERY_LOG.read_text(encoding="utf-8").strip().splitlines()) == 2
 
     def test_delivery_log_smtp_on_fallback(self, tmp_runtime, make_sheet, fake_smtp):
@@ -315,3 +342,163 @@ class TestReviewD028:
         self._seed_log(f"{(DAY - timedelta(days=30)).isoformat()},smtp,adar|shanee")
         from automation.weekly_briefing import _system_flags
         assert not [i for i in _system_flags(DAY) if "degraded" in i]
+
+
+# ---------------------------------------------------------------------------
+# GAP-2 cross-run reconcile: stale-drop (fail loud) + outbox-budget#3 (a
+# budget-deferred alert is consumed only after the carrying digest is confirmed)
+# ---------------------------------------------------------------------------
+class TestReconcileGAP2:
+    def _pending(self, hours_ago, now, **over):
+        entry = {
+            "msg_id": f"brief-daily-{DAY.isoformat()}",
+            "digest_date": DAY.isoformat(),
+            "recipient": "adar",
+            "rows": [{"row": 2, "overdue": False}],
+            "deferred_keys": [],
+            "reported_fail_lines": [],
+            "queued_at": (now - timedelta(hours=hours_ago)).isoformat(timespec="seconds"),
+        }
+        entry.update(over)
+        outbox.record_pending(entry)
+
+    def test_stale_pending_dropped_logged_not_stamped(self, tmp_runtime, make_sheet, capsys):
+        p = make_sheet([["Car test", "Car", "Adar", DAY, "7,1", "One-off", "Pending"]])
+        now = datetime(2026, 6, 10, 7, 30)
+        self._pending(49, now)                                # > 48h horizon, never confirmed
+        stamped = daily_digest.reconcile_deliveries(now, sheet_path=p)
+        assert stamped == 0                                   # nothing confirmed → nothing stamped
+        assert read_reminders(p)[0].last_sent is None         # reminder stays eligible → re-fires
+        assert outbox.read_pending() == []                    # dropped
+        assert "DROPPING" in capsys.readouterr().out          # logged loud
+        assert f"{DAY.isoformat()},queued-stale," in config.DELIVERY_LOG.read_text(encoding="utf-8")
+
+    def test_within_horizon_pending_kept(self, tmp_runtime, make_sheet):
+        p = make_sheet([["Car test", "Car", "Adar", DAY, "7,1", "One-off", "Pending"]])
+        now = datetime(2026, 6, 10, 7, 30)
+        self._pending(10, now)                                # 10h < 48h: still waiting
+        assert daily_digest.reconcile_deliveries(now, sheet_path=p) == 0
+        assert len(outbox.read_pending()) == 1                # kept
+        assert not config.DELIVERY_LOG.exists()               # neither confirmed nor stale yet
+
+    def test_deferred_consumed_only_on_confirmed_digest(self, tmp_runtime, make_sheet,
+                                                        fake_smtp):
+        _beat()
+        # An alert deferred yesterday is due to ride today's digest (SPEC §7.5).
+        outbox._append_deferred({
+            "id": "wa-xyz", "to": "adar", "body": "deferred alert body",
+            "source": "summarizer", "deferred_on": (DAY - timedelta(days=1)).isoformat(),
+        })
+        p = make_sheet([["Car test", "Car", "Adar", DAY, "7,1", "One-off", "Pending"]])
+        messages = daily_digest.run(DAY, send=True, sheet_path=p)
+        assert "deferred alert body" in messages["adar"]      # rode the digest
+        # Unconfirmed: NOT consumed — it re-rides the next digest (budget#3).
+        assert "wa-xyz" in _deferred_ids()
+        # Bridge confirms the carrying digest → reconcile consumes it.
+        _seed_sent(f"brief-daily-{DAY.isoformat()}", ["adar", "shanee"])
+        daily_digest.run(DAY, send=True, sheet_path=p)
+        assert "wa-xyz" not in _deferred_ids()
+
+    def test_deferred_consumed_per_recipient_on_confirm(self, tmp_runtime, make_sheet,
+                                                        fake_smtp):
+        """budget#3 is per-recipient: confirming adar's digest consumes only the
+        alert adar's digest carried, not shanee's still-undelivered one."""
+        _beat()
+        for who in ("adar", "shanee"):
+            outbox._append_deferred({
+                "id": f"wa-{who}", "to": who, "body": f"for {who}", "source": "summarizer",
+                "deferred_on": (DAY - timedelta(days=1)).isoformat(),
+            })
+        p = make_sheet([["Car test", "Car", "Adar", DAY, "7,1", "One-off", "Pending"]])
+        daily_digest.run(DAY, send=True, sheet_path=p)
+        _seed_sent(f"brief-daily-{DAY.isoformat()}", ["adar"])   # only adar confirmed
+        daily_digest.run(DAY, send=True, sheet_path=p)
+        ids = _deferred_ids()
+        assert "wa-adar" not in ids       # adar's digest confirmed → its deferred consumed
+        assert "wa-shanee" in ids         # shanee unconfirmed → hers re-rides next digest
+
+    def test_non_sent_status_does_not_confirm(self, tmp_runtime, make_sheet):
+        """A SENT_FILE row with status send_failed / refused_unknown_recipient is
+        NOT a delivery — reconcile must not stamp; a real 'sent' row later does."""
+        p = make_sheet([["Car test", "Car", "Adar", DAY, "7,1", "One-off", "Pending"]])
+        now = datetime(2026, 6, 10, 7, 30)
+        self._pending(1, now)                                    # adar, row 2, 1h ago
+        _seed_sent(f"brief-daily-{DAY.isoformat()}", ["adar"], status="send_failed")
+        _seed_sent(f"brief-daily-{DAY.isoformat()}", ["adar"], status="refused_unknown_recipient")
+        assert daily_digest.reconcile_deliveries(now, sheet_path=p) == 0
+        assert read_reminders(p)[0].last_sent is None            # not stamped
+        assert len(outbox.read_pending()) == 1                   # kept (within horizon)
+        _seed_sent(f"brief-daily-{DAY.isoformat()}", ["adar"])   # a real delivery
+        assert daily_digest.reconcile_deliveries(now, sheet_path=p) == 1
+        assert read_reminders(p)[0].last_sent == DAY
+        assert outbox.read_pending() == []
+
+    def test_single_recipient_confirm_leaves_other_pending(self, tmp_runtime, make_sheet,
+                                                           fake_smtp):
+        """Owner Adar: the row rides adar's digest; shanee gets the quiet-day
+        briefing. Confirming shanee's leg must NOT stamp adar's reminder (the
+        shared brief-daily-{date} msg_id is discriminated per-recipient)."""
+        _beat()
+        p = make_sheet([["Car test", "Car", "Adar", DAY, "7,1", "One-off", "Pending"]])
+        daily_digest.run(DAY, send=True, sheet_path=p)
+        _seed_sent(f"brief-daily-{DAY.isoformat()}", ["shanee"])  # only shanee confirmed
+        daily_digest.run(DAY, send=True, sheet_path=p)
+        assert read_reminders(p)[0].last_sent is None             # adar's row NOT stamped
+        assert {e["recipient"] for e in outbox.read_pending()} == {"adar"}  # shanee settled, adar waits
+        _seed_sent(f"brief-daily-{DAY.isoformat()}", ["adar"])
+        daily_digest.run(DAY, send=True, sheet_path=p)
+        assert read_reminders(p)[0].last_sent == DAY              # adar confirmed → stamped
+        assert outbox.read_pending() == []
+
+    def test_confirm_does_not_resurrect_completed_reminder(self, tmp_runtime, make_sheet,
+                                                           fake_smtp):
+        """Blocker regression: the stamp now lands a run after queue, so a row the
+        user marks Done between queue and confirm must NOT be clobbered to Sent."""
+        _beat()
+        p = make_sheet([["Car test", "Car", "Adar", DAY, "7,1", "One-off", "Pending"]])
+        daily_digest.run(DAY, send=True, sheet_path=p)            # queues, unstamped
+        update_reminders([CellWrite(2, "Status", "Done")], p)    # user completes it in the dashboard
+        _seed_sent(f"brief-daily-{DAY.isoformat()}", ["adar", "shanee"])
+        daily_digest.run(DAY, send=True, sheet_path=p)            # reconcile must respect the Done
+        r = read_reminders(p)[0]
+        assert r.status == "Done"                                 # not resurrected to Sent
+        assert r.last_sent is None
+        assert outbox.read_pending() == []                        # digest WAS delivered → entry settled
+
+    def test_confirm_does_not_stamp_rescheduled_row(self, tmp_runtime, make_sheet, fake_smtp):
+        """A row whose Due moved (reschedule / recurrence bump) between queue and
+        confirm is not stamped from the stale queue-time snapshot."""
+        _beat()
+        p = make_sheet([["Car test", "Car", "Adar", DAY, "7,1", "One-off", "Pending"]])
+        daily_digest.run(DAY, send=True, sheet_path=p)            # queued with due=DAY
+        update_reminders([CellWrite(2, "Due Date", DAY + timedelta(days=14))], p)  # rescheduled
+        _seed_sent(f"brief-daily-{DAY.isoformat()}", ["adar", "shanee"])
+        daily_digest.run(DAY, send=True, sheet_path=p)
+        r = read_reminders(p)[0]
+        assert r.last_sent is None                               # not stamped (row moved)
+        assert r.status == "Pending"                             # untouched
+        assert outbox.read_pending() == []                       # digest delivered → entry settled
+
+    def test_stamp_dated_to_digest_day_not_reconcile_day(self, tmp_runtime, make_sheet):
+        """No +1-day skew: a digest queued on DAY but confirmed two days later
+        stamps Last Sent = DAY (the real send day), not the reconcile day."""
+        p = make_sheet([["Car test", "Car", "Adar", DAY, "7,1", "One-off", "Pending"]])
+        self._pending(0, datetime(2026, 6, 10, 7, 30))            # queued_at = DAY 07:30
+        _seed_sent(f"brief-daily-{DAY.isoformat()}", ["adar"])
+        later = datetime(2026, 6, 12, 7, 30)                      # reconcile two days on
+        assert daily_digest.reconcile_deliveries(later, sheet_path=p) == 1
+        assert read_reminders(p)[0].last_sent == DAY
+
+    def test_tombstoned_row_defers_confirmed_stamp(self, tmp_runtime, make_sheet):
+        """A dashboard write in flight (§8.3) on a confirmed digest's row defers
+        the stamp to the next run rather than racing it."""
+        from datetime import timedelta as _td
+        now = datetime(2026, 6, 10, 7, 30)
+        # Row carries a fresh tombstone (write landing within the 6h window).
+        p = make_sheet([["Car test", "Car", "Adar", DAY, "7,1", "One-off", "Pending", "",
+                         "WhatsApp", "", "", "", "", "", (now - _td(hours=1)).isoformat()]])
+        self._pending(1, now)
+        _seed_sent(f"brief-daily-{DAY.isoformat()}", ["adar"])
+        assert daily_digest.reconcile_deliveries(now, sheet_path=p) == 0  # deferred, not stamped
+        assert len(outbox.read_pending()) == 1                            # kept for next run
+        assert read_reminders(p)[0].last_sent is None

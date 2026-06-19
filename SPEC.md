@@ -164,7 +164,14 @@ read Reminders where Status ∉ {Done, Skipped}.  (NOT "∈ {Pending, Snoozed,
        or days_until ∈ Lead Times                → LEAD-TIME
        or days_until == 0                         → DUE TODAY
 hand fires to the 07:30 daily digest (§7.2).
-on send success (in the digest): Last Sent = now; Status = Sent | Overdue.
+on CONFIRMED delivery (in the digest): Last Sent = now; Status = Sent | Overdue.
+  (Confirmed = the bridge's whatsapp_sent.jsonl, reconciled at the next run; the
+  §10.2 SMTP fallback confirms inline. NOT on queue — the bridge delivers
+  asynchronously, so stamping a merely-queued digest let a bridge that dropped
+  its session read "Sent" while the reminder never arrived, and the Last-Sent
+  guard then silently suppressed the re-fire. Stamping on confirmation closes
+  that silent-loss; an unconfirmed digest leaves its rows unstamped → they
+  re-fire. See §7.5.)
 recurrence on Done: bump Due Date by the period, Status → Pending, Last Sent
   cleared; Feb-29-class dates clamp to the last day of the target month + a
   review flag; Custom is flagged, never guessed.
@@ -173,7 +180,7 @@ heartbeat: append one line to logs/reminders_log.csv every run.
 
 ### 7.2 Daily digest (07:30) + weekly briefing (Sat 21:00)
 
-**Daily digest:** one short message assembled from engine fires + the WhatsApp digest section + new-property listings + a Hebcal line (Fridays / erev chag), queued as `kind=briefing`. **One morning message, not several** — assembly happens before queuing. On send success the digest stamps each fired row's Last Sent / Status per §7.1.
+**Daily digest:** one short message assembled from engine fires + the WhatsApp digest section + new-property listings + a Hebcal line (Fridays / erev chag), queued as `kind=briefing`. **One morning message, not several** — assembly happens before queuing. On **confirmed delivery** the digest stamps each fired row's Last Sent / Status per §7.1 (the bridge delivers asynchronously, so a digest queued one morning is stamped when the next run reconciles its confirmation; the SMTP fallback stamps inline).
 
 **Both adults, every day.** The digest is assembled and queued for adar **and** shanee on every run. An adult with no fires of their own still gets the briefing — the quiet-day line plus the shared sections (WhatsApp groups, property). This keeps the surface partner-symmetric and means silence always signals a *broken* digest, never an empty day. Because it is `kind=briefing` it is budget-exempt, so briefing the empty-handed adult never spends an alert slot.
 
@@ -204,6 +211,8 @@ queue(to: "adar"|"shanee"|"both", body, kind: "alert"|"critical"|"briefing", sou
 
 The ledger is shared across **all** senders — the engine and the summarizer can't each spend a separate 2/day. *(The daily digest is `kind=briefing`, not `alert`: as an alert it consumed a budget slot and, worse, an over-budget alert defers *into* the next digest — which is itself the message, a circular dependency.)*
 
+**Delivery confirmation (cross-run reconcile).** The bridge delivers asynchronously and records each confirmed send to `whatsapp_sent.jsonl`. So queueing is **not** delivery: the daily digest does not stamp on queue — it writes a pending row per recipient to `digest_pending.jsonl`, and at the start of every `--send` run `reconcile_deliveries()` stamps Last Sent / Status (§7.1), clears the reported fail-flag lines, and consumes the budget-deferred alerts that digest carried — but only for the entries the bridge has since confirmed. An entry left unconfirmed past 48h is dropped and logged; its reminders stay unstamped and re-fire (fail loud, degrade quiet). The §10.2 SMTP fallback is itself the confirmation, so it stamps and consumes inline. Because the stamp now lands a run *after* the digest, reconcile re-reads the Sheet and honors the engine's own write guards: it never overwrites a row the user has since completed (Status Done/Skipped), rescheduled, or that recurrence bumped, defers a row with a §8.3 write in flight, and dates Last Sent to the digest's own send day. *(A bounded in-run wait was tried and rejected: it duplicates digests if bridge latency ever exceeds the window and couples the run to the bridge's async timing. Reconcile stamps whenever the bridge eventually confirms — next run or the one after.)*
+
 ### 7.6 Dashboard (PWA)
 
 Read: `batchGet` over all bound ranges (UI contract in `DESIGN.md`). Write: per the §6.1 write contract — optimistic UI, an offline queue in `localStorage.pendingWrites[]` (cap 50), flushed on reconnect in tap order, failed flushes retried on the next online event. Identity: Google sign-in → `Settings.UserMap` → display name. Demo mode renders `mock_data.json` and never calls gapi.
@@ -224,7 +233,7 @@ The dashboard stamps `WriteQueue_Tombstone` (ISO-T datetime) on every write; que
 
 ### 8.4 Idempotency & dedup
 
-Outbox messages carry stable ids: engine `rem-{row}-{date}`, summarizer `wa-{msg_id}`, briefings `brief-{type}-{date}`. The bridge dedups per (id, target). Engine re-runs on the same day are no-ops (the Last-Sent guard).
+Outbox messages carry stable ids: engine `rem-{row}-{date}`, summarizer `wa-{msg_id}`, briefings `brief-{type}-{date}`. The bridge dedups per (id, target). Engine re-runs on the same day are no-ops (the Last-Sent guard). The digest's confirmed-delivery stamp (§7.5) keys its pending rows on the same `brief-{type}-{date}` id and drops a settled row once stamped, so reconcile is idempotent — a re-run never double-stamps or re-consumes a deferred alert.
 
 ### 8.5 Time & locale
 
