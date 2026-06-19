@@ -4,7 +4,8 @@ Hermetic: a mock per-provider CSV → ingest → a tmp xlsx Sheet (explicit path
 never the live Sheet / committed seed). No banks, no Node, no network — the
 Node scraper (scrape.js) is VPS-only and node-checked, not unit-tested.
 Covers: CSV → Sheet, Txn-ID dedup + rerun idempotency, balance-only rows,
-provider-id vs hash ids, Finance-Accounts upsert (human fields preserved),
+natural-key hash ids (the provider `identifier` is ignored — non-unique on
+Mizrahi), Finance-Accounts upsert (human fields preserved),
 fail-loud on missing creds / scrape-error marker, and the seed-safety gate.
 """
 
@@ -80,11 +81,13 @@ def test_provider_of():
     assert fin.provider_of(Path("/var/x/MAX_2026-06-17.csv")) == "max"
 
 
-def test_txn_id_prefers_identifier_then_stable_hash():
-    assert fin.txn_id("2026-06-15", -10, "X", "A", "real-id") == "real-id"
-    h1 = fin.txn_id("2026-06-15", -10, "X", "A", "")
-    h2 = fin.txn_id("2026-06-15", -10, "X", "A", "")
-    h3 = fin.txn_id("2026-06-15", -11, "X", "A", "")
+def test_txn_id_is_natural_key_hash():
+    # The provider identifier is NOT part of the key (Mizrahi reuses it across
+    # distinct charges — §12.2). Same natural key → same id; a different natural
+    # key (here, a different amount) → a different id. Deterministic.
+    h1 = fin.txn_id("2026-06-15", -10, "X", "A")
+    h2 = fin.txn_id("2026-06-15", -10, "X", "A")
+    h3 = fin.txn_id("2026-06-15", -11, "X", "A")
     assert h1.startswith("h:") and h1 == h2 and h1 != h3
 
 
@@ -99,8 +102,10 @@ def test_mock_csv_ingests_to_sheet(tmp_path):
     txns = _rows(sp, cfg.FINANCE_TRANSACTIONS_TAB)
     assert txns[0] == sheet.FINANCE_TRANSACTIONS_COLUMNS          # header
     assert len(txns) - 1 == 3
-    assert set(_col(txns, "Txn-ID")) == {"abc123"} | {
-        t for t in _col(txns, "Txn-ID") if str(t).startswith("h:")}
+    # All Txn-IDs are natural-key hashes — the provider `identifier` (abc123 on
+    # the first row) is ignored, since it is not unique per transaction (§12.2).
+    assert all(str(t).startswith("h:") for t in _col(txns, "Txn-ID"))
+    assert len(set(_col(txns, "Txn-ID"))) == 3          # 3 distinct natural keys
     # M6.4: the on-box rules engine categorizes at ingest (no LLM key in tests
     # → rules only). SHUFERSAL→Groceries, SUPERPHARM→Health, PAZ→Transport.
     cat_by_desc = dict(zip(_col(txns, "Description"), _col(txns, "Category")))
@@ -108,7 +113,7 @@ def test_mock_csv_ingests_to_sheet(tmp_path):
     assert cat_by_desc["SUPERPHARM"] == "Health"
     assert cat_by_desc["PAZ GAS"] == "Transport"
     assert set(_col(txns, "Cat-Source")) == {"rules"}
-    assert "abc123" in _col(txns, "Txn-ID")
+    assert "abc123" not in _col(txns, "Txn-ID")         # identifier is not the key
     assert -432.5 in _col(txns, "Amount (ILS)")
 
     accts = _rows(sp, cfg.FINANCE_ACCOUNTS_TAB)
@@ -130,35 +135,53 @@ def test_dedup_rerun_is_idempotent(tmp_path):
     assert len(_rows(sp, cfg.FINANCE_ACCOUNTS_TAB)) - 1 == 2       # upsert, not append
 
 
-def test_idless_collision_drops_second_charge_as_phantom_dup(tmp_path):
-    """Documented edge case (finance_ingest.py txn_id docstring): two genuinely
-    distinct same-day charges with an identical account+amount+description and
-    NO provider identifier hash to one Txn-ID, so the dedup treats the second as
-    a phantom duplicate and drops it. This LOCKS that behavior (it is silent data
-    loss) — changing the hash key to recover both must change this test, with a
-    PO call. Most providers supply `identifier`, so this is rare in practice."""
+def test_natural_key_collision_drops_second_charge_as_phantom_dup(tmp_path):
+    """Accepted floor (finance_ingest.py txn_id docstring): two genuinely distinct
+    same-day charges with an identical account+amount+description hash to one
+    Txn-ID, so the dedup drops the second as a phantom dup. This LOCKS that
+    behavior (it is silent data loss) — recovering both needs a richer key + a PO
+    call. Rare for a bank; re-verify per card before trusting a provider field."""
     text = ("account,balance,date,identifier,amount,description\n"
             "MIZ-0001,9000,2026-06-15,,-12.00,COFFEE KIOSK\n"
             "MIZ-0001,9000,2026-06-15,,-12.00,COFFEE KIOSK\n")   # two real ₪12 coffees
     sp = _sheet(tmp_path)
     res = fin.run(csv_dir=_csv(tmp_path, text), sheet_path=sp, today=TODAY, now=NOW)
     # finance-ingest#3: the in-batch collision is a distinct counter, NOT
-    # mislabeled "already on the tab" (txns_seen). Drop behavior is unchanged.
+    # mislabeled "already on the tab" (txns_seen).
     assert res.txns_new == 1 and res.txns_phantom_dup == 1 and res.txns_seen == 0
     assert len(_rows(sp, cfg.FINANCE_TRANSACTIONS_TAB)) - 1 == 1
 
 
-def test_idless_collision_avoided_when_provider_supplies_identifier(tmp_path):
-    """Control for the above: the SAME two charges keep both rows once the
-    provider tags them with distinct identifiers — proving the loss is the
-    id-less hash collision specifically, not a general dedup defect."""
+def test_distinct_identifiers_do_not_rescue_same_natural_key(tmp_path):
+    """Inverts the pre-2026-06-19 behavior: distinct provider identifiers no
+    longer keep two same-natural-key rows apart — `identifier` is out of the key
+    (§12.2), so the second still drops. We stopped trusting identifier because
+    Mizrahi reuses it; this same-day-collision merge is the symmetric cost."""
     text = ("account,balance,date,identifier,amount,description\n"
             "MIZ-0001,9000,2026-06-15,txn-a,-12.00,COFFEE KIOSK\n"
             "MIZ-0001,9000,2026-06-15,txn-b,-12.00,COFFEE KIOSK\n")
     sp = _sheet(tmp_path)
     res = fin.run(csv_dir=_csv(tmp_path, text), sheet_path=sp, today=TODAY, now=NOW)
-    assert res.txns_new == 2 and res.txns_seen == 0             # both kept
-    assert set(_col(_rows(sp, cfg.FINANCE_TRANSACTIONS_TAB), "Txn-ID")) == {"txn-a", "txn-b"}
+    assert res.txns_new == 1 and res.txns_phantom_dup == 1
+    assert all(str(t).startswith("h:")
+               for t in _col(_rows(sp, cfg.FINANCE_TRANSACTIONS_TAB), "Txn-ID"))
+
+
+def test_reused_identifier_across_distinct_charges_keeps_all(tmp_path):
+    """Regression for the 2026-06-19 live data-loss bug: israeli-bank-scrapers
+    hands Mizrahi a NON-unique identifier (one id shared across many distinct
+    charges). The old `if identifier: return identifier` collapsed 96 real rows
+    to 26 on the live tab. With the natural-key Txn-ID, distinct charges that
+    happen to share an identifier are all kept (would FAIL on the old code:
+    txns_new == 1, phantom_dup == 2)."""
+    text = ("account,balance,date,identifier,amount,description\n"
+            "MIZ-0001,9000,2026-06-10,dup-ref,-12.00,COFFEE\n"
+            "MIZ-0001,9000,2026-06-11,dup-ref,-50.00,GROCERY\n"
+            "MIZ-0001,9000,2026-06-12,dup-ref,-9.90,BAKERY\n")   # 3 distinct, 1 id
+    sp = _sheet(tmp_path)
+    res = fin.run(csv_dir=_csv(tmp_path, text), sheet_path=sp, today=TODAY, now=NOW)
+    assert res.txns_new == 3 and res.txns_phantom_dup == 0       # all kept, no false dup
+    assert len(_rows(sp, cfg.FINANCE_TRANSACTIONS_TAB)) - 1 == 3
 
 
 def test_balance_only_row_feeds_account_not_txn(tmp_path):

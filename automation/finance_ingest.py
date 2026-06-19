@@ -95,17 +95,23 @@ def _last4(account: str) -> str:
     return tail[-4:]
 
 
-def txn_id(date_s: str, amount, description: str, account: str,
-           identifier: str = "") -> str:
-    """Provider id when present, else a stable hash of the natural key. The hash
-    is deterministic so a re-fetched overlap window dedups to the same id.
-    Limitation (no provider id): two genuinely distinct same-day charges with an
-    identical merchant + amount hash to one id, so the second is deduped as a
-    phantom duplicate. israeli-bank-scrapers supplies `identifier` for most
-    providers, so this is rare; revisit if a provider returns id-less rows."""
-    identifier = (identifier or "").strip()
-    if identifier:
-        return identifier
+def txn_id(date_s: str, amount, description: str, account: str) -> str:
+    """A stable hash of the natural key: date | amount | description | account.
+    Deterministic, so a re-fetched overlap window dedups to the same id.
+
+    We deliberately do NOT key on the provider `identifier`. israeli-bank-scrapers
+    exposes one for some providers, but it is NOT unique per transaction: Mizrahi
+    reuses a single identifier across many distinct charges (verified live
+    2026-06-19 — 8 ids spanned ~10 transactions each, collapsing 96 real rows to
+    26 on the first import). The natural key separated all 96 with zero collisions,
+    so the identifier buys no distinctness and, were it to drift between fetches,
+    would only break idempotency. It stays in the CSV for traceability but out of
+    the dedup key (SPEC §12.2).
+    Accepted floor: two genuinely distinct charges sharing an identical
+    date+amount+description+account hash to one id, so the second drops as a
+    phantom dup. Rare for a bank; if a card (Max/Cal) proves to repeat identical
+    same-day charges, re-verify with the (date,amount)-vs-identifier diagnostic
+    before trusting a richer key."""
     key = f"{date_s}|{amount}|{(description or '').strip()}|{(account or '').strip()}"
     return "h:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:16]
 
@@ -158,7 +164,7 @@ def _parse_rows(reader, provider: str, today: date, now: datetime) -> ParseResul
             "Amount (ILS)": amt,
             "Category": "",            # M6.4 fills (rules + DeepSeek, D-050/051)
             "Cat-Source": "",
-            "Txn-ID": txn_id(d, amt, desc, account, str(row.get("identifier", ""))),
+            "Txn-ID": txn_id(d, amt, desc, account),   # identifier ignored (§12.2)
             "Imported-At": imported_at,
         })
     return res
@@ -187,8 +193,9 @@ def _mock_csv_text() -> str:
 class RunResult:
     txns_new: int = 0
     txns_seen: int = 0          # already on the durable tab (Txn-ID match)
-    txns_phantom_dup: int = 0   # dropped as an in-batch id collision (id-less rows
-                                # that hash alike) — NOT "already on the tab"
+    txns_phantom_dup: int = 0   # dropped as an in-batch collision: two rows with an
+                                # identical natural key (date/amount/description/
+                                # account) hash alike — NOT "already on the tab"
     accounts: int = 0
     is_mock: bool = False
     wrote: bool = False
@@ -264,7 +271,7 @@ def run(csv_dir: Optional[Path] = None, sheet_path: Optional[Path] = None,
             res.txns_seen += 1          # genuinely already on the tab
             continue
         if tid in batch:
-            res.txns_phantom_dup += 1   # in-batch id collision (see Txn-ID docstring)
+            res.txns_phantom_dup += 1   # in-batch natural-key collision (Txn-ID docstring)
             continue
         batch.add(tid)
         new_txns.append(t)

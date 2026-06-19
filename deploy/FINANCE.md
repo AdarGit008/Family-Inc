@@ -14,8 +14,12 @@ the lane is **inert until `bank_creds.json` is placed**, so a clean box is safe.
 
 ## 0. Pre-flight (read BEFORE you start)
 
-- **Mizrahi is password-only** → it works end-to-end headless today. Do it first and prove
-  the whole pipe on it alone (§1–§3). It needs no `--auth` step.
+- **Mizrahi is password-only** → no `--auth` / device-trust step. *But* the portal may force a
+  one-time **password change** (or a terms/confirm interstitial) that a headless run can't
+  clear — it surfaces as a `TIMEOUT … #/change-pass` scrape error (seen on first go-live,
+  2026-06-19). Clear it once by hand in a normal browser (change the password, then update
+  `bank_creds.json`), and the headless run works. Do Mizrahi first and prove the whole pipe on
+  it alone (§1–§3).
 - **Max + Cal re-challenge a fresh browser, and `israeli-bank-scrapers` 6.7.3 has no
   programmatic OTP entry for them** (username+password only — there is no code path to type
   an OTP in). The mechanism is **device-trust persistence**: each provider has a persistent
