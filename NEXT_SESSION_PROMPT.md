@@ -15,19 +15,18 @@ You are opening a Family Inc working session as Lead Architect. Read `CLAUDE.md`
 
 Open items:
 
-- M6.2 — appliance deploy + first live auth (the "VPS hour"). Place `bank_creds.json` (mode 600); rename the 3 live-Sheet tabs to the full names; Mizrahi first (password-only, headless) → verify …
 - M6.3 — consumer wiring + close. Briefing Money section + dashboard Money drawer read live; the >35d stale-import warning fires. Acceptance = the first real monthly review (~30 days in).
 - M6.4 — analysis layer. *Repo half built + tested (2026-06-18).* The on-box rules engine (`automation/lib/categorize.py` + committed `seeds/14_Finance_Category_Rules.csv`) populates …
 - Parallel (Shanee). Budget migration — her manual budget → `Finance-Budget`; gives the actuals a target and defines the category vocab the rules engine maps to.
 
 Recent commits (the dated decision record — decisions fold into the canon, not a separate log):
 
+- 2026-06-19 fix: finance Txn-ID dedup — drop non-unique provider identifier (live data loss)
+- 2026-06-19 feat: M6.2 finance interactive device-trust auth (--auth) + §12.2 contract
 - 2026-06-19 chore: regenerate NEXT_SESSION_PROMPT for M6 + graceful open-item truncation
 - 2026-06-19 fix: GAP-2 + outbox-budget#3 — cross-run delivery reconcile (Brief 3, Lane B)
 - 2026-06-19 reviews: GAP-2 delivery-reconcile session opener (Brief 3)
 - 2026-06-18 fix: Brief-2 Lane B (partial) — outbox/delivery integrity (budget#1/#2, GAP-8, GAP-10)
-- 2026-06-18 fix: Brief-2 Lane S — publish/privacy safety (GAP-5 + deploy-systemd#4)
-- 2026-06-18 fix: Brief-2 small fixes — Lane A (finance hardening) + Lane E canon hygiene
 
 Session contract: don't open lanes outside the current focus without a PO call ·
 constants → config, utilities → `automation/lib/`, message copy → templates ·
