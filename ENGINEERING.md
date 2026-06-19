@@ -63,7 +63,7 @@ Boundary rules (convention, reviewer-checked — no CI enforces them yet): scrip
 | Python | 3.12 + **uv** | `uv sync` on the box; lockfile committed; appliance path is `uv run --frozen` |
 | Key deps | gspread, google-auth, anthropic, pytest, requests | additions need a one-line justification in the commit body |
 | Node | 22 LTS, plain npm | bridge + finance scraper only; `npm ci`; lockfiles committed |
-| Browser | headless Chromium | property (headed under Xvfb) + finance (headless); installed once by `provision.sh`, kept out of the uv lockfile |
+| Browser | headless Chromium | property (headed under Xvfb) + finance (daily headless; one-time `--auth` device-trust login headed under xvfb+x11vnc, persisting a per-provider profile under `/var/lib/family-inc/finance/profiles/`, mode 700); installed once by `provision.sh`, kept out of the uv lockfile |
 | Scheduling | **systemd timers** | journald logs, `OnFailure=` hooks, `Persistent=true` catches missed runs after reboots |
 | Dashboard hosting | GitHub Pages via Actions serving `main:/dashboard` | static, zero backend; the workflow generates the gitignored `config.js` from Actions secrets |
 | Secrets | `/etc/family-inc/` mode 600 | `service-account.json`, `env` (DeepSeek/Anthropic keys, SMTP, Apify token), `recipients.json`, `property_searches.json`, `bank_creds.json` |

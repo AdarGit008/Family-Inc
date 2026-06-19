@@ -8,7 +8,10 @@ provider-id vs hash ids, Finance-Accounts upsert (human fields preserved),
 fail-loud on missing creds / scrape-error marker, and the seed-safety gate.
 """
 
+import shutil
+import subprocess
 from datetime import date, datetime
+from pathlib import Path
 
 import pytest
 from openpyxl import Workbook, load_workbook
@@ -16,6 +19,8 @@ from openpyxl import Workbook, load_workbook
 from automation import finance_ingest as fin
 from automation.lib import config as cfg
 from automation.lib import sheet
+
+SCRAPE_JS = Path(__file__).resolve().parents[1] / "automation" / "finance" / "scrape.js"
 
 TODAY = date(2026, 6, 17)
 NOW = datetime(2026, 6, 17, 6, 0, 0)
@@ -455,3 +460,71 @@ def test_text_prefix_month_window_sums_iso_text_dates():
     assert month_actual("Groceries", "2026-06") == 532.50   # non-zero, this month
     assert month_actual("Groceries", "2026-05") == 999.00   # prev month isolated
     assert month_actual("Transport", "2026-06") == 280.00
+
+
+# ---------------------------------------------------------------------------
+# scrape.js — the Node scraper is VPS-only (banks + bundled Chromium), so these
+# guard only the parts that need neither: it parses, and its argv/fail-loud
+# contract holds. The deps (israeli-bank-scrapers, puppeteer) are required
+# lazily, so these run green without `npm ci` having been done.
+# ---------------------------------------------------------------------------
+requires_node = pytest.mark.skipif(
+    shutil.which("node") is None, reason="node not installed (scrape.js is VPS-only)"
+)
+
+
+def _node(*args, env=None):
+    return subprocess.run(
+        ["node", str(SCRAPE_JS), *args],
+        capture_output=True, text=True, env=env, timeout=30,
+    )
+
+
+@requires_node
+def test_scrape_js_node_check_parses():
+    """The syntax guard the module docstring promises (no test existed before)."""
+    res = subprocess.run(
+        ["node", "--check", str(SCRAPE_JS)], capture_output=True, text=True, timeout=30
+    )
+    assert res.returncode == 0, res.stderr
+
+
+@requires_node
+@pytest.mark.parametrize("args", [["--auth"], ["--auth", "bogus"]])
+def test_scrape_js_auth_usage_guard(args):
+    """`--auth` without a known provider exits 2 with usage and loads no Chromium
+    (the guard runs before puppeteer is required, so it passes with no node_modules)."""
+    res = _node(*args)
+    assert res.returncode == 2
+    assert "usage: node scrape.js --auth <provider>" in res.stderr
+    assert "mizrahi, max, cal" in res.stderr
+
+
+@requires_node
+def test_scrape_js_auth_mizrahi_is_noop():
+    """Mizrahi is password-only — `--auth mizrahi` is a clean no-op (exit 0), not a
+    browser launch; only Max/Cal persist a device-trust profile."""
+    res = _node("--auth", "mizrahi")
+    assert res.returncode == 0
+    assert "password-only" in res.stdout
+
+
+@requires_node
+@pytest.mark.parametrize("args", [["--foo"], ["mizrahi"], ["--auth", "max", "extra"]])
+def test_scrape_js_rejects_unknown_invocation(args):
+    """A typo or stray positional must fail loud (exit 2), never silently take the
+    daily-scrape branch — fail-loud on the hand-typed `--auth` command."""
+    res = _node(*args)
+    assert res.returncode == 2
+    assert "usage: node scrape.js" in res.stderr
+
+
+@requires_node
+def test_scrape_js_missing_creds_fails_loud():
+    """A daily run with no creds file fails loud (exit 1) — the unit-fails →
+    fail-flag contract. Lazy require means this hits loadCreds() before the lib."""
+    import os
+    env = {**os.environ, "FAMILY_INC_BANK_CREDS": "/nonexistent/bank_creds.json"}
+    res = _node(env=env)
+    assert res.returncode == 1
+    assert "[fatal]" in res.stderr and "bank_creds.json" in res.stderr

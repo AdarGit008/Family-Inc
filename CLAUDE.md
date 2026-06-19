@@ -30,13 +30,13 @@ Either PO can lead a session and take routine calls solo; major directional call
 
 ## Non-negotiable principles (full versions: SPEC §3)
 
-One source of truth per domain · boring tech · alert budget 2/day enforced at the outbox (criticals bypass, briefings exempt) · briefings > notifications · partner-symmetric, no scoring · fail loud, degrade quiet · never promise an affordance that doesn't exist · no money movement, no credential storage (except appliance-local read-only finance logins), no messages beyond the two adults, no kid-facing UI.
+One source of truth per domain · boring tech · alert budget 2/day enforced at the outbox (criticals bypass, briefings exempt) · briefings > notifications · partner-symmetric, no scoring · fail loud, degrade quiet · never promise an affordance that doesn't exist · no money movement, no credential storage (except appliance-local read-only finance logins + the device-trust browser profiles they authorize), no messages beyond the two adults, no kid-facing UI.
 
 ## Current state (live)
 
 **v1 live & accepted since 2026-06-13 (`v1-live`).** Running on the appliance: the keystone loop (reminders → WhatsApp digest + dashboard write-back), the weekly briefing (deterministic template), the group summarizer (on **DeepSeek**, keyword fallback keyless), and the **property tracker** (Yad2 on-box + Madlan via Apify, silent listings in the morning digest). Delivery has an email fallback; the outbox enforces the budget.
 
-**Building: M6 finance ingestion** (banks + cards, read-only, categorized + trends, silent delivery). The repo half is built and tested; the appliance step (place `bank_creds.json`, rename the 3 live-Sheet finance tabs, first interactive OTP) is next. **Gated to ~2026-06-20** (needs ≥1 week of live data): the first real classifier-accuracy run + the external milestone review. Full status: `BACKLOG.md`.
+**Building: M6 finance ingestion** (banks + cards, read-only, categorized + trends, silent delivery). The repo half is built and tested; the appliance step (place `bank_creds.json`, rename the 3 live-Sheet finance tabs, one-time `--auth` device-trust login for the cards) is next. **Gated to ~2026-06-20** (needs ≥1 week of live data): the first real classifier-accuracy run + the external milestone review. Full status: `BACKLOG.md`.
 
 ## Session protocol
 

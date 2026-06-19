@@ -20,6 +20,10 @@ WorkingDirectory=/opt/family-inc
 EnvironmentFile=-/etc/family-inc/env
 Environment=FAMILY_INC_FINANCE_DIR=/var/lib/family-inc/finance
 StateDirectory=family-inc/finance
+; Owner-only state: the dir holds the device-trust browser profiles (live bank
+; session cookies) and the transaction CSVs. UMask=0077 keeps the CSVs 0600 too.
+StateDirectoryMode=0700
+UMask=0077
 TimeoutStartSec=600
 MemoryMax=1500M
 ExecStart=/usr/bin/node automation/finance/scrape.js

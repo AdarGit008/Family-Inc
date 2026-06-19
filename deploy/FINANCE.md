@@ -12,17 +12,20 @@ provider) → `automation/finance_ingest.py` (Python, the only Sheet writer). Dr
 `provision.sh` already ran `npm ci` in `automation/finance/` and enabled the timer — but
 the lane is **inert until `bank_creds.json` is placed**, so a clean box is safe.
 
-## 0. Pre-flight (decide BEFORE you start)
+## 0. Pre-flight (read BEFORE you start)
 
-- **Mizrahi is password-only** → it works end-to-end today. Do it first and prove the
-  whole pipe on it alone.
-- **Max + Cal can OTP-challenge, and there is no interactive-OTP code yet.** `scrape.js`
-  is headless-only (`showBrowser: false`, no headed/TTY/argv path); an OTP re-challenge
-  **fails loud** (`_scrape_errors.json` → the next digest reports it) but cannot be
-  answered interactively. SPEC §12.2 promises "the operator re-runs interactively" — that
-  capability is **unbuilt**. Decide with the PO before the cards step: either accept
-  fail-loud-and-skip on a challenge, or build a headed/interactive mode first (a code
-  change to the §12.2 auth contract — needs a PO call).
+- **Mizrahi is password-only** → it works end-to-end headless today. Do it first and prove
+  the whole pipe on it alone (§1–§3). It needs no `--auth` step.
+- **Max + Cal re-challenge a fresh browser, and `israeli-bank-scrapers` 6.7.3 has no
+  programmatic OTP entry for them** (username+password only — there is no code path to type
+  an OTP in). The mechanism is **device-trust persistence**: each provider has a persistent
+  Chromium profile (`<finance-dir>/profiles/<provider>`), and a **one-time headed login you
+  drive by hand** (`scrape.js --auth <provider>`) clears the challenge once. The portal then
+  trusts that profile, so the daily headless run reuses it and is not re-challenged. On the
+  headless VPS the headed browser is shown via **xvfb + x11vnc over an SSH tunnel** — the
+  full procedure is **§4**. Do the cards there, after Mizrahi proves the pipe.
+- **Run everything as `familyinc`** (the unit's user) so the profile the daily run reads is
+  owned by the daily run. A profile authorized as `root` is unreadable by the timer.
 
 ## 1. Rename the 3 live-Sheet tabs (load-bearing)
 
@@ -66,19 +69,66 @@ populated by the rules engine), and `Finance-Accounts` shows Mizrahi with a fres
 `Last Imported`. A re-run must be idempotent (dedup → 0 new). If `_scrape_errors.json`
 appears, the run **persisted the good data then failed loud** — read the marker.
 
-## 4. Add the cards (Max + Cal) — only after the §0 OTP decision
+## 4. Add the cards (Max + Cal) — one-time device-trust, then daily-headless
 
-Add the `max` and `cal` blocks to `bank_creds.json`, re-run §3. On a Max/Cal OTP
-re-challenge the run fails loud and skips that provider; the good providers still land.
-**Cadence is the first tuning knob** (§12.2): if the cards challenge often, drop them to
-2–3×/week and keep the bank daily.
+Add the `max` and `cal` blocks to `bank_creds.json` (§2). A first **headless** run will
+likely fail loud on a device/OTP challenge for a card — that is expected; clear it once with
+the headed `--auth` login, which trusts this box's browser profile so the daily run rides it.
+
+**4a — install x11vnc and pause the daily timer (one-time):**
+
+```bash
+sudo apt-get install -y x11vnc          # xvfb is already present (property scraper)
+sudo systemctl stop family-finance.timer  # so the 06:00 run can't open the same
+                                          # profile mid-auth (Chrome SingletonLock).
+                                          # Re-armed in §5; Persistent=true catches up.
+```
+
+**4b — run the headed login on the box, as `familyinc`, under xvfb.** Both terminals run
+as `familyinc` and share a **pinned** xauth cookie, so x11vnc can attach to `:99` while the
+display stays access-controlled (no `-ac` — `:99` will be showing a live banking session,
+so it must not be open to every local process):
+
+```bash
+# Terminal A: headed Chrome on :99; -f pins the xauth cookie to a known path.
+sudo -u familyinc xvfb-run -f /tmp/finance-xauth --server-num=99 \
+  -s '-screen 0 1280x900x24' \
+  node /opt/family-inc/automation/finance/scrape.js --auth max
+# Terminal B (give A a second to bring :99 up): same user + pinned cookie, localhost only.
+sudo -u familyinc env XAUTHORITY=/tmp/finance-xauth \
+  x11vnc -display :99 -auth /tmp/finance-xauth -localhost -rfbport 5900 -nopw -forever
+```
+
+**4c — view + drive it from your laptop:**
+
+```bash
+ssh -L 5900:localhost:5900 <box>        # tunnel; then open any VNC viewer → localhost:5900
+# In the VNC window: log into Max, complete the SMS/OTP "remember this device" step until
+# you reach the account dashboard. Then go back to Terminal A and press ENTER to close it.
+# (The session auto-closes after 20 min if you don't — just re-run --auth.)
+```
+
+> Alternative if you'd rather not run a VNC server: `ssh -X <box>` and run the same
+> `sudo -u familyinc … --auth max` with the forwarded `DISPLAY` — the browser renders on
+> your laptop, no xvfb/x11vnc. (You must `xauth add` the forwarded cookie for `familyinc`;
+> we default to on-box VNC so the trusted browser is the same Chromium/IP as the daily run.)
+
+The trust cookie is now persisted in `<finance-dir>/profiles/max/`. Repeat 4b–4c for `cal`.
+Then re-run §3 (`systemctl start family-finance.service`) and confirm both cards land
+**headless**. If a card still re-challenges, the trust didn't take — re-run `--auth` for it
+(and see §12.2: cadence is the tuning knob — drop noisy cards to 2–3×/week).
+
+> If device-trust ever expires (a card starts re-challenging weeks later), the fix is the
+> same one-time `--auth` login — no creds change. A corrupt profile is recoverable by
+> `rm -rf <finance-dir>/profiles/<provider>` then re-running `--auth`.
 
 ## 5. Enable the timer
 
-`provision.sh` already `enable`d `family-finance.timer`. Confirm it is active and the next
-fire is sane:
+`provision.sh` already `enable`d `family-finance.timer`. If you stopped it for the §4 auth,
+re-arm it, then confirm it is active and the next fire is sane:
 
 ```bash
+sudo systemctl start family-finance.timer                 # re-arm if §4a stopped it
 sudo systemctl list-timers 'family-finance*' --no-pager   # next ~06:00 Asia/Jerusalem
 ```
 
