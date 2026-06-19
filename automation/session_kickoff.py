@@ -30,7 +30,9 @@ def _open_items(body: str) -> list[str]:
             if s.startswith(marker):
                 text = s[len(marker):].strip().lstrip("*").strip()
                 text = re.sub(r"\*\*", "", text)
-                items.append(text[:140] + "…" if len(text) > 140 else text)
+                if len(text) > 200:  # word-boundary clip — never mid-word; keep the lead clause
+                    text = text[:200].rsplit(" ", 1)[0].rstrip(" ;,—-") + " …"
+                items.append(text)
                 break
     return items
 
