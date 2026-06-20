@@ -687,7 +687,12 @@
       target: parseFloat(r['Monthly Target (ILS)']) || 0,
       actual: parseFloat(r['Actual (current month)']) || 0,
       pct: parseFloat(r['% of Target']) || 0,
-    })).filter(b => b.category && b.category !== 'Category');
+      // Drop the header echo and the TOTAL row: TOTAL is a SUM of the categories,
+      // so including it would double-count the money-summary totals, list a
+      // phantom "TOTAL" line, and miscount over-budget categories. The weekly
+      // briefing's section_money skips it the same way (keep the two surfaces in
+      // agreement — both read this one tab).
+    })).filter(b => b.category && b.category !== 'Category' && b.category !== 'TOTAL');
     const txns = rowsToObjects(named.finance_txns).map(r => ({
       date: parseDate(r['Date']),
       account: r['Account'],
