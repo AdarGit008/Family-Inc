@@ -15,18 +15,18 @@ You are opening a Family Inc working session as Lead Architect. Read `CLAUDE.md`
 
 Open items:
 
-- M6.3 — consumer wiring + close. Briefing Money section + dashboard Money drawer read live; the >35d stale-import warning fires. Acceptance = the first real monthly review (~30 days in). The …
+- M6.3 — consumer wiring + close. Briefing Money section + dashboard Money drawer read live; the >35d stale-import warning is armed (`FINANCE_STALE_IMPORT_DAYS`). Budget-SUMIFS installer ran live …
 - M6.4 — analysis layer. *Repo half built + tested (2026-06-18).* The on-box rules engine (`automation/lib/categorize.py` + committed `seeds/14_Finance_Category_Rules.csv`) populates …
 - Parallel (Shanee). Budget migration — her manual budget → `Finance-Budget`; gives the actuals a target and defines the category vocab the rules engine maps to.
 
 Recent commits (the dated decision record — decisions fold into the canon, not a separate log):
 
+- 2026-06-20 chore: regenerate NEXT_SESSION_PROMPT (M6.3 installer + dashboard wiring landed)
 - 2026-06-20 fix: M6.3 dashboard Money drawer — exclude Finance-Budget TOTAL row (double-count)
 - 2026-06-20 chore: gitignore .claude/ (local Claude Code settings + locks)
 - 2026-06-20 feat: M6.3 budget-SUMIFS installer — idempotent live formula stamp (lib/finance_budget + CLI)
 - 2026-06-19 next session additions
 - 2026-06-19 docs: close M6.2 (Mizrahi/debit live) + defer cards — canon to present-tense
-- 2026-06-19 fix: finance Txn-ID dedup — drop non-unique provider identifier (live data loss)
 
 Session contract: don't open lanes outside the current focus without a PO call ·
 constants → config, utilities → `automation/lib/`, message copy → templates ·
