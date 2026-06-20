@@ -21,12 +21,12 @@ Open items:
 
 Recent commits (the dated decision record — decisions fold into the canon, not a separate log):
 
+- 2026-06-20 fix: M6.3 dashboard Money drawer — exclude Finance-Budget TOTAL row (double-count)
+- 2026-06-20 chore: gitignore .claude/ (local Claude Code settings + locks)
+- 2026-06-20 feat: M6.3 budget-SUMIFS installer — idempotent live formula stamp (lib/finance_budget + CLI)
 - 2026-06-19 next session additions
 - 2026-06-19 docs: close M6.2 (Mizrahi/debit live) + defer cards — canon to present-tense
 - 2026-06-19 fix: finance Txn-ID dedup — drop non-unique provider identifier (live data loss)
-- 2026-06-19 feat: M6.2 finance interactive device-trust auth (--auth) + §12.2 contract
-- 2026-06-19 chore: regenerate NEXT_SESSION_PROMPT for M6 + graceful open-item truncation
-- 2026-06-19 fix: GAP-2 + outbox-budget#3 — cross-run delivery reconcile (Brief 3, Lane B)
 
 Session contract: don't open lanes outside the current focus without a PO call ·
 constants → config, utilities → `automation/lib/`, message copy → templates ·
