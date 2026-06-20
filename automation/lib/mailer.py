@@ -10,7 +10,7 @@ degrades (SPEC §10.2).
 NOT an outbox bypass (CLAUDE.md guardrail): the content arriving here already
 passed outbox policy — assembly consumed the deferred queue, and the digest is
 briefing-kind (budget-exempt). This substitutes the *transport* for one
-already-policied message. Logged in DECISIONS.md D-027.
+already-policied message. See SPEC §10 / git history.
 
 Config: SMTP_HOST/SMTP_PORT (defaults in lib/config.py), SMTP_USER/SMTP_PASS
 (env-only, /etc/family-inc/env), FAMILY_INC_EMAIL_TO (comma-separated; unset

@@ -248,7 +248,7 @@ def queue(to: str, body: str, kind: str = "alert", *, source: str = "unknown",
           msg_id: Optional[str] = None, now: Optional[datetime] = None) -> QueueResult:
     """Queue one message toward a phone. See module docstring for semantics.
 
-    `msg_id` should be the stable id from SPEC §8.4 (rem-…, wa-…, brief-…);
+    `msg_id` should be the stable id from SPEC §8.4 (wa-…, brief-…);
     a uuid is generated when omitted, which forfeits cross-run idempotency.
     """
     if to not in VALID_RECIPIENTS:

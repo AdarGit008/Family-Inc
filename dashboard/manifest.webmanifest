@@ -4,8 +4,8 @@
   "description": "Household dashboard for the Family inc. operating system.",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#fafaf7",
-  "theme_color": "#2d5f3f",
+  "background_color": "#FAF8F5",
+  "theme_color": "#5E6AD2",
   "orientation": "portrait",
   "icons": [
     { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },

@@ -1,7 +1,7 @@
 # Family Inc. — System Specification
 
-*What the system is: scope, architecture, data model, contracts, policies. v3.0 · 2026-06-17.*
-*This is a present-tense snapshot — it describes how the system behaves today, not how it got here. The dated history (every prior "we changed X to Y" rationale) lives in `Archive/`. Companions: `ENGINEERING.md` (how it's built and run) · `DESIGN.md` (how it looks and reads) · `BACKLOG.md` (what's next).*
+*What the system is: scope, architecture, data model, contracts, policies. v3.1 · 2026-06-20.*
+*This is a present-tense snapshot — it describes how the system behaves today, not how it got here. The dated history (every prior "we changed X to Y" rationale) lives in `Archive/`. Companions: `ENGINEERING.md` (how it's built and run) · `DESIGN.md` (how it looks and reads) · `BACKLOG.md` (current status) · `ROADMAP.md` (the forward v1.1 plan + lane contracts).*
 
 ---
 
@@ -39,7 +39,7 @@ Phrased so a reviewer can check compliance:
 3. **Alerts are a budget.** Hard cap of 2 unsolicited messages per recipient per day, enforced at one chokepoint (§7.5). Critical-safety messages bypass it with an audit trail. Scheduled briefings are exempt — they are appointments, not interruptions. *(Enforced in one place because two scripts that each kept their own 2/day counter could combine to 4+/day.)*
 4. **Briefings > notifications.** The default unit of communication is a scheduled digest. A real-time message is the exception that must justify itself.
 5. **Partner-symmetric.** Both adults see everything, can act on everything, and appear as equals. No leaderboards, no scoring.
-6. **Fail loud, degrade quiet.** Infrastructure failures surface in the next briefing ("bridge silent 14h"), never as silence. Feature degradation (LLM down → deterministic fallback) must not page anyone.
+6. **Fail loud, degrade quiet.** Infrastructure failures surface in the next briefing ("bridge silent 14h"), never as silence. Feature degradation (LLM down → deterministic fallback) must not page anyone. **Time-critical, user-facing data is the exception to "degrade quiet":** when a fetch fails for a time-sensitive line — e.g. Shabbat/chag candle-lighting times — surface an explicit "unavailable" line, never silence, because a missing safety line that's indistinguishable from "nothing today" is itself a silent failure (GAP-7, 2026-06-20).
 7. **Never promise an affordance the system doesn't have.** No reply commands in messages until reply parsing ships; no buttons that don't write.
 
 ## 4. Scope
@@ -59,7 +59,7 @@ Phrased so a reviewer can check compliance:
 
 ### Building now
 
-**Finance ingestion (M6, §12.2).** Read-only scrape of the bank + cards → categorized transactions + balances in the Sheet → silent surfacing in the briefing and dashboard. The repo half is built; first live run is pending the appliance step. See `BACKLOG.md`.
+**Finance ingestion (M6, §12.2).** Read-only scrape → categorized transactions + balances in the Sheet → silent surfacing in the briefing and dashboard. **Live on Mizrahi (debit) since 2026-06-19**; the consumer wiring (M6.3) and analysis layer (M6.4) are landing, and cards (Max/Cal) are deferred — debit-only household. See `BACKLOG.md`.
 
 ### Non-goals (permanent)
 
@@ -86,7 +86,7 @@ Pediatric milestones, goal coaching, PDF/OCR/voice capture, Gmail bill parsing, 
 │   07:25 reminders engine (compute)          │   │  read: batchGet          │
 │   07:30 daily digest (assemble + send)      │   │  write: batchUpdate +    │
 │   hourly whatsapp summarizer                │   │   DoneAt / LastDoneBy /  │
-│   ~06:00 finance scrape (building)          │   │   WriteQueue_Tombstone   │
+│   ~06:00 finance scrape (M6: live)          │   │   WriteQueue_Tombstone   │
 │   2×/day property scrape                    │   └──────────────────────────┘
 │   Sat 21:00 weekly briefing                 │
 │                                             │         ┌──────────────────┐
@@ -144,7 +144,7 @@ group_name · group_type · importance_default (alert_eligible / digest_only / m
 
 ### 6.4 Other tabs
 
-`People`, `Calendar-Events`, `Finance-Budget`, `Finance-Accounts`, `Finance-Transactions` (finance landing zone — schema in §12.2), `Goals`, `Health`, `Education`, `Car`, `Contracts`, `Contacts`, `Settings` (Key|Value rows — keys containing `@` are UserMap entries email→display-name; key `lang` is the chrome default), `Reminders-Archive` (one-offs roll here monthly), `Property-Listings` (scraper-written — schema in §12.1). Money values are **ILS only**.
+`People`, `Calendars`, `Calendar-Events`, `Finance-Budget`, `Finance-Accounts`, `Finance-Transactions` (finance landing zone — schema in §12.2), `Goals`, `Health`, `Education`, `Car`, `Contracts`, `Contacts`, `Lists`, `Settings` (Key|Value rows — keys containing `@` are UserMap entries email→display-name; key `lang` is the chrome default), `Reminders-Archive` (one-offs roll here monthly), `Property-Listings` (scraper-written — schema in §12.1). `Calendars` and `Lists` are human-only (no code contract; read loosely, out of code scope). Money values are **ILS only**.
 
 ## 7. Component contracts
 
@@ -184,7 +184,7 @@ heartbeat: append one line to logs/reminders_log.csv every run.
 
 **Both adults, every day.** The digest is assembled and queued for adar **and** shanee on every run. An adult with no fires of their own still gets the briefing — the quiet-day line plus the shared sections (WhatsApp groups, property). This keeps the surface partner-symmetric and means silence always signals a *broken* digest, never an empty day. Because it is `kind=briefing` it is budget-exempt, so briefing the empty-handed adult never spends an alert slot.
 
-**Weekly briefing:** read all tabs → render a five-scene narrative (the week's spend · a kids' moment · next week's three things · one goal line · one contract heads-up) from a **deterministic template** → write to `Briefings/` and queue `kind=briefing`. It also carries a compact **Classifier accuracy** section — the week's WhatsApp ALERT-tier counts, by-rule tally, and the <1/week false-positive target — and the standard self-report line (runs green, messages classified, tombstone skips, LLM spend). *(The briefing is template-only by design. An LLM-written version would have to send whole-Sheet context — reminders, finance, kids' health — to the model, far beyond the "one message + ≤3 context" bound the classifier observes. AI prose is a deferred v1.1 candidate, not a gap.)*
+**Weekly briefing:** read all tabs → render the **deterministic-template** sections — week ahead · reminders firing this week · overdue · Money · Goals · data hygiene · system self-report · classifier accuracy → write to `Briefings/` and queue `kind=briefing`. The **Classifier accuracy** section carries the week's WhatsApp ALERT-tier counts, by-rule tally, and the <1/week false-positive target; the **self-report** line carries runs-green, messages classified, tombstone skips, and LLM spend. *(Deterministic by design — no LLM call. An LLM-written "five-scene narrative" (the week's spend · a kids' moment · next week's three things · a goal line · a contract heads-up) over whole-Sheet context is a deferred v1.1 lane — `ROADMAP.md` §ai-briefing — not a gap: it needs a whole-Sheet→provider privacy call and keeps this template as its proven fallback.)*
 
 Both message kinds are budget-exempt and subject only to quiet hours.
 
@@ -201,7 +201,7 @@ Listens to **groups** → `inbox.jsonl`. Polls `outbox.jsonl` every 15s → send
 ### 7.5 Outbox (`lib/outbox.py`) — the chokepoint
 
 ```
-queue(to: "adar"|"shanee"|"both", body, kind: "alert"|"critical"|"briefing", source, id)
+queue(to: "adar"|"shanee"|"both", body, kind: "alert"|"critical"|"briefing", *, source, msg_id)
   briefing → exempt from budget; subject to quiet hours (22:00–07:00 → hold to 07:00)
   alert    → consult ledger[date][recipient]; if ≥2 → defer: append to tomorrow's
              digest, log alert_suppressed_by_budget; else send + increment
@@ -221,7 +221,7 @@ Read: `batchGet` over all bound ranges (UI contract in `DESIGN.md`). Write: per 
 
 ### 8.1 Alert budget
 
-2 unsolicited messages / recipient / day, enforced only in `lib/outbox.py`. When over budget, trim priority: OVERDUE and kids' Health always survive; WEEK/MONTH-OUT bump first; Goals never alert (briefing-only). If >10% of fires are suppressed over a rolling 14 days, the next weekly briefing says "budget is biting — raise the cap or tighten the rules?".
+2 unsolicited messages / recipient / day, enforced only in `lib/outbox.py`. When over budget, trim priority: OVERDUE and kids' Health always survive; **Goals are de-prioritised first** (`DROP_FIRST_DOMAINS` — sorted out ahead of WEEK/MONTH-OUT, since the weekly briefing already covers them; not a hard exclusion — a Goals fire still rides along when there is room under the per-digest cap), then WEEK/MONTH-OUT. If >10% of fires are suppressed over a rolling 14 days, the next weekly briefing says "budget is biting — raise the cap or tighten the rules?".
 
 ### 8.2 Quiet hours
 
@@ -233,7 +233,7 @@ The dashboard stamps `WriteQueue_Tombstone` (ISO-T datetime) on every write; que
 
 ### 8.4 Idempotency & dedup
 
-Outbox messages carry stable ids: engine `rem-{row}-{date}`, summarizer `wa-{msg_id}`, briefings `brief-{type}-{date}`. The bridge dedups per (id, target). Engine re-runs on the same day are no-ops (the Last-Sent guard). The digest's confirmed-delivery stamp (§7.5) keys its pending rows on the same `brief-{type}-{date}` id and drops a settled row once stamped, so reconcile is idempotent — a re-run never double-stamps or re-consumes a deferred alert.
+Outbox messages carry stable ids: summarizer `wa-{msg_id}`, briefings `brief-{type}-{date}` — the daily digest queues once per recipient as `brief-daily-{date}`; **individual reminders carry no outbox id** (the engine computes, the digest delivers). The bridge dedups per (id, target). Engine re-runs on the same day are no-ops (the Last-Sent guard). The digest's confirmed-delivery stamp (§7.5) keys its pending rows on the same `brief-{type}-{date}` id and drops a settled row once stamped, so reconcile is idempotent — a re-run never double-stamps or re-consumes a deferred alert.
 
 ### 8.5 Time & locale
 
@@ -296,9 +296,9 @@ Active house search. New listings land silently and surface in the morning diges
 | **Delivery** | New listings land **silently** and surface in a "🏠 דירות חדשות / New listings" section of the 07:30 digest. They never alert and never bypass the budget — property is not critical-safety. |
 | **Failure handling** | A scrape error or anti-bot block sets the fail-flag (`OnFailure` → `logs/fail.flag`); the next digest reports "property scrape failed" and the weekly briefing surfaces persistent failures. The realized escape hatch from a persistent block is the Apify secondary; an anti-detect browser on-box is a further fallback. |
 
-### 12.2 Finance — Mizrahi / Max / Cal (building, M6)
+### 12.2 Finance — Mizrahi / Max / Cal (live on Mizrahi, M6)
 
-A committed monthly finance review is the standing consumer. Scope = Mizrahi (bank) + Max + Cal (cards); **categorized + month-over-month trends**; investments/brokerage out of scope. Anomaly detection stays killed. Delivery is silent. The repo half is built and tested; the live appliance run is pending (`BACKLOG.md` M6).
+A committed monthly finance review is the standing consumer. Scope = Mizrahi (bank) + Max + Cal (cards); **categorized + month-over-month trends**; investments/brokerage out of scope. Anomaly detection stays killed. Delivery is silent. **Live on Mizrahi (debit) since 2026-06-19** (daily read-only scrape → categorized, idempotent Sheet write); the consumer wiring (M6.3) + analysis layer (M6.4) are landing. **Cards (Max/Cal) deferred** — debit-only household, so Mizrahi is the complete picture (`BACKLOG.md` M6).
 
 | Facet | Spec |
 |---|---|
@@ -312,4 +312,4 @@ A committed monthly finance review is the standing consumer. Scope = Mizrahi (ba
 
 ## 13. References
 
-`ENGINEERING.md` — runtime, repo layout, testing, ops. `DESIGN.md` — dashboard UI, message design system, i18n. `BACKLOG.md` — what's next and what's frozen. `Archive/` — the dated decision history and superseded docs.
+`ENGINEERING.md` — runtime, repo layout, testing, ops. `DESIGN.md` — dashboard UI, message design system, i18n. `BACKLOG.md` — current status; what's frozen. `ROADMAP.md` — the sequenced forward plan + v1.1 lane contracts. `Archive/` — the dated decision history and superseded docs.

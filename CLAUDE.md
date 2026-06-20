@@ -1,21 +1,22 @@
 # Family Inc. — Session Context
 
-*Auto-loaded at the top of every session opened in this folder. Consolidated 2026-06-17 (the SPEC bump: canon rewritten clean, the D-NN decision log retired to `Archive/`). Keep under 100 lines.*
+*Auto-loaded at the top of every session opened in this folder. Consolidated 2026-06-17 (the SPEC bump: canon rewritten clean, the D-NN decision log retired to `Archive/`). 2026-06-20: spec-ahead pass — `ROADMAP.md` added as the 5th canon doc; canon reconciled to code. Keep under 100 lines.*
 
 ## What this is
 
 A household operating system for Adar + Shanee (+ 2 young kids, adult-mediated). Master DB = the `Family_OS` Google Sheet. Two product surfaces: WhatsApp messages (self-hosted Baileys bridge) and a PWA dashboard pinned to both iPhones. All automation runs on **one VPS** ("the appliance"). Israeli context throughout: Hebrew/RTL, ILS, Asia/Jerusalem, Maccabi, Hebcal.
 
-## Canon — four documents, one job each
+## Canon — five documents, one job each
 
 | Doc | Owns | Open it for |
 |---|---|---|
 | `SPEC.md` | what the system is: scope, architecture, data model, contracts, policies | any contract or "how should X behave" |
 | `ENGINEERING.md` | how it's built/run: repo layout, toolchain, VPS, deploy, tests, ops | any "how do we do X" |
 | `DESIGN.md` | both surfaces: dashboard UI + WhatsApp message design, i18n, states | any pixel or copy question |
-| `BACKLOG.md` | what's next: shipped, in-progress, gated, v1.1, frozen lanes | what to work on / what's frozen |
+| `BACKLOG.md` | current status: shipped, in-progress, gated, frozen lanes | where we are / what's frozen |
+| `ROADMAP.md` | the forward plan: the ranked v1.1 sequence + per-lane forward contracts (spec **ahead** of build) | what to build next / a future lane's contract |
 
-Each doc is a **present-tense snapshot** — it describes the current state, not the history. `Archive/` holds superseded docs and the full dated decision history (the old `DECISIONS.md` D-001…D-052 log) — read-only, for "didn't we decide…". Status lives **only** in `BACKLOG.md`.
+The first four are **present-tense snapshots** of the current state; `ROADMAP.md` is the **near-future** plan (a lane's contract graduates into `SPEC.md` when it ships). `Archive/` holds superseded docs and the full dated decision history (the old `DECISIONS.md` D-001…D-052 log) — read-only, for "didn't we decide…". Status lives **only** in `BACKLOG.md`; the forward sequence lives **only** in `ROADMAP.md`.
 
 ## Roles & authority
 
@@ -36,7 +37,7 @@ One source of truth per domain · boring tech · alert budget 2/day enforced at 
 
 **v1 live & accepted since 2026-06-13 (`v1-live`).** Running on the appliance: the keystone loop (reminders → WhatsApp digest + dashboard write-back), the weekly briefing (deterministic template), the group summarizer (on **DeepSeek**, keyword fallback keyless), and the **property tracker** (Yad2 on-box + Madlan via Apify, silent listings in the morning digest). Delivery has an email fallback; the outbox enforces the budget.
 
-**M6 finance ingestion — live on Mizrahi (debit) since 2026-06-19:** daily read-only scrape → categorized, idempotent Sheet write (verified 98/98, dedup on a natural-key Txn-ID). **Cards (Max/Cal) deferred** — debit-only household, so Mizrahi is the complete picture; the `--auth` device-trust path is built but dormant (no card creds block → inert). M6.3 (briefing/dashboard consumers) + M6.4 (analysis layer) remain. **Gated to ~2026-06-26** (needs ≥1 week of live finance data from the 06-19 go-live): the first real classifier-accuracy run + the external milestone review. Full status: `BACKLOG.md`.
+**M6 finance ingestion — live on Mizrahi (debit) since 2026-06-19:** daily read-only scrape → categorized, idempotent Sheet write (verified 98/98, dedup on a natural-key Txn-ID). **Cards (Max/Cal) deferred** — debit-only household, so Mizrahi is the complete picture; the `--auth` device-trust path is built but dormant (no card creds block → inert). M6.3 (briefing/dashboard consumers) + M6.4 (analysis layer) remain. **Gated to ~2026-06-26** (needs ≥1 week of live finance data from the 06-19 go-live): the first real classifier-accuracy run + the external milestone review. Full status: `BACKLOG.md`; the forward plan + lane contracts: `ROADMAP.md`.
 
 ## Session protocol
 

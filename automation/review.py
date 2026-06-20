@@ -9,14 +9,15 @@ to reviews/.
 
 Providers (--provider):
 
-- **ollama** (default) — one OpenAI-compatible endpoint for everything:
-  `{OLLAMA_HOST}/v1/chat/completions`. Cloud (https://ollama.com, needs
-  OLLAMA_API_KEY) or local (OLLAMA_HOST=http://localhost:11434, no key,
-  ₪0/run, same privacy posture as the WhatsApp bridge).
-- **deepseek** — https://api.deepseek.com, key from DEEPSEEK_API_KEY env ONLY
-  (folded in from run_review_deepseek.py, M1). Supports --chunk for
+- **deepseek** (default) — https://api.deepseek.com, key from DEEPSEEK_API_KEY
+  env ONLY (folded in from run_review_deepseek.py, M1). Supports --chunk for
   environments that cap process lifetime (one bounded call per invocation,
   conversation state in --state JSON; rerun until DONE).
+- **ollama** — keyless local fallback (`--provider ollama`); one
+  OpenAI-compatible endpoint for everything: `{OLLAMA_HOST}/v1/chat/completions`.
+  Cloud (https://ollama.com, needs OLLAMA_API_KEY) or local
+  (OLLAMA_HOST=http://localhost:11434, no key, ₪0/run, same privacy posture as
+  the WhatsApp bridge).
 
 The ritual's "Gemini" is a ROLE (external adversarial reviewer outside our
 context), not a vendor commitment — any sufficiently strong model can hold it
@@ -561,8 +562,8 @@ def main():
     ap.add_argument("--changes", required=True,
                     help='Path to a markdown file with the "What this session changed" '
                          'bullet list, or "-" for stdin.')
-    ap.add_argument("--provider", default="ollama", choices=["ollama", "deepseek"],
-                    help="Reviewer provider (default: ollama).")
+    ap.add_argument("--provider", default="deepseek", choices=["ollama", "deepseek"],
+                    help="Reviewer provider (default: deepseek; keyless local fallback: --provider ollama).")
     ap.add_argument("--model", default=DEFAULT_MODEL,
                     help=f"Model id (ollama default: {DEFAULT_MODEL}; "
                          f"deepseek default: {DEEPSEEK_DEFAULT_MODEL}).")

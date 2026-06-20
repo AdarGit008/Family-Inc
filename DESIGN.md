@@ -1,6 +1,6 @@
 # Family Inc. — Design Specification
 
-*The product has two surfaces: WhatsApp messages and the dashboard PWA. Both are designed here. v3.0 · 2026-06-17. The single offline model is queue + tombstone everywhere.*
+*The product has two surfaces: WhatsApp messages and the dashboard PWA. Both are designed here. v3.1 · 2026-06-20. The single offline model is queue + tombstone everywhere.*
 
 ---
 
@@ -21,55 +21,53 @@
 |---|---|---|---|
 | `--surface` | `#FAF8F5` | `#15161A` | page |
 | `--ink` | `#1A1A1F` | `#E8E6E1` | text |
-| `--muted` | `#71717A` | `#A1A1AA` | secondary text, ticks |
-| `--accent` | `#5E6AD2` | `#5E6AD2` | arc, links, active tab |
+| `--muted` | `#71717A` | `#A1A1AA` | secondary text |
+| `--accent` | `#5E6AD2` | `#5E6AD2` | links, active tab |
 | `--ok` | `#3F8F5F` | sage | all-clear, success |
 | `--warn` | `#C58B3A` | amber | due-today |
 | `--alert` | `#C44545` | terracotta | overdue |
 
-Semantic colors appear only on status; the accent is the single brand color. No gradients except the skeleton shimmer.
+Semantic colors appear only on status; the accent is the single brand color. No gradients.
 
 ### Type
 
 - **Heebo** — Hebrew UI (default chrome).
 - **Inter** — Latin UI (fallback chrome); tabular figures on.
 - **Geist Mono** — money only (`₪4,280`) so amounts read as data at a glance.
-- Scale: 17/15/13 body-secondary-caption; one display size (28) for the arc number and drawer KPIs. No font weight above 600.
+- Scale: 17/15/13 body-secondary-caption; one display size (28) for drawer KPIs. No font weight above 600.
 
 ### Components
 
-- **Progress arc** (fixed 56px strip): ring + "N completed · last 7 days" + seven weekday ticks (✓/·). A rolling count, never a streak; never shows a target or deficit. Tap → per-domain mini-arcs.
 - **Status banner**: one line — red if any overdue, amber if any fire-today, sage "all clear" otherwise.
 - **Reminder row**: flag dot · title · due phrase; tap reveals `✓ done` `+Nd` `note` pills. Snooze pills: 1/3/7/14/30.
 - **Domain drawers** (Money/Health/Goals/Car/Contracts): closed = one big KPI + sparkline; open = detail list.
 - **Bright-line goal viz**: target line + actual line + safety band (ahead/on-pace/behind) for multi-year goals — progress bars are banned for anything >90 days.
-- **Connection pill**: 🟢 live / ⛔ offline — N queued. The only place sync state appears.
-- **Sticky status pill** (top): one-liner like "Weekly briefing ready · 2 alerts" — our budget-friendly stand-in for OS-level notifications.
+- **Stale-data badge**: shown only when a live load fails and a cache exists — `לא מקוון — נתונים מ-{when}`. There is no positive "live" indicator; the pending-write count lives in Settings → queue inspector.
+- **Sticky status pill** (Today view): a single highest-priority one-liner — `{n} overdue` / `{n} due today` / `Sunday briefing ready` (one signal at a time, by priority) — our budget-friendly stand-in for OS-level notifications.
 
 ## 3. Information architecture (Today-first)
 
 ```
 Today (home)
-├── Header: Family inc. · date · sticky status pill · connection pill
-├── Progress arc strip
+├── Header: Family inc. · date · sticky status pill (Today view)
 ├── Banner (overdue / today / all-clear)
 ├── TODAY — reminders where Auto-flag ∈ {OVERDUE, FIRE TODAY}
 ├── CALENDAR — today's Calendar-Events
 ├── NEXT 7 DAYS — week-out reminders + events
 └── ▸ Drawers: Money · Health · Goals · Car · Contracts
-Briefing tab — latest weekly briefing rendered
-Settings tab — sign-in · Sheet ID · language toggle · demo toggle · queue inspector
+Sunday tab — a live week-ahead view computed from the Sheet (week ahead · reminders this week · overdue · Money · Goals · data hygiene), NOT the rendered weekly-briefing markdown
+Settings tab — sign-in · Sheet ID · language toggle · demo toggle · queue inspector (pending-write count)
 ```
 
-Today-first wins the 8 AM glance; tiles demote to drawers; the briefing gets a tab, not the home.
+Today-first wins the 8 AM glance; tiles demote to drawers; the Sunday week-ahead gets a tab, not the home.
 
 ## 4. States
 
-- **Loading**: skeleton shell <50ms with cached-snapshot shapes (counts from cache, else 3/2/3/4 rows); shimmer 1.6s; header/pills/tabs are real from t=0; cached values replace skeletons, live values cross-fade 120ms. Skeletons never shimmer while offline — static gray is more honest.
-- **Quiet day**: the arc keeps its ticks, the banner shows sage "all clear", TODAY renders "(nothing urgent)". The screen is never blank.
-- **Offline**: the pill flips to "⛔ offline — N queued"; rows keep working; a queued row shows "⏳ queued — will sync on reconnect". **Buttons never disable offline.**
+- **Loading**: a `Loading…` banner while the first `batchGet` is in flight; header/tabs are real from t=0; lists render once data arrives (cached snapshot first if present, then live). No skeleton or shimmer.
+- **Quiet day**: the banner shows sage "all clear" and TODAY renders "(nothing urgent)". The screen is never blank.
+- **Offline**: a one-shot toast confirms each queued write; the stale-data badge shows if the view was served from cache; rows keep working and re-render optimistically (the pending-write count is in Settings). **Buttons never disable offline.**
 - **Write failure (online)**: optimistic UI rolls back; inline "Couldn't save — retry?"; token expiry → silent refresh once, then a re-sign-in banner.
-- **Back from vacation (30 overdue)**: top 10 by due date + "+20 more" expander; the banner offers bulk-done multi-select; the arc shows the honest low count with zero commentary.
+- **Back from vacation (30 overdue)**: top 10 by due date + "+20 more" expander; the banner offers bulk-done multi-select, with zero commentary.
 
 ## 5. Interaction contract (write-back)
 
@@ -91,6 +89,7 @@ The most-used UI in the product. Rules:
 - **Both adults, every day.** Each adult gets their own 07:30 message every day — partner-symmetric. An adult with no reminders of their own still receives the briefing: the quiet-day line `אין תזכורות להיום — יום שקט.` followed by whatever shared groups / property sections exist. A truly empty day is just the head + quiet-day line — never *no* message (silence must stay distinguishable from a broken digest) and never a scold (quiet is a success state).
 - **Line economy.** One line per item: flag emoji · title · due phrase. Notes only if ≤120 chars. >5 items → top 5 by priority + "+N more — בלוח" (in the dashboard).
 - **Emoji are semantics, not decoration**: 🔴 overdue · 🟠 today · 🟡 week-out · 🟢 month-out · ⚠ needs-a-look · 🕯 Shabbat line · 🏠 new listings. No other emoji in generated copy.
+- **Budget-deferred carry-over.** Alerts the 2/day budget defers ride the *next* morning's digest under a `נשמרו מאתמול (מכסת הודעות):` section — surfaced, never dropped (copy pending Shanee review).
 - **No reply affordances** until reply parsing ships. Messages end with content, not instructions. When v1.1 lands, the reply grammar returns as a single footer line.
 - **Hebrew copy register**: short, warm, zero exclamation marks, no imperatives toward a person ("לקבוע תור" not "תקבעי תור!"). Dates as "יום ג׳ 17/6". Money as ₪ with a thousands separator.
 - **Attribution**: domain first, name inline.
@@ -127,7 +126,7 @@ Quiet day for this adult (no reminders of their own; shared sections still ride 
 
 Critical (budget-bypassing, rare): a single line, no frame — `⚠ {group}: {one_liner} ({sender}, {time})`.
 
-Weekly briefing (Sat 21:00): five scenes, vertical, one line each opener — *the week's spend · kids' moment · next week's three things · one goal line · one contract heads-up* — then short sections, then the system self-report and classifier-accuracy lines. Strava-year-in-review meets Morning Brew; the typography is the design. **Rendered from a deterministic template** (no LLM call); that voice is the template's design target.
+Weekly briefing (Sat 21:00): **deterministic flat sections** — week ahead · reminders firing this week · overdue · Money · Goals · data hygiene · system self-report · classifier accuracy — vertical, one line per item, the typography carrying the design. **Rendered from a deterministic template, no LLM call.** *(The "five-scene narrative" opener — the week's spend · a kids' moment · next week's three things · a goal line · a contract heads-up, Strava-year-in-review meets Morning Brew — is a deferred v1.1 LLM lane (`ROADMAP.md` §ai-briefing) with this template as its fallback, not the current output.)*
 
 Bridge-health warning prepends, never replaces: `⚠ הגשר שקט 14 שעות — ייתכן שפספסנו הודעות`.
 
@@ -142,14 +141,14 @@ Bridge-health warning prepends, never replaces: `⚠ הגשר שקט 14 שעות
 
 ## 8. Accessibility & ergonomics
 
-Tap targets ≥44px; contrast AA against both surfaces (the muted zinc fails on dark — use `#A1A1AA` minimum); focus-visible outlines on; a reduced-motion media query kills the shimmer + cross-fades; the PWA `apple-touch-icon` relies on the OS glass treatment, no fake translucency in-app; thumb-zone — action pills render below the row, not above.
+Tap targets ≥44px; contrast AA against both surfaces (the muted zinc fails on dark — use `#A1A1AA` minimum); focus-visible outlines on; the PWA `apple-touch-icon` relies on the OS glass treatment, no fake translucency in-app; thumb-zone — action pills render below the row, not above.
 
 ## 9. Manual smoke checklist (per dashboard deploy)
 
-1. Cold load <1s on phone over LTE; skeletons → live without layout shift.
+1. Cold load <1s on phone over LTE; the `Loading…` banner gives way to live lists without layout shift.
 2. Hebrew default renders RTL with no mirrored numerals; the toggle flips chrome only.
 3. Mark done online → row clears, the Sheet shows M/N/O stamped.
-4. Airplane mode → tap done → pill shows queued → reconnect → flush; the engine log shows a tombstone skip if within the window.
+4. Airplane mode → tap done → a queued toast shows → reconnect → flush; the engine log shows a tombstone skip if within the window.
 5. The demo toggle never touches the live Sheet.
 6. Lighthouse PWA installable; an offline reload serves the shell + cached data.
 7. Offline, tap until the queue hits 50 → a one-shot "queue full" warning shows; further taps don't grow the queue; reconnect → flush re-arms the warning.
