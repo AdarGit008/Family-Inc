@@ -602,11 +602,40 @@ def test_budget_installer_never_writes_human_columns():
 
 def test_budget_header_drift_fails_loud(tmp_path):
     """A renamed load-bearing column → refuse to stamp by position (fail loud,
-    never guess which column the actuals belong in)."""
+    never guess which column the actuals belong in). A *machine* header holding a
+    DIFFERENT value is a real column shift, distinct from an absent one (titled)."""
     bad = list(BUDGET_HEADER)
-    bad[fb.COL_ACTUAL - 1] = "Spent"                  # C header drifted
+    bad[fb.COL_ACTUAL - 1] = "Spent"                  # C header drifted (non-empty conflict)
     with pytest.raises(fb.BudgetHeaderError):
         fb.budget_formula_cells(_budget_grid(header=bad))
+
+
+def test_budget_installer_titles_absent_machine_header():
+    """Hardening (2026-06-20): a tab that simply LACKS a machine column header —
+    the live tab created before the M6.4 block had no J 'Last Month (ILS)', and a
+    fresh budget from Shanee's migration has only Category/Target — must NOT fail
+    loud. The installer owns those columns, so it titles them (row 1) and stamps the
+    data. An absent header is no contradiction; a CONFLICTING one still refuses
+    (test_budget_header_drift_fails_loud). Removes the manual 'add J1 by hand' step."""
+    hdr = list(BUDGET_HEADER)
+    hdr[fb.COL_LASTMONTH - 1] = None    # J absent — the exact live 2026-06-20 case
+    hdr[fb.COL_YTD - 1] = ""            # F absent too (blank, not None)
+    cells = {(r, c): v for r, c, v in fb.budget_formula_cells(_budget_grid(header=hdr))}
+    assert cells[(1, fb.COL_LASTMONTH)] == "Last Month (ILS)"   # installer titled J
+    assert cells[(1, fb.COL_YTD)] == "YTD Actual"               # …and F
+    assert '$I$3&"*"' in cells[(2, fb.COL_LASTMONTH)]           # …and still stamped its data
+    assert (1, fb.COL_CATEGORY) not in cells                    # never (re)titles a human header
+
+
+def test_budget_absent_human_header_still_fails_loud():
+    """The installer titles its OWN columns, never the human ones: an absent
+    Category or Monthly Target header is a malformed tab it refuses, rather than
+    silently re-titling Shanee's columns (the human-vs-machine ownership boundary)."""
+    for human_col in (fb.COL_CATEGORY, fb.COL_TARGET):
+        hdr = list(BUDGET_HEADER)
+        hdr[human_col - 1] = None
+        with pytest.raises(fb.BudgetHeaderError):
+            fb.budget_formula_cells(_budget_grid(header=hdr))
 
 
 def test_budget_no_categories_fails_loud():

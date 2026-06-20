@@ -11,8 +11,12 @@ live can't silently diverge.
 
 Pure — grid in, cells out; no Sheet/backend I/O lives here (the CLI does the read
 and write through `lib/sheet`). `budget_formula_cells(grid)` validates the header
-(load-bearing column order, §12.2 — fail loud rather than stamp a formula into the
-wrong column), discovers the category rows from column A, and returns the
+(load-bearing column order, §12.2): a human header (Category / Monthly Target)
+missing, or a machine header holding a *different* value, fails loud rather than
+stamp a formula into the wrong column — but a machine header that is merely *absent*
+the installer titles itself (it owns those columns), so a tab predating the M6.4
+block (no J 'Last Month (ILS)') or a fresh one from Shanee's migration stamps clean.
+It then discovers the category rows from column A, and returns the
 `(row, col, formula)` cells for the MACHINE-owned columns only: Actual / Variance /
 % / YTD / Last-Month per category, the `I`-helper date tags, and the TOTAL sums.
 It never writes a category row's Category (A) or Monthly Target (B), and never any
@@ -51,6 +55,17 @@ EXPECTED_HEADERS = {
     COL_LASTMONTH: "Last Month (ILS)",
 }
 
+# The MACHINE-owned load-bearing headers — the installer writes these columns' DATA,
+# so when a tab simply LACKS one (an empty header cell) it titles the column itself
+# rather than refuse: a tab created before the M6.4 machine block had no J 'Last
+# Month (ILS)' (the live 2026-06-20 case), and a fresh budget from Shanee's migration
+# has Category/Target but none of these. The human headers (Category, Monthly Target)
+# are deliberately NOT here — the installer never writes those columns, so a missing
+# or renamed human header is a malformed tab it fails loud on, never silently
+# re-titles. A machine header holding a DIFFERENT non-empty value is still a real
+# column shift → fail loud (only an absent one is auto-titled).
+MACHINE_HEADERS = {COL_ACTUAL, COL_VARIANCE, COL_PCT, COL_YTD, COL_LASTMONTH}
+
 TOTAL_LABEL = "TOTAL"
 
 
@@ -78,14 +93,35 @@ def _norm(h) -> str:
     return str(h or "").strip().casefold()
 
 
-def validate_header(header_row: list) -> list[str]:
-    """One problem string per drifted load-bearing column, [] when clean."""
-    problems = []
+def _blank(v) -> bool:
+    return str(v or "").strip() == ""
+
+
+def header_drift(header_row: list) -> tuple[list[str], list[tuple[int, str]]]:
+    """Partition the load-bearing header against EXPECTED_HEADERS into
+    (conflicts, fill):
+
+      conflicts — one problem string per column to FAIL LOUD on: a human header
+        (Category / Monthly Target) missing or renamed, or a MACHINE header holding
+        a DIFFERENT non-empty value (a real column shift — never stamp by position
+        into it).
+      fill — (col, label) for MACHINE headers whose cell is EMPTY: the installer
+        titles its own column rather than refuse, so a tab predating the M6.4 block
+        (no J 'Last Month (ILS)') or a fresh one from Shanee's migration stamps
+        clean. An empty cell is no contradiction to the positional layout.
+
+    Clean tab → ([], [])."""
+    conflicts: list[str] = []
+    fill: list[tuple[int, str]] = []
     for col, expected in EXPECTED_HEADERS.items():
         got = header_row[col - 1] if col <= len(header_row) else None
-        if _norm(got) != _norm(expected):
-            problems.append(f"col {col}: expected {expected!r}, found {got!r}")
-    return problems
+        if _norm(got) == _norm(expected):
+            continue
+        if col in MACHINE_HEADERS and _blank(got):
+            fill.append((col, expected))
+        else:
+            conflicts.append(f"col {col}: expected {expected!r}, found {got!r}")
+    return conflicts, fill
 
 
 def _cell_a(row: list):
@@ -123,10 +159,10 @@ def budget_formula_cells(grid: list[list]) -> list[tuple[int, int, str]]:
     re-stamps for the current layout. (It re-stamps the CURRENT category rows; it
     does not clear machine cells on a row that ceased to be a category — a removed
     category leaves stale actuals to clear by hand.)"""
-    problems = validate_header(grid[0] if grid else [])
-    if problems:
+    conflicts, fill = header_drift(grid[0] if grid else [])
+    if conflicts:
         raise BudgetHeaderError(
-            "Finance-Budget header drifted from SPEC §12.2: " + "; ".join(problems))
+            "Finance-Budget header drifted from SPEC §12.2: " + "; ".join(conflicts))
     cats = category_rows(grid)
     if not cats:
         raise BudgetHeaderError(
@@ -134,6 +170,11 @@ def budget_formula_cells(grid: list[list]) -> list[tuple[int, int, str]]:
             "column A first: Shanee's budget migration is the vocab authority)")
 
     cells: list[tuple[int, int, str]] = []
+    # Title any absent MACHINE header the layout needs (e.g. J 'Last Month (ILS)' on
+    # a tab predating the M6.4 block, or every machine column on a fresh budget from
+    # Shanee's migration) — the installer owns those columns. Human headers already
+    # passed the conflict check above and are never titled here.
+    cells += [(1, col, label) for col, label in fill]
     # Helper date tags (column I) — the SUMIFS criteria key off these; the H
     # labels document the block (cosmetic, carried from the seed).
     cells += [

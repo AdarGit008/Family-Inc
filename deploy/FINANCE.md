@@ -162,14 +162,17 @@ idempotent and re-running after a budget change just re-stamps for the new rows.
 category — clear those by hand.)* Then confirm actuals go **non-zero** on the first
 real month (Groceries/Transport/Health).
 
-- **Live tab must carry column `J` before you stamp (seen 2026-06-20):** the installer
-  guards the load-bearing column order and **refuses** if `Finance-Budget` `J1` isn't
-  `Last Month (ILS)` (`col 10: … found None`). The M6.4 helper block — `H` As-of /
-  `I` `=TODAY()` / `J` Last-Month — is in the seed, but a tab **created before M6.4**
-  (the live tab was A–I only) or a **fresh tab from Shanee's migration** may lack `J`.
-  Fix once by hand: set `J1` = `Last Month (ILS)` (or
-  `sheet.write_cells(FINANCE_BUDGET_TAB, [(1, 10, 'Last Month (ILS)')])`), then re-run
-  `--dry-run`. The installer fills `H`/`I` itself; only the `J` header is yours to add.
+- **Absent machine columns are auto-titled (hardened 2026-06-20):** the installer
+  owns the machine columns (`Actual`/`Variance`/`%`/`YTD`/`J` Last-Month + the `H`/`I`
+  helper block), so when a tab simply *lacks* one it **titles the column itself and
+  stamps** — no hand-fix. This was the live 2026-06-20 case (the tab predated the M6.4
+  block, so it was A–I only with no `J` `Last Month (ILS)`); it's also what a fresh
+  budget from Shanee's migration looks like (only `Category`/`Monthly Target` filled).
+  What it still **refuses** (fail loud): a *human* header (`Category` / `Monthly
+  Target`) missing or renamed, or a machine header holding a *different* value (a real
+  column shift). So before a fresh-tab stamp, ensure only the two human headers are
+  present and exact — the installer provides the rest. (`deploy/FINANCE.md` was
+  briefly amended 2026-06-20 to add `J1` by hand; the hardening superseded that.)
 - **No stray-formula risk:** there's no manual copy, so the old "stray Notes-column
   `SUMIFS`" copy artifact can't happen — the installer emits no Notes cell (pinned by
   `test_budget_installer_never_writes_notes_column`).

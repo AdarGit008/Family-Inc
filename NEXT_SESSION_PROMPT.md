@@ -21,12 +21,12 @@ Open items:
 
 Recent commits (the dated decision record — decisions fold into the canon, not a separate log):
 
+- 2026-06-20 docs: M6.3 live budget-SUMIFS install — stamped + J-header drift fixed
 - 2026-06-20 chore: regenerate NEXT_SESSION_PROMPT (M6.3 installer + dashboard wiring landed)
 - 2026-06-20 fix: M6.3 dashboard Money drawer — exclude Finance-Budget TOTAL row (double-count)
 - 2026-06-20 chore: gitignore .claude/ (local Claude Code settings + locks)
 - 2026-06-20 feat: M6.3 budget-SUMIFS installer — idempotent live formula stamp (lib/finance_budget + CLI)
 - 2026-06-19 next session additions
-- 2026-06-19 docs: close M6.2 (Mizrahi/debit live) + defer cards — canon to present-tense
 
 Session contract: don't open lanes outside the current focus without a PO call ·
 constants → config, utilities → `automation/lib/`, message copy → templates ·
