@@ -486,6 +486,178 @@ def test_text_prefix_month_window_sums_iso_text_dates():
 
 
 # ---------------------------------------------------------------------------
+# Budget formula INSTALLER — lib/finance_budget + finance_budget_formulas (M6.3,
+# the M6.4 reconciliation step gated to live data). Single source of formula
+# text; pinned against the committed seed so seed/installer/live can't diverge.
+# ---------------------------------------------------------------------------
+from automation.lib import finance_budget as fb  # noqa: E402
+from automation import finance_budget_formulas as fbf  # noqa: E402
+
+BUDGET_HEADER = ["Category", "Monthly Target (ILS)", "Actual (current month)",
+                 "Variance", "% of Target", "YTD Actual", "Notes", "As-of date",
+                 None, "Last Month (ILS)"]   # col I (9) header is the =TODAY() helper
+
+
+def _budget_grid(categories=("Groceries", "Transport"), total=True, header=None):
+    """A Finance-Budget grid (list[list]) — header + category rows (A name, B
+    target) + an optional TOTAL row, machine columns blank (pre-install)."""
+    g = [list(header if header is not None else BUDGET_HEADER)]
+    for name in categories:
+        row = [None] * 10
+        row[fb.COL_CATEGORY - 1], row[fb.COL_TARGET - 1] = name, 1000
+        g.append(row)
+    if total:
+        row = [None] * 10
+        row[fb.COL_CATEGORY - 1] = "TOTAL"
+        g.append(row)
+    return g
+
+
+def _budget_sheet(tmp_path, categories=(("Groceries", 4000), ("Transport", 1500)),
+                  total=True, header=None):
+    """A tmp xlsx with a Finance-Budget tab (header + categories + optional TOTAL),
+    machine columns blank — the live tab's state before the installer runs."""
+    wb = Workbook()
+    wb.active.title = "Placeholder"
+    ws = wb.create_sheet(cfg.FINANCE_BUDGET_TAB)
+    ws.append(header if header is not None else BUDGET_HEADER)
+    for name, target in categories:
+        ws.append([name, target])
+    if total:
+        ws.append(["TOTAL"])
+    p = tmp_path / "budget.xlsx"
+    wb.save(p)
+    return p
+
+
+def test_budget_cells_are_text_prefix_not_serial():
+    """The landmine guard at the installer level: the month/YTD/last-month actuals
+    are TEXT-prefix wildcards over the ISO-text Date, never a serial DATE() window."""
+    cells = {(r, c): v for r, c, v in fb.budget_formula_cells(_budget_grid())}
+    c2 = cells[(2, fb.COL_ACTUAL)]
+    assert '$I$2&"*"' in c2 and '">="&DATE(' not in c2          # month text-prefix
+    assert 'TEXT($I$1,"yyyy")&"*"' in cells[(2, fb.COL_YTD)]    # YTD = year prefix
+    assert '$I$3&"*"' in cells[(2, fb.COL_LASTMONTH)]           # last-month
+    assert cells[(1, fb.COL_HELPER)] == "=TODAY()"
+    assert cells[(2, fb.COL_HELPER)] == '=TEXT(I1,"yyyy-mm")'
+    assert cells[(3, fb.COL_HELPER)] == '=TEXT(EDATE($I$1,-1),"yyyy-mm")'
+    assert cells[(2, fb.COL_VARIANCE)] == "=B2-C2"
+    assert cells[(2, fb.COL_PCT)] == "=IFERROR(C2/B2,0)"
+    # TOTAL sums over the category span (rows 2..3), plus its own variance/%.
+    assert cells[(4, fb.COL_ACTUAL)] == "=SUM(C2:C3)"
+    assert cells[(4, fb.COL_TARGET)] == "=SUM(B2:B3)"
+    assert cells[(4, fb.COL_YTD)] == "=SUM(F2:F3)"
+
+
+def test_budget_cells_match_committed_seed():
+    """The anti-drift tie: the installer's output for the seed's own categories
+    must EQUAL the seed's pinned formulas, so a live install and the committed
+    seed (test_seed_budget_uses_text_prefix_not_serial_sumifs) stay identical."""
+    seed = load_workbook(cfg.SHEET_PATH)[cfg.FINANCE_BUDGET_TAB]   # formulas (not data_only)
+    grid = [[seed.cell(row=r, column=c).value for c in range(1, 11)]
+            for r in range(1, seed.max_row + 1)]
+    cells = {(r, c): v for r, c, v in fb.budget_formula_cells(grid)}
+    for coord, key in {"C2": (2, 3), "F2": (2, 6), "J2": (2, 10), "D2": (2, 4),
+                       "E2": (2, 5), "I1": (1, 9), "I2": (2, 9), "I3": (3, 9),
+                       "C13": (13, 3), "B13": (13, 2), "F13": (13, 6)}.items():
+        assert cells[key] == seed[coord].value, coord
+    # …and the WHOLE installer output equals the seed, not just the spot-checks —
+    # any divergence at any of the 66 machine cells (e.g. YTD on rows 3-12, the
+    # TOTAL variance/%, the H labels) fails here, making the anti-drift tie total.
+    for r, c, v in fb.budget_formula_cells(grid):
+        assert v == seed.cell(row=r, column=c).value, (r, c)
+
+
+def test_budget_installer_round_trips_to_live_formulas(tmp_path):
+    """The write seam: cells stamped via sheet.write_cells (USER_ENTERED) land as
+    live formulas, and the human columns (Category/Target/Notes) are untouched."""
+    sp = _budget_sheet(tmp_path)
+    cells = fb.budget_formula_cells(sheet.read_grid(cfg.FINANCE_BUDGET_TAB, sp))
+    sheet.write_cells(cfg.FINANCE_BUDGET_TAB, cells, path=sp)
+    ws = load_workbook(sp)[cfg.FINANCE_BUDGET_TAB]                 # data_only=False → formulas
+    assert ws["C2"].value.startswith("=IFERROR(-SUMIFS(") and '$I$2&"*"' in ws["C2"].value
+    assert 'TEXT($I$1,"yyyy")&"*"' in ws["F2"].value
+    assert '$I$3&"*"' in ws["J2"].value
+    assert ws["I1"].value == "=TODAY()" and ws["I2"].value == '=TEXT(I1,"yyyy-mm")'
+    assert ws["A2"].value == "Groceries" and ws["B2"].value == 4000   # human cols intact
+    assert ws["G2"].value in (None, "")                               # Notes never written
+    assert ws["C4"].value == "=SUM(C2:C3)"                            # TOTAL over 2 rows
+
+
+def test_budget_installer_never_writes_human_columns():
+    """The irreversible-harm guard: the installer must never write a category row's
+    Category (A) or Monthly Target (B), or any Notes (G) — those are Shanee's. (The
+    TOTAL row's B is a machine =SUM and IS allowed.) This pins all three prongs of
+    the safety contract, so a future refactor that emitted a human cell fails here
+    rather than clobbering the live budget on the next re-stamp. Also covers the old
+    'stray Transport-row Notes SUMIFS' artifact class (the G prong)."""
+    grid = _budget_grid(categories=("Housing", "Groceries", "Transport"))
+    cats = set(fb.category_rows(grid))
+    cells = fb.budget_formula_cells(grid)
+    assert all(c != fb.COL_NOTES for _, c, _ in cells)                        # G never (any row)
+    assert all(c != fb.COL_CATEGORY for _, c, _ in cells)                     # A never (any row)
+    assert all(not (c == fb.COL_TARGET and r in cats) for r, c, _ in cells)   # B never on a category row
+    assert any(c == fb.COL_TARGET for _, c, _ in cells)                       # …but the TOTAL B SUM is present
+
+
+def test_budget_header_drift_fails_loud(tmp_path):
+    """A renamed load-bearing column → refuse to stamp by position (fail loud,
+    never guess which column the actuals belong in)."""
+    bad = list(BUDGET_HEADER)
+    bad[fb.COL_ACTUAL - 1] = "Spent"                  # C header drifted
+    with pytest.raises(fb.BudgetHeaderError):
+        fb.budget_formula_cells(_budget_grid(header=bad))
+
+
+def test_budget_no_categories_fails_loud():
+    """A header-only tab (no budget rows yet) fails loud rather than stamping an
+    empty layout — Shanee's migration must populate column A first."""
+    with pytest.raises(fb.BudgetHeaderError):
+        fb.budget_formula_cells(_budget_grid(categories=(), total=False))
+
+
+def test_budget_category_below_total_fails_loud():
+    """A category row ordered BELOW the TOTAL row would put TOTAL inside its own SUM
+    range (circular #ERROR, and two surfaces read TOTAL) — refuse the layout, never
+    emit a self-referential sum. Guards a re-run after a budget reorder."""
+    grid = [list(BUDGET_HEADER), [None] * 10, [None] * 10, [None] * 10]
+    grid[1][fb.COL_CATEGORY - 1], grid[1][fb.COL_TARGET - 1] = "Housing", 8500   # row 2
+    grid[2][fb.COL_CATEGORY - 1] = "TOTAL"                                       # row 3
+    grid[3][fb.COL_CATEGORY - 1], grid[3][fb.COL_TARGET - 1] = "Savings", 1000   # row 4 < TOTAL
+    with pytest.raises(fb.BudgetHeaderError):
+        fb.budget_formula_cells(grid)
+
+
+def test_write_cells_skips_without_live_or_path(monkeypatch):
+    """sheet.write_cells refuses to write when path is None and not live — the
+    lib-level 'never mutate the committed seed' backstop (mirrors upsert_rows). The
+    CLI short-circuits before reaching this branch, so pin it directly."""
+    monkeypatch.setattr(sheet, "is_live", lambda: False)
+    before = load_workbook(cfg.SHEET_PATH)[cfg.FINANCE_BUDGET_TAB]["C2"].value
+    sheet.write_cells(cfg.FINANCE_BUDGET_TAB, [(2, 3, "=1+1")], path=None)   # no-op
+    after = load_workbook(cfg.SHEET_PATH)[cfg.FINANCE_BUDGET_TAB]["C2"].value
+    assert after == before                                                  # seed untouched
+
+
+def test_installer_dry_run_writes_nothing(tmp_path, capsys):
+    sp = _budget_sheet(tmp_path)
+    cells = fbf.run(path=sp, dry_run=True)
+    assert cells
+    assert load_workbook(sp)[cfg.FINANCE_BUDGET_TAB]["C2"].value in (None, "")
+    assert "dry-run" in capsys.readouterr().out
+
+
+def test_installer_refuses_without_live_or_path(capsys):
+    """No live backend + no path → builds the cells (reading the seed) but writes
+    NOTHING, so a creds-less dev run can't mutate the committed seed."""
+    before = load_workbook(cfg.SHEET_PATH)[cfg.FINANCE_BUDGET_TAB]["C2"].value
+    cells = fbf.run(path=None, dry_run=False)          # is_live() is False (conftest)
+    assert cells and "NOT written" in capsys.readouterr().out
+    after = load_workbook(cfg.SHEET_PATH)[cfg.FINANCE_BUDGET_TAB]["C2"].value
+    assert after == before                             # seed untouched
+
+
+# ---------------------------------------------------------------------------
 # scrape.js — the Node scraper is VPS-only (banks + bundled Chromium), so these
 # guard only the parts that need neither: it parses, and its argv/fail-loud
 # contract holds. The deps (israeli-bank-scrapers, puppeteer) are required

@@ -543,6 +543,32 @@ def upsert_rows(tab: str, columns: list[str], rows: list[dict], key_column: str,
         b.append(tab, columns, appends)
 
 
+def read_grid(tab: str, path: Optional[Path] = None) -> list[list]:
+    """The whole tab as rows (header included), [] when the tab is absent. A thin
+    public handle for tooling that needs the raw grid (the finance budget formula
+    installer, §12.2); readers degrade, they don't crash."""
+    b = backend(path)
+    if tab not in b.tabs():
+        return []
+    return b.grid(tab)
+
+
+def write_cells(tab: str, cells: Iterable[tuple[int, int, object]],
+                path: Optional[Path] = None) -> None:
+    """Write a batch of (row, col, value) cells via the backend's USER_ENTERED
+    batch_update — the seam for formula / maintenance writes (the finance budget
+    formula installer, §12.2: a value beginning '=' lands as a live formula). Live
+    backend or an explicit path only — refuses to mutate the committed seed,
+    exactly like upsert_rows / roll_off / the write-backs."""
+    cells = list(cells)
+    if not cells:
+        return
+    if path is None and not is_live():
+        log.info("write_cells skipped for %s — no live backend (won't touch the seed)", tab)
+        return
+    backend(path).batch_update(tab, cells)
+
+
 def read_column(tab: str, column: str, path: Optional[Path] = None) -> list:
     """All values of one named column (header-matched, loose). Missing tab or
     column → [] — readers degrade, they don't crash."""

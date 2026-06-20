@@ -138,24 +138,39 @@ sudo systemctl list-timers 'family-finance*' --no-pager   # next ~06:00 Asia/Jer
 
 M6.2 closes once a live scrape→Sheet roundtrip is verified on at least Mizrahi.
 
-## 6. M6.3 — apply the live budget formulas + close
+## 6. M6.3 — install the live budget formulas + close
 
 The `Finance-Budget` actuals reconcile via a **text-prefix wildcard** `SUMIFS` on the
 ISO-text `Date` (`<yyyy-mm>&"*"`), NOT a serial `DATE()` window (which reads ₪0 against
-RAW-appended text dates). The committed seed (`Family_OS.xlsx` `Finance-Budget`) carries
-the correct form (pinned by `tests/test_finance.py::test_seed_budget_uses_text_prefix_not_serial_sumifs`).
-Copy those formulas onto the live `Finance-Budget` tab and verify actuals go **non-zero**
-on the first real month.
+RAW-appended text dates). Don't hand-copy them — run the **installer**, which is the
+single source of the formula text (`automation/lib/finance_budget.py`, pinned against the
+committed seed by `tests/test_finance.py`):
 
-Cautions when applying:
-- **Do NOT propagate the seed's stray `SUMIFS` in the Transport-row Notes column** — it is
-  a copy artifact, not a real actual. Apply only the intended `C`/`F`/`J` column formulas.
-- **Category-vocab gap (expected, not a bug yet):** the rules engine emits `Dining`,
-  `Entertainment`, … but the budget has rows `Dining out`, `Subscriptions`, `Savings`,
-  `Other` with no matching rules category — so those actuals read **₪0** even with perfect
-  ingest. The vocab is **PROVISIONAL** pending Shanee's budget migration, which is the
-  vocabulary authority. Do not unilaterally rename buckets to close this — it's a PO/Shanee
-  call.
+```bash
+# As familyinc, with the live Sheet env loaded (FAMILY_INC_SHEET_ID). Preview first.
+python3 /opt/family-inc/automation/finance_budget_formulas.py --dry-run
+python3 /opt/family-inc/automation/finance_budget_formulas.py            # stamp it
+```
+
+It reads the live `Finance-Budget` tab, validates the load-bearing column order (fails
+loud on drift), and stamps **only** the machine columns — Actual/Variance/%/YTD/Last-Month
+per category, the `I`-helper date tags, and the TOTAL sums — keyed off whatever category
+rows the tab has. **A category row's Category and Monthly Target, and every Notes cell,
+are never written** (the only Target it writes is the TOTAL row's `=SUM`), so it's
+idempotent and re-running after a budget change just re-stamps for the new rows.
+*(Re-stamps the current rows; it does not clear machine cells on a row you delete as a
+category — clear those by hand.)* Then confirm actuals go **non-zero** on the first
+real month (Groceries/Transport/Health).
+
+- **No stray-formula risk:** there's no manual copy, so the old "stray Notes-column
+  `SUMIFS`" copy artifact can't happen — the installer emits no Notes cell (pinned by
+  `test_budget_installer_never_writes_notes_column`).
+- **Category-vocab gap (expected, not a bug yet):** the rules engine emits `Dining out`,
+  `Health`, … but the budget also has rows `Subscriptions`, `Savings`, `Other` with no
+  matching rules category — so those actuals read **₪0** even with perfect ingest. The
+  vocab is **PROVISIONAL** pending Shanee's budget migration, which is the vocabulary
+  authority. Don't unilaterally rename buckets to close this — it's a PO/Shanee call;
+  when she maps them, just re-run the installer.
 
 M6.3 acceptance is the first real **monthly** review (~30 days of live data).
 
