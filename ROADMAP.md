@@ -10,6 +10,8 @@
 
 ## 1. The next lane (recommended)
 
+> ✅ **Built 2026-06-22** — `.github/workflows/tests.yml` (pytest gate + `lib/pii.py` repo-wide leak guard + `config.js` smoke), verified locally **421 green**; lands on the PO's push (status + landing record in `BACKLOG.md`). **Two deviations from the sketch below, by design:** the leak guard is a **pytest, not a grep step** (single-sources its patterns with `test_seed_safety.py` + rides `deploy.sh`), and the job runs on the **whole tree with no path filter** (a path-filtered run would let a PII paste in docs/config bypass the guard). **The now-next lane is GAP-7** (§2 rank 2). The original rationale is kept below for the record.
+
 **A pre-merge CI gate — and bundle two cheaper, higher-irreversibility wins into the same job.**
 
 The hermetic 390-test suite (~2.6s) runs today **only** inside `deploy/deploy.sh` on the appliance. Nothing runs it on push/PR, so a red commit can sit on `main` and silently keep the box from reaching HEAD during the mandated 30-day boring hold. The gate is the meta-protection that makes every later fix in §3 safe to land — and it needs no live data, has zero guardrail surface, and fits the light 06-20→06-26 window.
@@ -29,7 +31,7 @@ Ranked by *fits-the-window-and-clears-blockers*, then value-per-effort. The wind
 
 | # | Lane | Value | Effort | Risk | Window |
 |---|---|---|---|---|---|
-| 1 | **CI gate + PII-leak guard + config smoke** | high | S | low | now → 06-26 |
+| 1 | **CI gate + PII-leak guard + config smoke** — ✅ built 06-22 (lands on push) | high | S | low | now → 06-26 |
 | 2 | **GAP-7 Hebcal fail-loud** (decided: fix) | high | S | low | now → 06-26 |
 | 3 | **Reviewer/provider canon** (done this session; verify) | med | S | low | now → 06-26 |
 | 4 | **DESIGN reconcile** (done this session: 3 components removed) | high | S | low | now → 06-26 |
@@ -62,7 +64,7 @@ Ranked by *fits-the-window-and-clears-blockers*, then value-per-effort. The wind
 
 The now→06-26 work. Each item is small, low-risk, needs no new live data, and either protects the dev loop or fixes a live correctness/honesty gap.
 
-- **CI gate + leak guard + config smoke (lane 1)** — see §1. Acceptance: a red commit cannot merge to `main`; the leak grep fails CI on a planted phone/JID/amount; the config smoke fails on a malformed `config.js`. *Open: add the gate, or document a deliberate no-CI choice? (recommend add — the suite is hermetic + free).*
+- **CI gate + leak guard + config smoke (lane 1)** — ✅ **built 2026-06-22** (status in `BACKLOG.md`; lands on push). `.github/workflows/tests.yml` runs the hermetic suite on push/PR to `main`. Acceptance met locally (421 green): a red commit can't merge; the PII guard (`tests/test_repo_pii_guard.py` + `lib/pii.py`) fails on a planted phone/JID/amount; the `config.js` smoke fails on a drifted template. **Two deviations from the §1 sketch, by design:** the leak guard is a **pytest, not a grep step** (single-sources its patterns with the seed guard + rides `deploy.sh` on the box), and the job runs on the **whole tree with no path filter** (a path-filtered run would let a PII paste outside `automation/**` bypass the guard). *PO call resolved: gate added.*
 - **GAP-7 Hebcal fail-loud (lane 2)** — **decided fix.** `hebcal_client` returns `{_stub:true}` on fetch failure; today `daily_digest._hebcal_line` (and the Shabbat `shabbat_times` path — the higher-stakes weekly one) render that as **silence**, indistinguishable from a genuine no-chag day. Contract: on `_stub`, surface a short Hebrew "candle times unavailable" line (copy = Shanee) instead of silence, per the §3.6 clarification landed this session (time-critical data fails loud). Ships with a regression test. Policy: rides the budget-exempt `kind=briefing` digest, no new alert path. *Open: exact Hebrew string (Shanee); confirm both the Friday Shabbat and the erev-chag paths get the line.*
 - **Reviewer/provider canon (lane 3)** — **done this session:** `review.py --provider` default flipped to `deepseek` so code matches the "DeepSeek default" canon; ollama stays the keyless local fallback via `--provider ollama`. Consequence: a bare `review.py` now needs `DEEPSEEK_API_KEY` (always present when the operator runs a gate). The runtime classifier + summarizer already run on DeepSeek — the canon is now consistent across all three. Verify before the 06-26 milestone gate fires.
 - **DESIGN reconcile (lane 4)** — **done this session:** the progress arc, connection pill, and skeleton/shimmer loading — documented but never built — are **removed** from `DESIGN.md` (components, IA, states, acceptance, smoke checklist). The real stale-data badge + the single-signal Today status pill are now documented as-built. No code change; the dashboard never had these.

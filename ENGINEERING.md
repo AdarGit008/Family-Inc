@@ -126,7 +126,7 @@ sudo /usr/bin/systemctl restart family-bridge    # the one whitelisted sudoers l
 
 Timers pick up new code automatically on the next fire (they exec scripts from the repo); only the long-running bridge needs a restart. **Committed is not deployed** — a placed secret or a merged feature is inert until `deploy.sh` pulls it; confirm the box is at origin HEAD before declaring anything live. The `familyinc` user has exactly one sudo capability (restart `family-bridge`), so a compromised script can't escalate.
 
-There is intentionally **no pre-merge CI** today — the only test gate is `deploy.sh`'s pytest on the box, so a red commit can land on `main` until someone deploys. A hermetic GitHub Actions pytest job is the recommended next step (roadmap rank 1, tracked in `ROADMAP.md`).
+**Pre-merge CI:** `.github/workflows/tests.yml` runs the hermetic pytest suite — including the seed-safety guard, the repo-wide PII-leak guard (`tests/test_repo_pii_guard.py` + the shared patterns in `lib/pii.py`), and the dashboard `config.js` smoke — on every push + PR to `main`, so a red commit can't merge. It gates **merge**, not the box: `deploy.sh` still runs the same suite on the appliance as the safety net before restarting the bridge (no `deploy.sh` change — the guards are plain pytest, so they ride the existing run). The job has no path filter (the PII guard scans the whole tree, so a leaked value in docs or config trips it too) and installs Node 22 so the `@requires_node` syntax-check tests run rather than skip.
 
 Dashboard deploys are `git push` (Pages rebuilds in ~30s); the PWA on both phones picks up on next open. `sw.js` cache-busts on a version bump in `config.example.js`, mirrored into `config.js`.
 

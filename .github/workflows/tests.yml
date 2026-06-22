@@ -1,0 +1,54 @@
+# Family inc. — pre-merge quality gate (ROADMAP §1, lane 1).
+#
+# A red commit must not reach main. This runs the full hermetic pytest suite on
+# every push and PR to main — including the seed-safety guard, the repo-wide PII
+# leak guard, and the dashboard config.js smoke (all plain pytest tests, so they
+# also ride deploy/deploy.sh on the box; this file adds no deploy.sh change).
+#
+# No path filter: the PII guard scans the WHOLE tree, so a PII paste into a doc
+# or config outside automation/** must still trip the gate. The suite is hermetic
+# (conftest blanks the Sheet id + all creds) and fast, so running it on every PR
+# is cheap insurance.
+#
+# Committed != deployed (CLAUDE.md): a green gate gates MERGE, not the appliance —
+# code still reaches the box only via deploy/deploy.sh.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # node is needed by the scrape.js syntax-check tests and the config.js smoke
+      # (node --check); without it those run as skips, not passes, and CI would not
+      # assert the full suite the box runs. Pin to 22 LTS — the appliance's version.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: astral-sh/setup-uv@v8
+        with:
+          enable-cache: true
+
+      - name: Install dependencies (frozen)
+        run: uv sync --frozen
+
+      - name: Run the hermetic test suite
+        # FAMILY_INC_SHEET_ID= (empty, NOT -u) keeps the suite off any live Sheet —
+        # exactly how deploy/deploy.sh runs it; --frozen matches the appliance path.
+        run: FAMILY_INC_SHEET_ID= uv run --frozen pytest -q

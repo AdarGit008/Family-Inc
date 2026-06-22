@@ -14,32 +14,14 @@ owner-routing tokens (`OWNER_TO_RECIPIENTS`), the Settings UserMap display names
 and are named throughout CLAUDE.md + the git author identity — so they are NOT
 flagged here. High-severity PII (real emails/phones/IDs/JIDs/account numbers) is.
 """
-import re
-
 from openpyxl import load_workbook
 
 from automation.lib import config as cfg
-
-# Any email-shaped token whose domain is NOT a documentation placeholder. Kept
-# domain-charset-agnostic (not ASCII-only) so a Unicode/Hebrew domain can't slip.
-EMAIL_SHAPE = re.compile(r'[^\s@]+@([^\s@]+\.[^\s@]+)')
-PLACEHOLDER_DOMAIN = re.compile(r'^(?:example\.|test\.|placeholder|localhost)', re.I)
-IL_MOBILE = re.compile(r'(?:\+?972[\-\s]?|0)5\d[\-\s]?\d{3}[\-\s]?\d{4}')
-JID = re.compile(r'@(?:s\.whatsapp\.net|g\.us|lid)\b')
-LONG_ACCT = re.compile(r'(?<!\d)\d{12,}(?!\d)')   # IBAN / full account / card number
+from automation.lib import pii   # the shared PII patterns (also back the repo-wide guard)
 
 # The seed must contain at least these tabs — a guard against cfg.SHEET_PATH
 # silently pointing at the wrong/empty workbook (a vacuous pass = false safety).
 EXPECTED_TABS = {"People", "Contacts", "Finance-Accounts", "Health", "Settings"}
-
-
-def _has_real_email(s: str) -> bool:
-    return any(not PLACEHOLDER_DOMAIN.match(m.group(1)) for m in EMAIL_SHAPE.finditer(s))
-
-
-def _has_real_teudat_zehut(s: str) -> bool:
-    """A 9-digit Israeli ID that is not an obvious placeholder (all-same-digit)."""
-    return any(len(set(m.group())) > 1 for m in re.finditer(r'(?<!\d)\d{9}(?!\d)', s))
 
 
 def test_committed_seed_has_no_high_severity_pii():
@@ -59,11 +41,10 @@ def test_committed_seed_has_no_high_severity_pii():
                     continue
                 scanned += 1
                 s, coord = str(v), f"{tab}!{ws.cell(row, col).coordinate}"
-                if _has_real_email(s):           leaks.append(f"{coord}: real-email")
-                if IL_MOBILE.search(s):          leaks.append(f"{coord}: IL-phone")
-                if JID.search(s):                leaks.append(f"{coord}: JID")
-                if LONG_ACCT.search(s):          leaks.append(f"{coord}: account-number")
-                if _has_real_teudat_zehut(s):    leaks.append(f"{coord}: teudat-zehut")
+                # Identifiers only (pii.scan) — the seed carries synthetic finance
+                # amounts by design, so ILS_AMOUNT is NOT applied here.
+                for kind in pii.scan(s):
+                    leaks.append(f"{coord}: {kind}")
 
     assert scanned > 50, f"seed-safety MISCONFIGURED: only {scanned} cells scanned in {cfg.SHEET_PATH}"
     assert not leaks, (
