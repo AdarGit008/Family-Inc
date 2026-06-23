@@ -11,6 +11,6 @@
     "node": ">=22.13"
   },
   "dependencies": {
-    "israeli-bank-scrapers": "6.7.3"
+    "israeli-bank-scrapers": "6.7.8"
   }
 }
