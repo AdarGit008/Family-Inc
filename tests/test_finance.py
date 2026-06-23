@@ -352,15 +352,51 @@ def test_rules_vocab_within_budget_categories():
     KNOWN-PENDING — Shanee's budget-vocab migration is the authority: Fees/Income/
     Shopping have no budget row yet, held as an explicit allow-list so this test
     still catches any NEW drift and the gap can't be forgotten. When Shanee maps
-    them (add rows, or remap the rules), shrink `pending` toward empty."""
-    rules_vocab = set(categorize.vocabulary(categorize.load_rules()))
+    them (add rows, or remap the rules), shrink `pending` toward empty. The EXCLUDED
+    set ('Card Settlement', `categorize.EXCLUDED_CATEGORIES`) is the opposite of
+    pending: a label a RULE may assign (the Cal-settlement mirror) that must NEVER be
+    a budget row AND must never be offered to the LLM gap-fill — so the spend counts
+    once via the per-merchant Cal scrape, and the model can't zero a non-Cal row by
+    guessing it."""
+    rules = categorize.load_rules()
+    all_cats = {cat for _, cat in rules}            # every label a RULE can assign (incl. excluded)
+    llm_vocab = set(categorize.vocabulary(rules))   # the stage-2 LLM vocab (excludes the buckets)
     budget = {r[0] for r in _rows(cfg.SHEET_PATH, cfg.FINANCE_BUDGET_TAB)[1:]
               if r[0] and r[0] != "TOTAL"}
     pending = {"Fees", "Income", "Shopping"}        # GAP-1: awaiting Shanee's budget rows
-    unmapped = rules_vocab - budget - pending
+    excluded = categorize.EXCLUDED_CATEGORIES       # 'Card Settlement' — rule-only, never a budget row
+    unmapped = all_cats - budget - pending - excluded
     assert not unmapped, f"rules emit categories with no Finance-Budget row: {unmapped}"
-    assert pending <= rules_vocab                   # keep the allow-list honest (no stale entries)
-    assert "Dining out" in rules_vocab and "Dining" not in rules_vocab   # the GAP-1 rename
+    assert pending <= llm_vocab                     # the LLM may still emit the pending labels
+    assert excluded <= all_cats                     # the exclusion bucket is defined as a rule
+    assert excluded.isdisjoint(llm_vocab), (        # but NEVER in the LLM vocab (else it zeros a row)
+        f"excluded buckets must not be offered to gap-fill: {excluded & llm_vocab}")
+    assert not (excluded & budget), (               # and MUST stay out of the budget grid
+        f"excluded categories must NOT be Finance-Budget rows: {excluded & budget}")
+    assert "Dining out" in all_cats and "Dining" not in all_cats   # the GAP-1 rename
+
+
+def test_card_settlement_excludes_cal_mirror():
+    """Cal is immediate-debit: its spend appears per-merchant in the Cal scrape AND
+    as merchant-less settlement lines on the Mizrahi debit. Those Mizrahi-side lines
+    map to the EXCLUDED 'Card Settlement' bucket (not a budget row → out of the
+    SUMIFS), so the spend counts once. Tokens verified against live data 2026-06-23:
+    the כא"ל settlements + the future-charge line match; the 'כארם' (Karem) restaurant
+    and Shanee's 'כרטיס דביט' must NOT (the over-match that an unanchored token caused)."""
+    rules = categorize.load_rules()
+    assert categorize.apply_rules('דביט כא"ל (חיוב מיידי)', rules) == "Card Settlement"
+    assert categorize.apply_rules('ויזה כא"ל (י)', rules) == "Card Settlement"
+    assert categorize.apply_rules("חיוב ויזה כאל עתידי", rules) == "Card Settlement"
+    # Must NOT over-match: Shanee's debit card stays blank (its own lane), and a
+    # merchant that merely contains כא ('כארם' = Karem) is never force-excluded.
+    assert categorize.apply_rules("רכישה בכרטיס דביט", rules) != "Card Settlement"
+    assert categorize.apply_rules("מסעדת ומאפיית כארם חסן", rules) != "Card Settlement"
+    # Deliberately absent from the budget grid (the SUMIFS exclusion) AND from the LLM
+    # gap-fill vocab — reachable only by the exact rule above, never an LLM guess on an
+    # ambiguous non-Cal row (which would silently zero a real expense).
+    budget = {r[0] for r in _rows(cfg.SHEET_PATH, cfg.FINANCE_BUDGET_TAB)[1:] if r[0]}
+    assert "Card Settlement" not in budget
+    assert "Card Settlement" not in categorize.vocabulary(rules)
 
 
 def test_missing_rules_file_degrades_quiet(tmp_path):

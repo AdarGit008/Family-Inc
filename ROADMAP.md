@@ -122,13 +122,11 @@ The now→06-26 work. Each item is small, low-risk, needs no new live data, and 
 - **Policy.** No new credentialed surface (an integer + a config rate, not an invoice read); outbox untouched.
 - **Open PO calls.** Per-result ₪ rate to encode? · enforce on projected-₪ or raw count? · accept that a capped month may miss blocked-portal listings until rollover?
 
-### 3.7 finance-cards-unfreeze — Max / Cal (spec-ahead; activates by config)
+### 3.7 finance-cards-unfreeze — Cal **shipped 2026-06-23**; remaining cards follow the same path
 
-- **Scope.** Adding a Max/Cal credit card to the debit-only finance lane. The device-trust `--auth` path is **already built-but-dormant**; activation is **config-only** — a `bank_creds.json` card block + a one-time headed `--auth <provider>` login. No code change.
-- **Unfreeze condition.** A card is actually added to the household finances (today: debit-only, so Mizrahi is the complete picture).
-- **Contract.** Per SPEC §12.2 — `--auth` clears the device challenge once under xvfb+x11vnc; the daily headless run reuses the persisted profile; a re-challenge fails loud (next digest) with re-run `--auth` as the remedy.
-- **Policy.** Read-only by nature (no money movement); credentials stay within the §12.2 narrowing (`/etc/family-inc/bank_creds.json` mode 600 + device-trust profiles mode 700, never in repo/backups). Partner-symmetric: the Money section stays household-level (no per-person spend scoring) even if a card skews to one adult.
-- **Open PO calls.** Per-card `Owner` default? · daily vs 2–3×/week cadence on day one (re-challenge noise)? · does a card change the >35d stale-import expectation (a card may legitimately have no charges for a month)?
+**✅ Graduated into SPEC §12.2 / BACKLOG M6.5.** Cal (Visa) is live — the `--auth` device-trust path (built-but-dormant since 06-19) was exercised: a one-time headed login under xvfb + x11vnc over an SSH tunnel, then daily **headless** (first import 103 txns, ~90% categorized). The "config-only activation" held — a `bank_creds.json` `cal` block + the `--auth cal` login, no code change — **except** one addition the spec-ahead missed: a **`Card Settlement`** exclusion rule, because Cal is *immediate-debit* (its spend also lands merchant-less on the Mizrahi statement, so the mirror must be excluded or the spend double-counts). **Remaining cards** (Shanee's debit card + the other Visa-debit lines surfaced on the statement) follow this now-proven path: an `--auth` login + a `Card Settlement` mirror token each.
+
+- **Open PO calls (carried to M6.5).** Per-card `Owner` default? · daily vs 2–3×/week cadence (re-challenge noise)? · does a card change the >35d stale-import expectation (a card may legitimately have no charges for a month)?
 
 ---
 

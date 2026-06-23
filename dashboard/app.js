@@ -984,7 +984,7 @@
 
     // D4: Surface recent transactions (last 10) below the budget breakdown.
     const recentTxns = (state.data.txns || [])
-      .filter(tx => tx.date)
+      .filter(tx => tx.date && isSpendTxn(tx))
       .sort((a, b) => b.date - a.date)
       .slice(0, 10);
     const txnHtml = recentTxns.map(tx => `
@@ -1092,6 +1092,12 @@
     });
   }
 
+  // Card-settlement mirror lines (an immediate-debit card's spend also lands on the
+  // bank statement as a merchant-less settlement) are excluded from raw-transaction
+  // SPEND views — the per-merchant card line is the real spend, counted once; summing
+  // the mirror too would ~double it. Mirrors automation/lib/categorize.EXCLUDED_CATEGORIES.
+  function isSpendTxn(tx) { return tx.category !== 'Card Settlement'; }
+
   // Build a last-7-day spending series from transactions (signed-amount sum per day).
   // Falls back to null if no transactions are available.
   function txnTrend7d() {
@@ -1102,7 +1108,7 @@
       const d = new Date(state.today);
       d.setDate(d.getDate() - i);
       const sum = txns
-        .filter(t => t.date && daysBetween(t.date, d) === 0)
+        .filter(t => t.date && daysBetween(t.date, d) === 0 && isSpendTxn(t))
         .reduce((s, t) => s + Math.abs(t.amount || 0), 0);
       days.push(sum);
     }

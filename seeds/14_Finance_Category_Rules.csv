@@ -21,6 +21,18 @@
 # An unmatched transaction stays blank (Cat-Source ""), never force-fit to "Other".
 # Lines starting with # and blank lines are ignored; '#' is not a wildcard.
 pattern,category
+# --- Card settlement (EXCLUDED — deliberately NOT a Finance-Budget row) ---
+# Cal is an immediate-debit card: every purchase appears per-merchant in the Cal
+# scrape (categorized there) AND as a merchant-less settlement line on the Mizrahi
+# debit. Map the Mizrahi-side Cal lines to 'Card Settlement' — kept OUT of the
+# budget vocabulary — so the actuals SUMIFS counts each purchase once (via the Cal
+# side) and these mirror lines don't inflate the uncategorized rate. Cal token is
+# כא"ל (ASCII quote U+0022); verified against live data 2026-06-23 to match only the
+# דביט/ויזה כא"ל settlements + the 'חיוב ויזה כאל עתידי' future line — never the
+# 'כארם' restaurant or Shanee's 'כרטיס דביט'. Other cards' mirror lines join here as
+# those cards are hooked up (a card's own scrape is the categorized source of truth).
+כא"ל,Card Settlement
+ויזה כאל,Card Settlement
 # --- Health (before any grocery rule: SUPERPHARM must not fall to Groceries) ---
 SUPERPHARM,Health
 סופר-פארם,Health

@@ -64,14 +64,28 @@ def load_rules(path: Optional[Path] = None) -> list[tuple[str, str]]:
     return rules
 
 
+# Categories a RULE may assign deterministically but the LLM gap-fill must NOT — the
+# excluded buckets. 'Card Settlement' is the Cal-settlement mirror (M6.5): a not-a-
+# budget-row label, so anything tagged with it contributes 0 to every actuals SUMIFS.
+# That is correct for the Cal mirror lines (which match an exact rule), but if the LLM
+# could pick it for an ambiguous NON-mirror row that misses every rule, it would
+# silently zero a real expense. So apply_rules (stage 1) still assigns these; they are
+# kept out of vocabulary() (the stage-2 LLM vocab) — reachable only by an exact rule.
+EXCLUDED_CATEGORIES = frozenset({"Card Settlement"})
+
+
 def vocabulary(rules: list[tuple[str, str]]) -> list[str]:
-    """Distinct categories in file order — the ONLY labels gap-fill may use."""
+    """Distinct categories in file order, MINUS the EXCLUDED_CATEGORIES — the ONLY
+    labels the LLM gap-fill may use. apply_rules can still assign an excluded bucket
+    deterministically; this list is the stage-2 LLM vocab, so a bucket like 'Card
+    Settlement' is reachable only by an exact rule match, never an LLM guess."""
     seen: set[str] = set()
     out: list[str] = []
     for _, cat in rules:
-        if cat not in seen:
-            seen.add(cat)
-            out.append(cat)
+        if cat in EXCLUDED_CATEGORIES or cat in seen:
+            continue
+        seen.add(cat)
+        out.append(cat)
     return out
 
 
