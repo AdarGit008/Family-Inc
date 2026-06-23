@@ -1,6 +1,6 @@
 # Next session — Family Inc
 
-*Generated 2026-06-22 by `automation/session_kickoff.py`. Regenerated at every session end — do not edit by hand.*
+*Generated 2026-06-23 by `automation/session_kickoff.py`. Regenerated at every session end — do not edit by hand.*
 
 **Before pasting (on your machine):** `git pull --ff-only`
 
@@ -21,12 +21,12 @@ Open items:
 
 Recent commits (the dated decision record — decisions fold into the canon, not a separate log):
 
+- 2026-06-23 fix(finance): bump israeli-bank-scrapers 6.7.3 -> 6.7.8
+- 2026-06-23 fix(ci): pin setup-uv to @v7 — @v8 floating tag is unresolvable
+- 2026-06-22 feat: hardening lane 1 — pre-merge CI gate + repo-wide PII guard + config.js smoke
 - 2026-06-20 docs: add visual architecture overview (Mermaid diagrams) to Archive
 - 2026-06-20 docs: M6 spec-ahead pass — ROADMAP.md (5th canon doc) + 50-finding canon↔code reconciliation
 - 2026-06-20 feat: M6.3 budget installer — live stamp + harden against absent machine headers
-- 2026-06-20 docs: M6.3 live budget-SUMIFS install — stamped + J-header drift fixed
-- 2026-06-20 chore: regenerate NEXT_SESSION_PROMPT (M6.3 installer + dashboard wiring landed)
-- 2026-06-20 fix: M6.3 dashboard Money drawer — exclude Finance-Budget TOTAL row (double-count)
 
 Session contract: don't open lanes outside the current focus without a PO call ·
 constants → config, utilities → `automation/lib/`, message copy → templates ·

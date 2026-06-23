@@ -39,6 +39,8 @@ One source of truth per domain · boring tech · alert budget 2/day enforced at 
 
 **M6 finance ingestion — live on Mizrahi (debit) since 2026-06-19:** daily read-only scrape → categorized, idempotent Sheet write (verified 98/98, dedup on a natural-key Txn-ID). **Cards (Max/Cal) deferred** — debit-only household, so Mizrahi is the complete picture; the `--auth` device-trust path is built but dormant (no card creds block → inert). M6.3 (briefing/dashboard consumers) + M6.4 (analysis layer) remain. **Gated to ~2026-06-26** (needs ≥1 week of live finance data from the 06-19 go-live): the first real classifier-accuracy run + the external milestone review. Full status: `BACKLOG.md`; the forward plan + lane contracts: `ROADMAP.md`.
 
+**2026-06-23 (second VPS hour):** box-side verification (ROADMAP lane 7) confirmed the asserted-live claims; the CI gate (lane 1) merged to `main` (first run red on `setup-uv@v8` → pinned `@v7`); the Mizrahi scraper lib was bumped 6.7.3→6.7.8 after a 06-22 login-flow failure; and a **~77%-blank live-categorization gap** was surfaced — the real substance of the gated 06-26 M6.4 accuracy work (needs Shanee's vocab migration + a re-categorize backfill).
+
 ## Session protocol
 
 0. `git pull --ff-only` before touching anything — other agents push to origin; the local folder is not assumed current.
