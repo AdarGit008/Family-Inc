@@ -41,7 +41,11 @@ jobs:
         with:
           node-version: "22"
 
-      - uses: astral-sh/setup-uv@v8
+      # setup-uv publishes floating major tags only through v7 (v8 exists only as
+      # full release tags like v8.2.0 — there is no floating @v8, so @v8 fails to
+      # resolve at "Set up job"). Pin to the latest floating major, matching the
+      # @v4 style above. Bump deliberately when setup-uv ships a floating @v8.
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
