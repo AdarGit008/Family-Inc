@@ -377,20 +377,26 @@ def test_rules_vocab_within_budget_categories():
 
 
 def test_card_settlement_excludes_cal_mirror():
-    """Cal is immediate-debit: its spend appears per-merchant in the Cal scrape AND
-    as merchant-less settlement lines on the Mizrahi debit. Those Mizrahi-side lines
-    map to the EXCLUDED 'Card Settlement' bucket (not a budget row → out of the
-    SUMIFS), so the spend counts once. Tokens verified against live data 2026-06-23:
-    the כא"ל settlements + the future-charge line match; the 'כארם' (Karem) restaurant
-    and Shanee's 'כרטיס דביט' must NOT (the over-match that an unanchored token caused)."""
+    """Immediate-debit cards (Cal, and Shanee's Cal-cleared debit card) post each
+    purchase per-merchant in the card's own scrape AND as a merchant-less settlement
+    line on the Mizrahi debit. Those Mizrahi-side lines map to the EXCLUDED 'Card
+    Settlement' bucket (not a budget row → out of the SUMIFS), so the spend counts
+    once via the per-merchant card row. Tokens verified against live data: the כא"ל
+    settlements + the future-charge line, and Shanee's 'רכישה בכרטיס דביט' mirror
+    (M6.5 2026-06-23, on the connected Cal login). The 'כארם' (Karem) restaurant must
+    NOT match (the over-match an unanchored token caused)."""
     rules = categorize.load_rules()
     assert categorize.apply_rules('דביט כא"ל (חיוב מיידי)', rules) == "Card Settlement"
     assert categorize.apply_rules('ויזה כא"ל (י)', rules) == "Card Settlement"
     assert categorize.apply_rules("חיוב ויזה כאל עתידי", rules) == "Card Settlement"
-    # Must NOT over-match: Shanee's debit card stays blank (its own lane), and a
-    # merchant that merely contains כא ('כארם' = Karem) is never force-excluded.
-    assert categorize.apply_rules("רכישה בכרטיס דביט", rules) != "Card Settlement"
+    # Shanee's debit card: its per-merchant detail rides the existing Cal scrape, so
+    # the Mizrahi-side mirror line is EXCLUDED — flipped from the 06-23 morning guard
+    # (when her card wasn't yet scraped and the line was left in the budget).
+    assert categorize.apply_rules("רכישה בכרטיס דביט", rules) == "Card Settlement"
+    # Must NOT over-match: a merchant that merely contains כא ('כארם' = Karem) is
+    # never force-excluded; and the full 'רכישה ב…' phrase spares a 'דמי כרטיס דביט' fee.
     assert categorize.apply_rules("מסעדת ומאפיית כארם חסן", rules) != "Card Settlement"
+    assert categorize.apply_rules("דמי כרטיס דביט", rules) != "Card Settlement"
     # Deliberately absent from the budget grid (the SUMIFS exclusion) AND from the LLM
     # gap-fill vocab — reachable only by the exact rule above, never an LLM guess on an
     # ambiguous non-Cal row (which would silently zero a real expense).

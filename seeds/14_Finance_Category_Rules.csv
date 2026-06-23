@@ -22,17 +22,25 @@
 # Lines starting with # and blank lines are ignored; '#' is not a wildcard.
 pattern,category
 # --- Card settlement (EXCLUDED — deliberately NOT a Finance-Budget row) ---
-# Cal is an immediate-debit card: every purchase appears per-merchant in the Cal
-# scrape (categorized there) AND as a merchant-less settlement line on the Mizrahi
-# debit. Map the Mizrahi-side Cal lines to 'Card Settlement' — kept OUT of the
-# budget vocabulary — so the actuals SUMIFS counts each purchase once (via the Cal
-# side) and these mirror lines don't inflate the uncategorized rate. Cal token is
-# כא"ל (ASCII quote U+0022); verified against live data 2026-06-23 to match only the
-# דביט/ויזה כא"ל settlements + the 'חיוב ויזה כאל עתידי' future line — never the
-# 'כארם' restaurant or Shanee's 'כרטיס דביט'. Other cards' mirror lines join here as
-# those cards are hooked up (a card's own scrape is the categorized source of truth).
+# Immediate-debit cards (Cal, and Shanee's Cal-cleared debit card) post every
+# purchase per-merchant in the card's OWN scrape (categorized there) AND as a
+# merchant-less settlement line on the Mizrahi debit. Map those Mizrahi-side mirror
+# lines to 'Card Settlement' — kept OUT of the budget vocabulary — so the actuals
+# SUMIFS counts each purchase once (via the per-merchant card row) and the mirror
+# lines don't inflate the uncategorized rate. Tokens verified against live data:
+#  • כא"ל / ויזה כאל (ASCII quote U+0022) — Cal's settlements + the 'חיוב ויזה כאל
+#    עתידי' future line; verified 2026-06-23 NOT to catch the 'כארם' restaurant.
+#  • רכישה בכרטיס דביט — Shanee's debit card (Cal-cleared immediate-debit, on the
+#    ALREADY-CONNECTED Cal login, M6.5 2026-06-23 — no new --auth; her per-merchant
+#    detail rides the existing Cal scrape, so the Mizrahi mirror is excluded to avoid
+#    a double-count). The full 'רכישה ב…' phrase is used (not bare כרטיס דביט) so it
+#    can't catch a 'דמי כרטיס דביט' fee line.
+# Other statement cards (e.g. ויזה-דביט) join here only as each card's own
+# per-merchant scrape is confirmed live — exclude a mirror before its source flows
+# and that card's spend is counted nowhere.
 כא"ל,Card Settlement
 ויזה כאל,Card Settlement
+רכישה בכרטיס דביט,Card Settlement
 # --- Health (before any grocery rule: SUPERPHARM must not fall to Groceries) ---
 SUPERPHARM,Health
 סופר-פארם,Health
