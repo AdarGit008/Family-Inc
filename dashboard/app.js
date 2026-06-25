@@ -28,7 +28,7 @@
       'tabbar.settings': 'הגדרות',
       // Today screen sections
       'section.todayList': 'להיום',
-      'section.todayCalendar': 'יומן היום',
+      'section.calendar': 'יומן',
       'section.next7': 'השבוע הקרוב',
       'section.domains': 'תחומים',
       // Drawers
@@ -52,7 +52,7 @@
       // Empty states
       'empty.nothingOnFire': 'שום דבר לא בוער. ☕',
       'empty.nothingThisWeek': 'אין אירועים השבוע.',
-      'empty.noEventsToday': 'אין אירועים היום.',
+      'empty.noEventsDay': 'אין אירועים.',
       'empty.noQueuedWrites': 'אין כתיבות בתור.',
       'empty.next60Days': 'אין אירועים בחודשיים הקרובים.',
       'empty.noBudget': 'אין תקציב עדיין.',
@@ -67,6 +67,8 @@
       'state.loading': 'טוען…',
       // Calendar
       'cal.allDay': 'כל היום',
+      'cal.today': 'היום',
+      'cal.tomorrow': 'מחר',
       // Car field labels
       'car.annualTest': 'טסט שנתי',
       'car.insurance': 'ביטוח',
@@ -148,7 +150,7 @@
       'tabbar.sunday': 'Sunday',
       'tabbar.settings': 'Settings',
       'section.todayList': 'For today',
-      'section.todayCalendar': "Today's calendar",
+      'section.calendar': 'Calendar',
       'section.next7': 'This coming week',
       'section.domains': 'Domains',
       'drawer.money': 'Money',
@@ -167,7 +169,7 @@
       'prompt.addNote': 'Add a note (will be appended to the Notes column):',
       'empty.nothingOnFire': 'Nothing on fire. ☕',
       'empty.nothingThisWeek': 'Nothing scheduled this week.',
-      'empty.noEventsToday': 'No events today.',
+      'empty.noEventsDay': 'No events.',
       'empty.noQueuedWrites': 'No queued writes.',
       'empty.next60Days': 'Nothing in the next two months.',
       'empty.noBudget': 'No budget yet.',
@@ -181,6 +183,8 @@
       'state.allGood': 'All good',
       'state.loading': 'Loading…',
       'cal.allDay': 'all day',
+      'cal.today': 'Today',
+      'cal.tomorrow': 'Tomorrow',
       'car.annualTest': 'Annual test',
       'car.insurance': 'Insurance',
       'car.license': 'License',
@@ -765,7 +769,7 @@
     document.getElementById('header-date').textContent = state.today.toLocaleDateString(_hdrLocale, { weekday: 'long', day: 'numeric', month: 'long' });
     renderStatusPill();
     renderToday();
-    renderTodayCalendar();
+    render3DayCalendar();
     renderNext7();
     renderDrawers();
     renderSunday();
@@ -900,8 +904,11 @@
     const list = state.data.reminders
       .filter(r => r.flag === 'WEEK OUT')
       .sort((a, b) => (a.daysUntil ?? 9e9) - (b.daysUntil ?? 9e9));
+    // Calendar events for days 3–7 only: the 3-day strip (V3.4) owns today+2, so
+    // this list starts at +3 — no event renders in both surfaces. (V3.3 folds
+    // this into the coming-up strip with the same 3–7 window.)
     const events = state.data.calendarEvents
-      .filter(e => e.date && daysBetween(e.date, state.today) >= 1 && daysBetween(e.date, state.today) <= 7)
+      .filter(e => e.date && daysBetween(e.date, state.today) >= 3 && daysBetween(e.date, state.today) <= 7)
       .sort((a, b) => a.date - b.date);
     const el = document.getElementById('next7-list');
     let html = '';
@@ -920,22 +927,67 @@
     attachRowHandlers(el);
   }
 
-  function renderTodayCalendar() {
-    const todays = state.data.calendarEvents.filter(e => e.date && daysBetween(e.date, state.today) === 0);
-    const el = document.getElementById('today-cal');
-    if (!todays.length) {
-      el.innerHTML = `<div class="empty">${escapeHtml(t('empty.noEventsToday'))}</div>`;
-      return;
-    }
-    el.innerHTML = todays.map(e => `
-      <div class="row cal-event">
-        <div class="row-top">
-          <span class="row-title">${escapeHtml(e.title)}</span>
-          <span class="row-meta cal-time">${e.start || escapeHtml(t('cal.allDay'))}${e.end ? '–' + e.end : ''}</span>
+  // Minutes-since-midnight for an 'HH:MM' start; all-day ('') sorts first as -1.
+  // Robust to an un-padded hour ('9:00') a hand-edited Sheet row might carry,
+  // which a lexical string sort would mis-order.
+  function calMinutes(s) {
+    if (!s) return -1;
+    const [h, m] = String(s).split(':');
+    return (+h || 0) * 60 + (+m || 0);
+  }
+
+  // V3.4: the calendar slot is a 3-day scroll-snap strip (today, +1, +2),
+  // replacing the single-day list. Exactly 3 panes ALWAYS render so an empty day
+  // never collapses the strip and the horizontal snap keeps stable geometry.
+  // Read-only — no data-row, no write affordances; events are edited at their
+  // source, the strip is a glance surface. Days 3–7 live in the coming-up/Next-7
+  // list (📆-tagged), so this stays today+2 with no overlap.
+  function render3DayCalendar() {
+    const el = document.getElementById('today-cal-strip');
+    if (!el) return;
+    const locale = currentLang() === 'en' ? 'en-GB' : 'he-IL';
+    el.innerHTML = [0, 1, 2].map(offset => {
+      const day = new Date(state.today);
+      day.setDate(day.getDate() + offset);
+      const events = state.data.calendarEvents
+        .filter(e => e.date && daysBetween(e.date, day) === 0)
+        .sort((a, b) => calMinutes(a.start) - calMinutes(b.start)); // all-day ('') sorts first
+      const body = events.length
+        ? events.map(renderCalEvent).join('')
+        : `<div class="empty">${escapeHtml(t('empty.noEventsDay'))}</div>`;
+      return `<div class="cal-day">
+        <div class="cal-day-head">
+          <span class="cal-day-name">${escapeHtml(dayLabel(offset, day, locale))}</span>
+          <span class="cal-day-date num">${escapeHtml(fmtDate(day))}</span>
         </div>
-        ${e.location ? `<div class="row-note">${escapeHtml(e.location)}${e.owner ? ' · ' + escapeHtml(e.owner) : ''}</div>` : ''}
+        ${body}
+      </div>`;
+    }).join('');
+  }
+
+  // Day-head label: today / tomorrow / the weekday name for +2 (locale-aware).
+  function dayLabel(offset, day, locale) {
+    if (offset === 0) return t('cal.today');
+    if (offset === 1) return t('cal.tomorrow');
+    return day.toLocaleDateString(locale, { weekday: 'long' });
+  }
+
+  // One read-only calendar-event card. A Shabbat line (the V3.2 'shabbat' source
+  // seam — also covers erev-chag candle-lighting, same 🕯 treatment) gets a 🕯
+  // glyph (aria-hidden, decorative — the title + border carry the meaning) + a
+  // non-color inline-start border, never hue alone (DESIGN §8). Times are mono (.num).
+  function renderCalEvent(e) {
+    const isShabbat = e.source === 'shabbat';
+    const time = e.start
+      ? escapeHtml(e.start) + (e.end ? '–' + escapeHtml(e.end) : '')
+      : escapeHtml(t('cal.allDay'));
+    return `<div class="row cal-event${isShabbat ? ' shabbat' : ''}">
+      <div class="row-top">
+        <span class="row-title">${isShabbat ? '<span aria-hidden="true">🕯 </span>' : ''}${escapeHtml(e.title)}</span>
+        <span class="row-meta cal-time num">${time}</span>
       </div>
-    `).join('');
+      ${e.location ? `<div class="row-note">${escapeHtml(e.location)}${e.owner ? ' · ' + escapeHtml(e.owner) : ''}</div>` : ''}
+    </div>`;
   }
 
   function renderReminderRow(r) {

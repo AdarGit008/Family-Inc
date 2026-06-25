@@ -91,10 +91,12 @@
       <!-- Love-note slot (V3.7) — empty + hidden until there's an inbound note. -->
       <div id="love-note-slot" hidden></div>
 
-      <!-- Calendar slot (V3.4 → 3-day scroll-snap strip) — holds today's calendar for now. -->
+      <!-- Calendar slot (V3.4) — a 3-day scroll-snap strip (today/+1/+2),
+           read-only. render3DayCalendar fills #today-cal-strip with exactly 3
+           panes; days 3–7 live in the coming-up strip below. -->
       <div id="calendar-slot" class="section">
-        <h2 data-i18n="section.todayCalendar">Today's calendar</h2>
-        <div id="today-cal"></div>
+        <h2 data-i18n="section.calendar">Calendar</h2>
+        <div id="today-cal-strip" class="cal-strip"></div>
       </div>
 
       <!-- Desk slot (V3.3 → select-to-act desk) — holds the OVERDUE/today list for now. -->

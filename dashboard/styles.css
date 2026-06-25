@@ -299,9 +299,51 @@ time {
   font-family: var(--font-mono);
 }
 
-/* Calendar events */
-.cal-event { padding: 10px 14px; }
-.cal-time { font-variant-numeric: tabular-nums; color: var(--blue); font-size: 13px; }
+/* Calendar — 3-day scroll-snap strip (V3.4). Always 3 panes (today/+1/+2) so an
+   empty day never collapses the strip and the horizontal snap keeps stable
+   geometry. RTL "just works": the strip inherits dir=rtl + uses logical props,
+   so today (the first pane) sits at the inline-start (right) edge and snap
+   advances inline. Read-only — these cards carry no tap affordance. */
+.cal-strip {
+  display: flex;
+  align-items: flex-start;        /* an empty pane must not stretch to a tall sibling */
+  gap: 12px;
+  overflow-x: auto;
+  /* overflow-x:auto forces the computed overflow-y to 'auto' too, making this a
+     two-axis scroll box that would otherwise clip the card drop-shadows flush —
+     so reserve block padding for the 0 8px 22px shadow to sit inside. */
+  padding-block: 2px 14px;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 2px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;          /* the peeking next pane is the affordance */
+}
+.cal-strip::-webkit-scrollbar { display: none; }
+.cal-day {
+  flex: 0 0 calc(100% - 32px);    /* near-full-width; ~32px of the next pane peeks */
+  min-width: 0;
+  scroll-snap-align: start;
+}
+.cal-day-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin: 2px 4px 8px;
+}
+.cal-day-name { font-weight: 600; font-size: 14px; }
+.cal-day-date { font-size: 13px; color: var(--muted); }
+
+/* Calendar event card — read-only (no tap affordance, no :active feedback) */
+.cal-event { padding: 10px 14px; cursor: default; }
+.cal-event:active { transform: none; }
+.cal-time { color: var(--blue); font-size: 13px; }   /* .num supplies mono + tnum */
+/* Shabbat line (🕯) — non-color inline-start border + glyph carry it, not hue alone */
+.cal-event.shabbat { border-inline-start: 3px solid var(--amber); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cal-strip { scroll-behavior: auto; }
+}
 
 /* Drawer */
 .drawer {
