@@ -22,12 +22,12 @@ Open items:
 
 Recent commits (the dated decision record — decisions fold into the canon, not a separate log):
 
+- 2026-06-25 feat(dashboard): V3.1 — cool token retone (IBM Plex Mono all-numerals, AA-cleared amber/muted)
+- 2026-06-25 docs(v3): resolve the 4 Today-redesign build blockers + add file-level build plan
+- 2026-06-25 docs: regenerate next-session prompt (post-rebase)
 - 2026-06-25 fix(finance): move Card Settlement exclusion below merchant rules — close the latent over-match (M6.5)
 - 2026-06-25 docs(roadmap): add v3 Today-redesign lane (§3.8) + decision record
 - 2026-06-23 feat(finance): hook up Shanee's debit card via the connected Cal login (M6.5)
-- 2026-06-23 feat(finance): hook up Cal (Visa) + Card Settlement exclusion — un-defer cards lane (M6.5)
-- 2026-06-23 docs: next-session opener — add Cal/Visa card (un-defers cards lane, reframes categorization)
-- 2026-06-23 docs: close 2026-06-23 VPS hour — lane-7 box verification, CI gate merged, finance lib bump
 
 Session contract: don't open lanes outside the current focus without a PO call ·
 constants → config, utilities → `automation/lib/`, message copy → templates ·
