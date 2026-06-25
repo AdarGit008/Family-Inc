@@ -379,30 +379,60 @@ def test_rules_vocab_within_budget_categories():
 def test_card_settlement_excludes_cal_mirror():
     """Immediate-debit cards (Cal, and Shanee's Cal-cleared debit card) post each
     purchase per-merchant in the card's own scrape AND as a merchant-less settlement
-    line on the Mizrahi debit. Those Mizrahi-side lines map to the EXCLUDED 'Card
-    Settlement' bucket (not a budget row → out of the SUMIFS), so the spend counts
-    once via the per-merchant card row. Tokens verified against live data: the כא"ל
-    settlements + the future-charge line, and Shanee's 'רכישה בכרטיס דביט' mirror
-    (M6.5 2026-06-23, on the connected Cal login). The 'כארם' (Karem) restaurant must
-    NOT match (the over-match an unanchored token caused)."""
+    line on the Mizrahi debit. Those merchant-less mirror lines fall through to the
+    EXCLUDED 'Card Settlement' bucket (not a budget row → out of the SUMIFS), so the
+    spend counts once via the per-merchant card row. The exclusion block sits BELOW
+    every merchant rule (a last-resort fallback), so a settlement token carrying a
+    merchant suffix categorizes by its MERCHANT, never force-excluded — the M6.5
+    box-verify (ii) over-match, closed structurally (2026-06-25). Tokens verified
+    against live data: the כא"ל settlements + the future-charge line, and Shanee's
+    'רכישה בכרטיס דביט' mirror (M6.5 2026-06-23, on the connected Cal login)."""
     rules = categorize.load_rules()
+    # Genuinely merchant-less wrappers fall through to the exclusion bucket.
     assert categorize.apply_rules('דביט כא"ל (חיוב מיידי)', rules) == "Card Settlement"
     assert categorize.apply_rules('ויזה כא"ל (י)', rules) == "Card Settlement"
     assert categorize.apply_rules("חיוב ויזה כאל עתידי", rules) == "Card Settlement"
     # Shanee's debit card: its per-merchant detail rides the existing Cal scrape, so
-    # the Mizrahi-side mirror line is EXCLUDED — flipped from the 06-23 morning guard
-    # (when her card wasn't yet scraped and the line was left in the budget).
+    # the merchant-less Mizrahi mirror line is EXCLUDED — flipped from the 06-23 morning
+    # guard (when her card wasn't yet scraped and the line was left in the budget).
     assert categorize.apply_rules("רכישה בכרטיס דביט", rules) == "Card Settlement"
-    # Must NOT over-match: a merchant that merely contains כא ('כארם' = Karem) is
-    # never force-excluded; and the full 'רכישה ב…' phrase spares a 'דמי כרטיס דביט' fee.
+    # CONTRACT (the fix for box-verify (ii)): a settlement token that carries a merchant
+    # suffix categorizes by the MERCHANT, never the excluded bucket — because the block
+    # sits below the merchant rules. A real grocery purchase is never silently zeroed.
+    assert categorize.apply_rules("רכישה בכרטיס דביט שופרסל", rules) == "Groceries"
+    assert categorize.apply_rules('ויזה כאל שופרסל', rules) == "Groceries"
+    # Must NOT over-match: 'כארם' (Karem) has no merchant rule of its own → None, never
+    # force-excluded; and a 'דמי כרטיס דביט' fee categorizes as Fees (the full 'רכישה ב…'
+    # settlement phrase does not catch it).
     assert categorize.apply_rules("מסעדת ומאפיית כארם חסן", rules) != "Card Settlement"
-    assert categorize.apply_rules("דמי כרטיס דביט", rules) != "Card Settlement"
+    assert categorize.apply_rules("דמי כרטיס דביט", rules) == "Fees"
     # Deliberately absent from the budget grid (the SUMIFS exclusion) AND from the LLM
-    # gap-fill vocab — reachable only by the exact rule above, never an LLM guess on an
-    # ambiguous non-Cal row (which would silently zero a real expense).
+    # gap-fill vocab — reachable only by an exact settlement rule, never an LLM guess on
+    # an ambiguous non-Cal row (which would silently zero a real expense).
     budget = {r[0] for r in _rows(cfg.SHEET_PATH, cfg.FINANCE_BUDGET_TAB)[1:] if r[0]}
     assert "Card Settlement" not in budget
     assert "Card Settlement" not in categorize.vocabulary(rules)
+
+
+def test_excluded_bucket_never_shadows_a_merchant():
+    """The Card Settlement exclusion is a LAST-RESORT fallback: it must sit below every
+    merchant rule so a settlement wrapper that ever carries a merchant token categorizes
+    by that MERCHANT, never the excluded bucket. Pins the file-order invariant — a future
+    re-sort that lifts an excluded pattern above the merchant rules would silently zero
+    real spend (the exact M6.5 over-match) — by appending each seeded merchant keyword to
+    each excluded pattern and asserting the result is never the excluded bucket."""
+    rules = categorize.load_rules()
+    excluded = categorize.EXCLUDED_CATEGORIES
+    excluded_pats = [pat for pat, cat in rules if cat in excluded]
+    merchant_pats = [pat for pat, cat in rules if cat not in excluded]
+    assert excluded_pats and merchant_pats            # guard: both populated
+    for spat in excluded_pats:
+        for mpat in merchant_pats:
+            got = categorize.apply_rules(f"{spat} {mpat}", rules)
+            assert got not in excluded, (
+                f"'{spat} {mpat}' force-excluded as {got!r}: an excluded pattern is "
+                f"shadowing merchant rule {mpat!r}. Keep the exclusion block BELOW all "
+                f"merchant rules so a merchant-bearing line is never silently zeroed.")
 
 
 def test_missing_rules_file_degrades_quiet(tmp_path):
