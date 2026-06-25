@@ -15,25 +15,27 @@
 
 ## 2. Visual system (dashboard)
 
-### Color — warm paper + indigo
+### Color — cool grey + blue *(v3 retone, shipped V3.1 2026-06-25; token names match `styles.css` canon)*
 
-| Token | Light | Dark | Use |
+| Token | Light | Dark (provisional) | Use |
 |---|---|---|---|
-| `--surface` | `#FAF8F5` | `#15161A` | page |
-| `--ink` | `#1A1A1F` | `#E8E6E1` | text |
-| `--muted` | `#71717A` | `#A1A1AA` | secondary text |
-| `--accent` | `#5E6AD2` | `#5E6AD2` | links, active tab |
-| `--ok` | `#3F8F5F` | sage | all-clear, success |
-| `--warn` | `#C58B3A` | amber | due-today |
-| `--alert` | `#C44545` | terracotta | overdue |
+| `--bg` | `#EBEEF2` | `#14161B` | page |
+| `--tile` | `#FFFFFF` | `#1C2027` | card / sheet surface |
+| `--ink` | `#12151C` | `#E7E9ED` | text |
+| `--muted` | `#5F6878` | `#A1AAB8` | secondary text (AA-cleared) |
+| `--line` | `#E1E5EB` | `#2A2E36` | hairlines |
+| `--accent` | `#2C57C8` | `#6E8BE8` | links, active tab — single brand color |
+| `--green` | `#2F8559` | `#4CA877` | all-clear, success |
+| `--amber` | `#8A5E12` | `#C79A4A` | due-today (darkened to clear AA) |
+| `--red` | `#C4403B` | `#DB6B63` | overdue |
 
-Semantic colors appear only on status; the accent is the single brand color. No gradients.
+Semantic colors appear only on status; the accent is the single brand color. No gradients. Semantic washes are `color-mix` off these tokens so they track the palette. Dark mode is **provisional** (its own pass later). Back-compat aliases (`--card`/`--border`/`--ink-dim`/`--orange`/`--yellow`/`--radius`, plus `--blue` for `.cal-time`) remain in `styles.css` until later V3 slices migrate their selectors. `--rad 20px` (cards/sheets), `--rad-sm 8px` (inputs), 999px pills; card shadow `0 1px 2px/0 8px 22px`, bottom-sheet `--sheet-shadow`.
 
 ### Type
 
 - **Heebo** — Hebrew UI (default chrome).
 - **Inter** — Latin UI (fallback chrome); tabular figures on.
-- **Geist Mono** — money only (`₪4,280`) so amounts read as data at a glance.
+- **IBM Plex Mono** — **all numerals** (money `₪4,280`, dates, counts, times, %) so figures read as data at a glance, via the `.num` utility + `<time>` (loose count/% spans get tagged as later slices render them).
 - Scale: 17/15/13 body-secondary-caption; one display size (28) for drawer KPIs. No font weight above 600.
 
 ### Components
@@ -153,3 +155,4 @@ Tap targets ≥44px; contrast AA against both surfaces (the muted zinc fails on 
 6. Lighthouse PWA installable; an offline reload serves the shell + cached data.
 7. Offline, tap until the queue hits 50 → a one-shot "queue full" warning shows; further taps don't grow the queue; reconnect → flush re-arms the warning.
 8. (bridge) A 1:1 message to the bridge number from a known sender is logged to `replies.jsonl` but gets **no reply/ack** (reply-parsing is v1.1, SPEC §7.4); an unknown 1:1 sender is dropped.
+9. (V3.1 retone) Cold load shows the cool palette (`--bg #EBEEF2`, `--accent #2C57C8`) and IBM Plex Mono numerals with no Geist FOUC; amber/muted text clears AA on both surfaces; Sunday + Settings inherit the palette with no layout shift; the longest `₪` amount + the drawer KPI row don't wrap under the new mono metrics.

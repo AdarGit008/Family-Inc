@@ -1,60 +1,86 @@
 /* Family inc. dashboard — single sheet of styles. Boring on purpose. */
 
 :root {
-  --bg: #FAF8F5;            /* warm paper */
-  --card: #ffffff;
-  --ink: #1A1A1F;
-  --ink-dim: #71717A;       /* zinc-500 */
-  --border: #D4D4D8;        /* zinc-300 */
-  --muted: #A1A1AA;         /* zinc-400 */
-  --accent: #5E6AD2;        /* Linear indigo */
-  --red: #C44545;           /* terracotta — alert */
-  --orange: #C58B3A;        /* amber — warning */
-  --yellow: #C58B3A;        /* alias to amber for legacy flag classes */
-  --green: #3F8F5F;         /* sage — success */
-  --blue: #4A6FA5;          /* slate-blue — info */
-  --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.04);
-  --radius: 12px;
+  /* ── v3 cool palette · canonical names (V3_RECONCILE token block) ── */
+  --bg: #EBEEF2;            /* page */
+  --tile: #FFFFFF;         /* card / sheet surface */
+  --tile2: #E9EDF3;        /* recessed surface */
+  --ink: #12151C;          /* text */
+  --muted: #5F6878;        /* secondary text (darkened to clear AA) */
+  --line: #E1E5EB;         /* hairlines */
+  --accent: #2C57C8;       /* brand blue (single brand color) */
+  --soft: rgba(44,87,200,.10);  /* accent wash */
+  --green: #2F8559;        /* sage — success (AA) */
+  --amber: #8A5E12;        /* amber — warning (darkened to clear AA) */
+  --red: #C4403B;          /* terracotta — alert */
+  --blue: #4A6FA5;         /* info — no v3 home yet; kept for .cal-time, revisit V3.8 */
+  --shadow: 0 1px 2px rgba(0,0,0,.03), 0 8px 22px rgba(0,0,0,.05);
+  --sheet-shadow: 0 -8px 40px rgba(18,21,28,.22);
+  --rad: 20px;             /* cards / sheets */
+  --rad-sm: 8px;           /* inputs / small chips */
   --font: 'Inter', 'Heebo', -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, "Courier New", monospace;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, "Courier New", monospace;
+  /* ── back-compat aliases — retired as later V3 slices migrate selectors; do NOT remove until a zero-ref audit (V3.8/V3.9) ── */
+  --card: var(--tile);
+  --border: var(--line);
+  --ink-dim: var(--muted);
+  --orange: var(--amber);
+  --yellow: var(--amber);
+  --radius: var(--rad);
 }
 
-/* Dark mode: auto (system preference) — the default when no explicit theme is set */
+/* Dark mode is PROVISIONAL (prior hues, cool-retoned) — gets its own pass later.
+   Theme blocks set only canonical names; the :root aliases above track them automatically. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #15161A;
-    --card: #1E2127;
-    --ink: #E8E6E1;
-    --ink-dim: #A1A1AA;
-    --border: #2A2A2E;
-    --muted: #71717A;
-    --accent: #7D8AEF;       /* Linear indigo (dark) */
-    --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.2);
+    --bg: #14161B;
+    --tile: #1C2027;
+    --tile2: #23262E;
+    --ink: #E7E9ED;
+    --muted: #A1AAB8;        /* lighter on dark for AA */
+    --line: #2A2E36;
+    --accent: #6E8BE8;       /* cool blue (dark) */
+    --soft: rgba(110,139,232,.16);
+    --green: #4CA877;        /* provisional dark semantics */
+    --amber: #C79A4A;
+    --red: #DB6B63;
+    --shadow: 0 1px 2px rgba(0,0,0,.30), 0 8px 22px rgba(0,0,0,.38);
+    --sheet-shadow: 0 -8px 40px rgba(0,0,0,.55);
   }
 }
 
 /* Dark mode: explicit override (ignores system preference) */
 :root[data-theme="dark"] {
-  --bg: #15161A;
-  --card: #1E2127;
-  --ink: #E8E6E1;
-  --ink-dim: #A1A1AA;
-  --border: #2A2A2E;
-  --muted: #71717A;
-  --accent: #7D8AEF;
-  --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.2);
+  --bg: #14161B;
+  --tile: #1C2027;
+  --tile2: #23262E;
+  --ink: #E7E9ED;
+  --muted: #A1AAB8;
+  --line: #2A2E36;
+  --accent: #6E8BE8;
+  --soft: rgba(110,139,232,.16);
+  --green: #4CA877;
+  --amber: #C79A4A;
+  --red: #DB6B63;
+  --shadow: 0 1px 2px rgba(0,0,0,.30), 0 8px 22px rgba(0,0,0,.38);
+  --sheet-shadow: 0 -8px 40px rgba(0,0,0,.55);
 }
 
 /* Light mode: explicit override (ignores system preference) */
 :root[data-theme="light"] {
-  --bg: #FAF8F5;
-  --card: #ffffff;
-  --ink: #1A1A1F;
-  --ink-dim: #71717A;
-  --border: #D4D4D8;
-  --muted: #A1A1AA;
-  --accent: #5E6AD2;
-  --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.04);
+  --bg: #EBEEF2;
+  --tile: #FFFFFF;
+  --tile2: #E9EDF3;
+  --ink: #12151C;
+  --muted: #5F6878;
+  --line: #E1E5EB;
+  --accent: #2C57C8;
+  --soft: rgba(44,87,200,.10);
+  --green: #2F8559;
+  --amber: #8A5E12;
+  --red: #C4403B;
+  --shadow: 0 1px 2px rgba(0,0,0,.03), 0 8px 22px rgba(0,0,0,.05);
+  --sheet-shadow: 0 -8px 40px rgba(18,21,28,.22);
 }
 
 * { box-sizing: border-box; }
@@ -131,9 +157,9 @@ header.app-header .date {
   align-items: center;
   gap: 8px;
 }
-.banner.clear { background: rgba(63, 143, 95, 0.12); color: var(--green); }
-.banner.warn  { background: rgba(197, 139, 58, 0.14); color: var(--orange); }
-.banner.alert { background: rgba(196, 69, 69, 0.14); color: var(--red); }
+.banner.clear { background: color-mix(in srgb, var(--green) 12%, transparent); color: var(--green); }
+.banner.warn  { background: color-mix(in srgb, var(--amber) 14%, transparent); color: var(--amber); }
+.banner.alert { background: color-mix(in srgb, var(--red) 14%, transparent); color: var(--red); }
 
 /* Sections */
 .section {
@@ -191,7 +217,9 @@ header.app-header .date {
 .flag-MONTH { color: var(--green); }
 
 /* Amounts — tabular mono, bidi-safe for Hebrew + ₪ */
-.amount {
+.amount,
+.num,
+time {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
@@ -251,7 +279,7 @@ header.app-header .date {
   font-style: italic;
 }
 .empty-caught-up {
-  background: rgba(63, 143, 95, 0.10);
+  background: color-mix(in srgb, var(--green) 10%, transparent);
   color: var(--green);
   border-radius: var(--radius);
   padding: 24px 16px;
@@ -359,9 +387,9 @@ header.app-header .date {
   display: block;
   margin: 6px 0 4px;
 }
-.goal-line .band-ok { fill: rgba(63, 143, 95, 0.12); }
-.goal-line .band-warn { fill: rgba(197, 139, 58, 0.14); }
-.goal-line .band-bad { fill: rgba(196, 69, 69, 0.12); }
+.goal-line .band-ok { fill: color-mix(in srgb, var(--green) 12%, transparent); }
+.goal-line .band-warn { fill: color-mix(in srgb, var(--amber) 14%, transparent); }
+.goal-line .band-bad { fill: color-mix(in srgb, var(--red) 12%, transparent); }
 .goal-line .target-line { stroke: var(--ink-dim); stroke-width: 1; stroke-dasharray: 3 3; fill: none; }
 .goal-line .actual-line { stroke: var(--accent); stroke-width: 2; fill: none; }
 .goal-line .now-dot { fill: var(--accent); }
@@ -419,10 +447,10 @@ nav.tabbar button.active { color: var(--accent); font-weight: 600; }
 /* Stale-cache badge */
 .stale-badge {
   font-size: 12px;
-  color: var(--orange);
+  color: var(--amber);
   padding: 6px 10px;
-  border-radius: 8px;
-  background: rgba(197, 139, 58, 0.10);
+  border-radius: var(--rad-sm);
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
   margin-bottom: 8px;
 }
 
@@ -446,7 +474,7 @@ nav.tabbar button.active { color: var(--accent); font-weight: 600; }
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--ink);
-  border-radius: 8px;
+  border-radius: var(--rad-sm);
   font-family: inherit;
   font-size: 14px;
 }
