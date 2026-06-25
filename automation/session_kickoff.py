@@ -7,6 +7,13 @@ the git log (recent decisions — the D-NN log is retired; decisions now fold in
 the canon and the dated rationale lives in commit messages). This script holds no
 status of its own.
 
+The focus headline is chosen, in order: (1) an explicit `**Focus:** …` pin the PO
+sets in BACKLOG (deterministic — it beats any heuristic when the active lane isn't
+the one a section is *titled* after); (2) else the in-progress (🔵) lanes across
+ALL sections; (3) else the first section with an open item. This is the fix for
+the old "focus = whatever section is literally titled 'In progress'" trap, which
+hid an actively-built lane filed elsewhere.
+
 Usage:  python3 automation/session_kickoff.py   (from repo root; stdlib only)
 """
 
@@ -21,14 +28,19 @@ OUT = ROOT / "NEXT_SESSION_PROMPT.md"
 N_COMMITS = 6
 
 
-def _open_items(body: str) -> list[str]:
-    """⬜/🔵 bullet lines in a section body, cleaned of marker + bold + length."""
+def _open_items(body: str, markers: tuple[str, ...] = ("⬜", "🔵")) -> list[str]:
+    """Bullet lines in a section body whose marker emoji is in `markers`, cleaned of
+    the bullet/bold wrapper + length. Tolerates BOTH `- 🔵 **x**` and the bold-wrapped
+    `- **🔵 x**` forms (the v3 lane uses the latter)."""
     items: list[str] = []
     for ln in body.splitlines():
         s = ln.strip()
-        for marker in ("- ⬜", "- 🔵"):
-            if s.startswith(marker):
-                text = s[len(marker):].strip().lstrip("*").strip()
+        if not s.startswith("- "):
+            continue
+        rest = s[2:].lstrip().lstrip("*").lstrip()  # past "- " and any leading **
+        for emoji in markers:
+            if rest.startswith(emoji):
+                text = rest[len(emoji):].strip().lstrip("*").strip()
                 text = re.sub(r"\*\*", "", text)
                 if len(text) > 200:  # word-boundary clip — never mid-word; keep the lead clause
                     text = text[:200].rsplit(" ", 1)[0].rstrip(" ;,—-") + " …"
@@ -57,6 +69,36 @@ def current_milestone(backlog: str) -> tuple[str, list[str]]:
     return "(no open milestone found — check BACKLOG.md)", []
 
 
+# An explicit, PO-set focus line in BACKLOG (e.g. `**▶ Focus:** v3 — V3.2 …`).
+# Boring + deterministic — it beats any heuristic when the active lane isn't the
+# one a section is *titled* after. Optional leading arrow glyph; tolerant of spacing.
+PIN_RE = re.compile(r"^\s*\*\*\s*(?:▶|►|➤)?\s*Focus:\s*\*\*\s*(.+?)\s*$", re.M)
+
+
+def in_progress_lanes(backlog: str) -> list[str]:
+    """Every 🔵 (in-progress) bullet across ALL sections — the lanes actually in
+    flight (the legend's 🔵), not just whatever section is titled 'In progress'."""
+    lanes: list[str] = []
+    for sec in re.split(r"^## ", backlog, flags=re.M)[1:]:
+        _, _, body = sec.partition("\n")
+        lanes.extend(_open_items(body, markers=("🔵",)))
+    return lanes
+
+
+def focus(backlog: str) -> tuple[str, list[str]]:
+    """(headline, active-lane list). Precedence:
+      1. an explicit `**Focus:** …` pin in BACKLOG — PO-controlled, deterministic;
+      2. else the in-progress (🔵) lanes across every section, document order;
+      3. else the first section that still has an open item (legacy heuristic)."""
+    lanes = in_progress_lanes(backlog)
+    pin = PIN_RE.search(backlog)
+    if pin:
+        return pin.group(1).strip(), lanes
+    if lanes:
+        return lanes[0], lanes
+    return current_milestone(backlog)
+
+
 def recent_decisions(n: int = N_COMMITS) -> list[str]:
     """Recent commit subjects (dated) — the decision record now lives in git
     history. Best-effort: returns [] if git is unavailable."""
@@ -74,8 +116,8 @@ def recent_decisions(n: int = N_COMMITS) -> list[str]:
 
 def main() -> int:
     backlog = (ROOT / "BACKLOG.md").read_text(encoding="utf-8")
-    milestone, items = current_milestone(backlog)
-    items_md = "\n".join(f"- {i}" for i in items) or "- (none)"
+    headline, lanes = focus(backlog)
+    lanes_md = "\n".join(f"- {ln}" for ln in lanes) or "- (none)"
     commits = recent_decisions()
     commits_md = "\n".join(f"- {c}" for c in commits) or "- (git log unavailable)"
     today = dt.date.today().isoformat()
@@ -93,11 +135,13 @@ Paste everything below this line to open the session:
 You are opening a Family Inc working session as Lead Architect. Read `CLAUDE.md`
 (roles, principles, guardrails), then work the current focus only.
 
-**Current focus: {milestone}**
+**Current focus: {headline}**
 
-Open items:
+*(The focus headline is set by a `**Focus:** …` pin in `BACKLOG.md` → `## Now`; absent a pin it's the freshest 🔵 lane.)*
 
-{items_md}
+Active lanes (🔵 in progress — work the focus above first; don't open the others without a PO call):
+
+{lanes_md}
 
 Recent commits (the dated decision record — decisions fold into the canon, not a separate log):
 
@@ -112,7 +156,7 @@ session end: tests green if code moved, `BACKLOG.md` flipped, regenerate this fi
 (stage → review gate if milestone-closing → commit → push). Git index operations
 run on the PO's machine, never in the sandbox.
 """, encoding="utf-8")
-    print(f"OK → {OUT.name} (focus: {milestone}, {len(items)} open items)")
+    print(f"OK → {OUT.name} (focus: {headline[:80]}, {len(lanes)} active lanes)")
     return 0
 
 
