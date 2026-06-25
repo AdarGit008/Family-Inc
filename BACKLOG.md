@@ -58,6 +58,7 @@ The pool below was **ranked, phased, and given forward contracts** in `ROADMAP.m
 - **After 06-26:** M6.3/M6.4 acceptance (classifier-accuracy run + budget-vocab migration + external review) · classifier-fp-metric · bridge scope-guard harness *(hard prereq to reply-parsing)*.
 - **Later v1.1 (post the 30-day hold, each a PO call):** reply-parsing (needs a budget-exempt `ack` kind) · inbox-trigger · apify-cap · calendar-connectors (decomposed — Hebrew-string pass pullable early).
 - **Frozen (joint / Shanee call):** big-charge-alert (brushes the **killed** anomaly lane) · ai-briefing (whole-Sheet→provider privacy expansion) · GCal/iCloud auto-ingest (credential-storage amendment).
+- **⬜ v3 Today redesign (decided 2026-06-25).** The dashboard Today surface gets a cool retone + new IA + two net-new components (parent-to-parent love-note, cross-domain timeline). 8 design calls co-signed (Adar + Shanee) after an 8-dimension adversarial review; decision record + design tokens in `V3_RECONCILE.md`, lane contract + V3.1–V3.9 build sequence in `ROADMAP.md` §3.8. **Build not started — window is a PO call** (now vs post the 30-day boring-hold ~07-13). Touches one new data path (appliance-local love-notes, bounded voice unfreeze) + the col-D snooze write (settle Lane C first).
 
 See `ROADMAP.md` §2 for the ranked sequence and §3 for each lane's contract, acceptance bar, and open PO calls. **Killed stays killed:** anomaly/subscription detection.
 

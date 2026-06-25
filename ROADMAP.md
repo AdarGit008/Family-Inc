@@ -48,6 +48,7 @@ Ranked by *fits-the-window-and-clears-blockers*, then value-per-effort. The wind
 | 15 | **inbox-trigger** (inotify, sub-hour critical latency) | med | M | med | later v1.1 (post-hold) |
 | 16 | **apify-cap** (≤₪120/mo result-counter) | low | M | low | later v1.1 |
 | 17 | **calendar-connectors** (decomposed; Hebrew-string pass pullable early) | high | XL | high | later v1.1 (majors) |
+| 18 | **v3-today-redesign** (decided 06-25; §3.8) — Today-surface UI rebuild | high | L | med | v1.1 — window is a PO call (now vs post-hold) |
 | — | **big-charge-alert** (>₪500) | med | S | med | **frozen** — joint PO call |
 | — | **ai-briefing** (LLM five-scene) | med | L | high | **frozen** — joint Shanee privacy call |
 | — | **GCal/iCloud auto-ingest** | high | XL | high | **frozen** — credential-storage amendment |
@@ -128,6 +129,19 @@ The now→06-26 work. Each item is small, low-risk, needs no new live data, and 
 
 - **Open PO calls (carried to M6.5).** Per-card `Owner` default? · daily vs 2–3×/week cadence (re-challenge noise)? · does a card change the >35d stale-import expectation (a card may legitimately have no charges for a month)?
 
+### 3.8 v3-today-redesign — rebuild the dashboard Today surface
+
+**Decided 2026-06-25.** A visual + interaction evolution of the **Today** surface, from a hi-fi prototype handoff put through an 8-dimension adversarial design review; 8 calls co-signed (Adar + Shanee). Full decision record + design tokens in `V3_RECONCILE.md`; full pixel spec in the handoff (`~/Downloads/Family Inc Repo Redesign.zip`). Same data philosophy (calm tech, Today-first, Hebrew/RTL); new layout + two net-new components.
+
+- **Scope.** The Today home surface only. A **system-wide cool retone** (tokens live on `:root`, so Sunday/Settings inherit colors but keep their layouts) + IBM Plex Mono for all numerals. New/changed components: a 3-tier status pill (red/amber/sage **+ count**), a parent-to-parent **love-note**, a 3-day scroll-snap **calendar**, a select-to-act **desk**, a **coming-up** strip (WEEK-OUT/MONTH-OUT), a cross-domain **timeline** (exponential 1wk→5yr zoom + category filter), and one data-driven **bottom-sheet** drawer replacing the inline accordions. *Not:* the WhatsApp surface; Sunday's or Settings' layouts.
+- **Contract — the 8 calls (D1–D8).** D1 a coming-up strip homes the WEEK-OUT tier (replaces v1 "Next 7 days"). D2 love-notes (Data). D3 account-switch = real Google re-auth, never a label flip. D4 snooze writes an **absolute** Due date. D5 the pill keeps a **red** OVERDUE tier + count. D6 the Car drawer stays. D7 drop the prototype's notif-toggles / bank-connect / export from Settings. D8 goal **tile** = progress bar, **drawer** keeps the bright-line viz; retone system-wide; mono widened to all numerals.
+- **Data touchpoints (additive-only).** (a) **Love-notes — appliance-local, not the Sheet:** one ephemeral note per direction (text|voice), 24h-or-on-replace expiry, over a small authenticated dashboard→appliance endpoint — the **first dashboard datum that is neither the Sheet nor the outbox**. The voice memo is the **bounded unfreeze** of the §4 voice-capture frozen lane (≤24h, appliance-local, the one stored-media exception). (b) **Snooze → col D as an absolute date** — settle the col-D format in Lane C (§2 rank 5) first so the engine round-trips it; an absolute future date clears OVERDUE cleanly (which +N could not on an already-overdue row). (c) **Timeline** needs a milestone-inclusion rule + a Domain→{finance,health,car,edu} map; no new tab.
+- **Policy.** Love-notes have **no push** → no alert-budget spend, no new channel to phones (the note shows on the recipient's next open); the outbox stays the sole alert path. Two-adults-only, parents-only (no kid UI), partner-symmetric (each sends/receives). Switch-account keeps `LastDoneBy` truthful via the live OAuth session (both adults are editors on the one sheet + UserMap entries).
+- **Acceptance.** Each slice ships tests-green and its DESIGN/SPEC sections **graduate to present-tense** as it lands. The DESIGN §9 smoke passes on the rebuilt Today; AA holds on both surfaces (the prototype's amber pill + muted text failed → the darkened `--amber #8A5E12` / `--muted #5F6878` are the fixes); RTL + EN-fallback intact (every new chrome string in `STRINGS` he+en); love-note round-trips with the 24h sweep; an overdue row snoozed to a future date leaves OVERDUE.
+- **Build sequence.** V3.1 token retone (`styles.css` + font link; reconcile names with the existing `--border`/`--font-mono`) → V3.2 scaffold + 3-tier pill → V3.3 desk + coming-up + absolute snooze (via `applyWrites`/tombstone) → V3.4 calendar → V3.5 portfolios + bottom-sheet (Money hero, Health avatars w/ **non-color** urgency, Goals bar+bright-line, Car, Contracts) → V3.6 timeline → V3.7 love-notes (appliance endpoint + UI; **text first, voice second**) → V3.8 i18n + a11y + Settings (add switch-account; drop the 3 cut controls) → V3.9 milestone review (`review.py`) + close.
+- **Dependencies.** Lane C (§2 rank 5) first (settles col-D). The love-note endpoint is the one appliance-side (server) piece. A full UI rebuild is **L–XL** — see the window call below.
+- **Open PO calls.** **Window (the big one):** the roadmap holds v1 **boring/stable until ~07-13** (30 days from `v1-live`); a Today-surface rebuild is a significant change — **build now, or after the hold?** · Timeline milestone-inclusion rule + Domain→category map. · Love-note audio: where it's stored on the appliance + the sweep mechanism. · Does account-switch need UI beyond reusing the sign-in flow?
+
 ---
 
 ## 4. Decisions & open questions carried forward
@@ -138,6 +152,9 @@ The now→06-26 work. Each item is small, low-risk, needs no new live data, and 
 - The three phantom DESIGN components → **removed from the project**.
 - Spec-ahead lives here in **ROADMAP.md** (5th canon doc).
 - ~30 doc-vs-code drift reconciliations across SPEC/ENGINEERING/DESIGN/README + code one-liners (see git history / `BACKLOG.md`).
+
+**Landed 2026-06-25:**
+- **v3 Today redesign decided** — 8 design calls co-signed (Adar + Shanee) after an 8-dimension adversarial review of a hi-fi prototype handoff. Captured as forward lane §3.8 + `V3_RECONCILE.md` (decision record + design tokens). Build not started; **window is an open PO call** (now vs after the boring-hold ~07-13). The first canon fold was mistakenly written against a stale base and discarded (the redesign reviewed while origin raced ahead with M6.5); this is the clean placement.
 
 **Open PO calls before / at the 06-26 gate:**
 - **Define the classifier-accuracy PASS THRESHOLD** (e.g. ALERT-tier FP < 1/week = accept; ≥ that = narrow patterns and re-run) *before* 06-26, so the milestone close isn't a judgment call on ambiguous ground.
