@@ -72,27 +72,45 @@
 
     <div id="stale-badge" class="stale-badge" hidden></div>
 
-    <!-- TODAY view -->
+    <!-- TODAY view — V3.2 scaffold. Vertical order is the signed v3 IA
+         (V3_RECONCILE): pill · love-note · calendar · desk · coming-up ·
+         portfolios. Each slot below wraps its LEGACY render target so the
+         existing renderers stay green this slice; V3.3–V3.7 swap the innards
+         slot-by-slot. -->
     <section class="view active" id="view-today">
-      <div id="status-pill" class="status-pill" hidden><span id="status-pill-text"></span></div>
-      <div id="banner" class="banner clear" data-i18n="state.loading">Loading…</div>
-
-      <div class="section">
-        <h2 data-i18n="section.todayList">Today</h2>
-        <div id="today-list"></div>
+      <!-- 3-tier status pill (replaces the old pill + the status banner). Starts
+           in the loading tier so it never reads as a premature "all clear";
+           renderStatusPill sets data-tier + glyph/count/label once data lands.
+           Tier is conveyed by color + count + label (never color-only). -->
+      <div id="status-pill" class="status-pill" data-tier="loading" role="status" aria-live="polite">
+        <span class="pill-glyph" id="status-pill-glyph" aria-hidden="true"></span>
+        <span class="pill-count num" id="status-pill-count" hidden></span>
+        <span class="pill-label" id="status-pill-text" data-i18n="state.loading">Loading…</span>
       </div>
 
-      <div class="section">
+      <!-- Love-note slot (V3.7) — empty + hidden until there's an inbound note. -->
+      <div id="love-note-slot" hidden></div>
+
+      <!-- Calendar slot (V3.4 → 3-day scroll-snap strip) — holds today's calendar for now. -->
+      <div id="calendar-slot" class="section">
         <h2 data-i18n="section.todayCalendar">Today's calendar</h2>
         <div id="today-cal"></div>
       </div>
 
-      <div class="section">
+      <!-- Desk slot (V3.3 → select-to-act desk) — holds the OVERDUE/today list for now. -->
+      <div id="desk" class="section">
+        <h2 data-i18n="section.todayList">Today</h2>
+        <div id="today-list"></div>
+      </div>
+
+      <!-- Coming-up slot (V3.3 → coming-up strip) — holds the next-7 list for now. -->
+      <div id="coming-up" class="section">
         <h2 data-i18n="section.next7">Next 7 days</h2>
         <div id="next7-list"></div>
       </div>
 
-      <div class="section">
+      <!-- Portfolios slot (V3.5 → tiles + bottom-sheet) — holds the domain drawers for now. -->
+      <div id="portfolios" class="section">
         <h2 data-i18n="section.domains">Domains</h2>
         <div class="drawer" data-drawer="money">
           <div class="drawer-toggle">

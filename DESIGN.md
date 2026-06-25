@@ -40,21 +40,20 @@ Semantic colors appear only on status; the accent is the single brand color. No 
 
 ### Components
 
-- **Status banner**: one line — red if any overdue, amber if any fire-today, sage "all clear" otherwise.
+- **3-tier status pill** (Today view, sticky; *v3, V3.2 — replaced the old status banner + plain pill*): a single signal, always visible (clear is a resting state, never hidden). Tier by priority `overdue` (red) > `today` (amber) > `clear` (sage), rendered as a decorative glyph + a **mono count** + a **text label** (`{n}` `overdue` / `{n}` `due today` / `Nothing urgent` / `Sunday briefing ready` on Sundays) — never color-only: the count + label carry the meaning. A `loading` tier holds first paint so it never reads as a premature "all clear". One signal at a time — our budget-friendly stand-in for OS-level notifications.
 - **Reminder row**: flag dot · title · due phrase; tap reveals `✓ done` `+Nd` `note` pills. Snooze pills: 1/3/7/14/30.
 - **Domain drawers** (Money/Health/Goals/Car/Contracts): closed = one big KPI + sparkline; open = detail list.
 - **Bright-line goal viz**: target line + actual line + safety band (ahead/on-pace/behind) for multi-year goals — progress bars are banned for anything >90 days.
 - **Stale-data badge**: shown only when a live load fails and a cache exists — `לא מקוון — נתונים מ-{when}`. There is no positive "live" indicator; the pending-write count lives in Settings → queue inspector.
-- **Sticky status pill** (Today view): a single highest-priority one-liner — `{n} overdue` / `{n} due today` / `Sunday briefing ready` (one signal at a time, by priority) — our budget-friendly stand-in for OS-level notifications.
 
 ## 3. Information architecture (Today-first)
 
 ```
 Today (home)
-├── Header: Family inc. · date · sticky status pill (Today view)
-├── Banner (overdue / today / all-clear)
-├── TODAY — reminders where Auto-flag ∈ {OVERDUE, FIRE TODAY}
+├── Header: Family inc. · date
+├── 3-tier status pill (sticky) — overdue (red) / today (amber) / clear (sage); loading tier on first paint
 ├── CALENDAR — today's Calendar-Events
+├── TODAY — reminders where Auto-flag ∈ {OVERDUE, FIRE TODAY}
 ├── NEXT 7 DAYS — week-out reminders + events
 └── ▸ Drawers: Money · Health · Goals · Car · Contracts
 Sunday tab — a live week-ahead view computed from the Sheet (week ahead · reminders this week · overdue · Money · Goals · data hygiene), NOT the rendered weekly-briefing markdown
@@ -65,11 +64,11 @@ Today-first wins the 8 AM glance; tiles demote to drawers; the Sunday week-ahead
 
 ## 4. States
 
-- **Loading**: a `Loading…` banner while the first `batchGet` is in flight; header/tabs are real from t=0; lists render once data arrives (cached snapshot first if present, then live). No skeleton or shimmer.
-- **Quiet day**: the banner shows sage "all clear" and TODAY renders "(nothing urgent)". The screen is never blank.
+- **Loading**: the status pill shows its neutral `loading` tier (`Loading…`) while the first `batchGet` is in flight — never a premature "all clear"; header/tabs are real from t=0; lists render once data arrives (cached snapshot first if present, then live). No skeleton or shimmer.
+- **Quiet day**: the status pill shows the sage `clear` tier (`Nothing urgent`, or `Sunday briefing ready` on Sundays) and TODAY renders "(nothing urgent)". The screen is never blank.
 - **Offline**: a one-shot toast confirms each queued write; the stale-data badge shows if the view was served from cache; rows keep working and re-render optimistically (the pending-write count is in Settings). **Buttons never disable offline.**
 - **Write failure (online)**: optimistic UI rolls back; inline "Couldn't save — retry?"; token expiry → silent refresh once, then a re-sign-in banner.
-- **Back from vacation (30 overdue)**: top 10 by due date + "+20 more" expander; the banner offers bulk-done multi-select, with zero commentary.
+- **Back from vacation (30 overdue)**: top 10 by due date + "+20 more" expander; bulk-done multi-select lands with the V3.3 select-to-act desk, with zero commentary.
 
 ## 5. Interaction contract (write-back)
 
@@ -147,7 +146,7 @@ Tap targets ≥44px; contrast AA against both surfaces (the muted zinc fails on 
 
 ## 9. Manual smoke checklist (per dashboard deploy)
 
-1. Cold load <1s on phone over LTE; the `Loading…` banner gives way to live lists without layout shift.
+1. Cold load <1s on phone over LTE; the `Loading…` pill gives way to live lists without layout shift.
 2. Hebrew default renders RTL with no mirrored numerals; the toggle flips chrome only.
 3. Mark done online → row clears, the Sheet shows M/N/O stamped.
 4. Airplane mode → tap done → a queued toast shows → reconnect → flush; the engine log shows a tombstone skip if within the window.
@@ -156,3 +155,4 @@ Tap targets ≥44px; contrast AA against both surfaces (the muted zinc fails on 
 7. Offline, tap until the queue hits 50 → a one-shot "queue full" warning shows; further taps don't grow the queue; reconnect → flush re-arms the warning.
 8. (bridge) A 1:1 message to the bridge number from a known sender is logged to `replies.jsonl` but gets **no reply/ack** (reply-parsing is v1.1, SPEC §7.4); an unknown 1:1 sender is dropped.
 9. (V3.1 retone) Cold load shows the cool palette (`--bg #EBEEF2`, `--accent #2C57C8`) and IBM Plex Mono numerals with no Geist FOUC; amber/muted text clears AA on both surfaces; Sunday + Settings inherit the palette with no layout shift; the longest `₪` amount + the drawer KPI row don't wrap under the new mono metrics.
+10. (V3.2 pill) The Today status pill shows exactly one tier by priority — red `overdue` + mono count when any overdue, else amber `due today` + count, else sage `Nothing urgent` (or `Sunday briefing ready` on Sundays); first paint shows the neutral `loading` tier (never a premature "all clear"); the tier reads from the count + label, not color alone; the pill is always visible (clear is a resting state) and resolves with no layout shift.

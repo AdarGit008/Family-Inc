@@ -38,14 +38,11 @@
       'drawer.car': 'רכב',
       'drawer.contracts': 'מנויים וחוזים',
       'drawer.education': 'חינוך',
-      // Banner
-      'banner.allClear': '✅ אין דברים דחופים',
-      'banner.overdueAndToday': '🔴 {overdue} באיחור · 🟠 {today} להיום',
-      'banner.overdueOnly': '🔴 {overdue} באיחור',
-      'banner.todayOnly': '🟠 {today} להיום',
-      // Status pill
-      'pill.overdue': '{n} באיחור',
-      'pill.dueToday': '{n} להיום',
+      // Status pill (3-tier; V3.2 replaced the status banner). Labels are
+      // count-free — the count renders as its own mono span beside the label.
+      'pill.overdue': 'באיחור',
+      'pill.dueToday': 'להיום',
+      'pill.allClear': 'אין דברים דחופים',
       'pill.sundayReady': 'סיכום ראשון מוכן',
       // Row actions
       'row.done': '✓ בוצע',
@@ -160,12 +157,9 @@
       'drawer.car': 'Car',
       'drawer.contracts': 'Subscriptions & contracts',
       'drawer.education': 'Education',
-      'banner.allClear': '✅ Nothing urgent',
-      'banner.overdueAndToday': '🔴 {overdue} overdue · 🟠 {today} due today',
-      'banner.overdueOnly': '🔴 {overdue} overdue',
-      'banner.todayOnly': '🟠 {today} due today',
-      'pill.overdue': '{n} overdue',
-      'pill.dueToday': '{n} due today',
+      'pill.overdue': 'overdue',
+      'pill.dueToday': 'due today',
+      'pill.allClear': 'Nothing urgent',
       'pill.sundayReady': 'Sunday briefing ready',
       'row.done': '✓ done',
       'row.snooze': '+ snooze',
@@ -635,6 +629,22 @@
     });
   }
 
+  // V3.2 forward seam (consumed by V3.4's 3-day calendar): collapse a candle-
+  // lighting Calendar-Events row to the canonical source token 'shabbat' so the
+  // calendar can tag it (🕯) without re-deriving. No-op on current data — candle-
+  // lighting is a digest-only Hebcal line (automation/daily_digest.py), not a
+  // Calendar-Events row — so this only fires if such a row is ever added. Matched
+  // PRECISELY, not broadly: only an explicit 'shabbat' Source token OR a candle-
+  // lighting title. NOT the generic 'hebcal' feed marker (it would mis-tag every
+  // chag/parsha/omer row) and NOT the bare word 'שבת' (would over-tag a Shabbat-
+  // dinner event).
+  const _SHABBAT_SOURCE_RE = /\bshabbat\b/i;
+  const _SHABBAT_TITLE_RE = /הדלקת נרות|candle[\s-]?lighting/i;
+  function normalizeCalendarSource(rawSource, title) {
+    if (_SHABBAT_SOURCE_RE.test(rawSource) || _SHABBAT_TITLE_RE.test(title)) return 'shabbat';
+    return rawSource;
+  }
+
   function parseAll(named) {
     const reminders = rowsToObjects(named.reminders).map(r => {
       const due = parseDate(r['Due Date']);
@@ -660,17 +670,20 @@
         writeQueueTombstone: parseDate(r['WriteQueue_Tombstone']),
       };
     });
-    const calendarEvents = rowsToObjects(named.calendarEvents).map(r => ({
-      _row: r._row,
-      date: parseDate(r['Date']),
-      start: r['Start'] || '',
-      end: r['End'] || '',
-      title: r['Title'] || '',
-      owner: r['Owner'] || '',
-      source: r['Source'] || '',
-      location: r['Location'] || '',
-      notes: r['Notes'] || '',
-    }));
+    const calendarEvents = rowsToObjects(named.calendarEvents).map(r => {
+      const title = r['Title'] || '';
+      return {
+        _row: r._row,
+        date: parseDate(r['Date']),
+        start: r['Start'] || '',
+        end: r['End'] || '',
+        title,
+        owner: r['Owner'] || '',
+        source: normalizeCalendarSource(r['Source'] || '', title),
+        location: r['Location'] || '',
+        notes: r['Notes'] || '',
+      };
+    });
     const people = rowsToObjects(named.people);
     // Settings tab (SPEC §6.4): Key|Value rows — keys containing '@' build
     // UserMap (email → display name); key 'lang' is the chrome default.
@@ -750,7 +763,6 @@
     // either language.
     const _hdrLocale = currentLang() === 'en' ? 'en-GB' : 'he-IL';
     document.getElementById('header-date').textContent = state.today.toLocaleDateString(_hdrLocale, { weekday: 'long', day: 'numeric', month: 'long' });
-    renderBanner();
     renderStatusPill();
     renderToday();
     renderTodayCalendar();
@@ -761,32 +773,52 @@
   }
 
   // ---------------- Status pill ----------------
-  function setStatusPill(text) {
+  // Shared count helper (V3.2). The status pill consumes it now; V3.3's desk
+  // reuses the same numbers (deskCount = overdue + fire-today) so the pill and
+  // the desk can never disagree. Reads the parsed r.flag, exactly as the deleted
+  // inline banner/pill filters did.
+  function computeCounts() {
+    const r = (state.data && state.data.reminders) || [];
+    const overdue = r.filter(x => x.flag === 'OVERDUE').length;
+    const today = r.filter(x => x.flag === 'FIRE TODAY').length;
+    return { overdue, today, deskCount: overdue + today };
+  }
+
+  // The pill is a single 3-tier signal (overdue > today > clear), always visible
+  // (clear is a resting state, never hidden) — plus a loading tier before data
+  // lands so it never reads as a premature "all clear". data-tier carries color;
+  // the count + label carry the meaning (never color-only, DESIGN §8). The glyph
+  // is decorative (aria-hidden in the markup); the count is a mono span.
+  function setStatusPill({ tier, glyph = '', count = null, label = '' }) {
     const pill = document.getElementById('status-pill');
-    const txt = document.getElementById('status-pill-text');
-    if (!pill || !txt) return;
-    if (!text) {
-      pill.hidden = true;
-      txt.textContent = '';
-      return;
+    const glyphEl = document.getElementById('status-pill-glyph');
+    const countEl = document.getElementById('status-pill-count');
+    const labelEl = document.getElementById('status-pill-text');
+    if (!pill || !glyphEl || !countEl || !labelEl) return;
+    pill.setAttribute('data-tier', tier);
+    glyphEl.textContent = glyph;
+    glyphEl.hidden = !glyph;   // an empty glyph must not reserve a flex gap (loading tier)
+    if (count == null) {
+      countEl.hidden = true;
+      countEl.textContent = '';
+    } else {
+      countEl.hidden = false;
+      countEl.textContent = String(count);
     }
-    txt.textContent = text;
-    pill.hidden = false;
+    labelEl.textContent = label;
   }
   function renderStatusPill() {
-    const r = state.data.reminders;
-    const overdue = r.filter(x => x.flag === 'OVERDUE').length;
-    const todayCount = r.filter(x => x.flag === 'FIRE TODAY').length;
-    const dow = state.today.getDay(); // 0 = Sunday
-    let msg = '';
+    if (!state.data) { setStatusPill({ tier: 'loading', label: t('state.loading') }); return; }
+    const { overdue, today } = computeCounts();
     if (overdue > 0) {
-      msg = t('pill.overdue', { n: overdue });
-    } else if (todayCount > 0) {
-      msg = t('pill.dueToday', { n: todayCount });
-    } else if (dow === 0) {
-      msg = t('pill.sundayReady');
+      setStatusPill({ tier: 'overdue', glyph: '🔴', count: overdue, label: t('pill.overdue') });
+    } else if (today > 0) {
+      setStatusPill({ tier: 'today', glyph: '🟠', count: today, label: t('pill.dueToday') });
+    } else if (state.today.getDay() === 0) { // Sunday — clear tier, briefing-ready label
+      setStatusPill({ tier: 'clear', glyph: '✅', label: t('pill.sundayReady') });
+    } else {
+      setStatusPill({ tier: 'clear', glyph: '✅', label: t('pill.allClear') });
     }
-    setStatusPill(msg);
   }
 
   // ---------------- Sparkline + KPI ----------------
@@ -849,26 +881,6 @@
       <polyline class="actual-line" points="0,${yA0} ${xNow},${yA1}" />
       <circle class="now-dot" cx="${xNow}" cy="${yA1}" r="2" />
     `;
-  }
-
-  function renderBanner() {
-    const r = state.data.reminders;
-    const overdue = r.filter(x => x.flag === 'OVERDUE').length;
-    const today = r.filter(x => x.flag === 'FIRE TODAY').length;
-    const banner = document.getElementById('banner');
-    if (overdue > 0 && today > 0) {
-      banner.className = 'banner alert';
-      banner.textContent = t('banner.overdueAndToday', { overdue, today });
-    } else if (overdue > 0) {
-      banner.className = 'banner alert';
-      banner.textContent = t('banner.overdueOnly', { overdue });
-    } else if (today > 0) {
-      banner.className = 'banner warn';
-      banner.textContent = t('banner.todayOnly', { today });
-    } else {
-      banner.className = 'banner clear';
-      banner.textContent = t('banner.allClear');
-    }
   }
 
   function renderToday() {
