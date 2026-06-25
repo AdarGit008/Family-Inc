@@ -111,58 +111,13 @@
         <div id="next7-list"></div>
       </div>
 
-      <!-- Portfolios slot (V3.5 → tiles + bottom-sheet) — holds the domain drawers for now. -->
+      <!-- Portfolios slot (V3.5) — a grid of domain TILES that open one shared,
+           data-driven bottom-sheet on tap (renderPortfolios builds the faces,
+           buildSheet the sheet body). Education has no Today tile (its data folds
+           into the V3.6 timeline); Timeline's tile lands with its sheet in V3.6. -->
       <div id="portfolios" class="section">
         <h2 data-i18n="section.domains">Domains</h2>
-        <div class="drawer" data-drawer="money">
-          <div class="drawer-toggle">
-            <span class="drawer-label"><span class="drawer-name" data-i18n="drawer.money">Money</span><span id="money-summary" class="row-meta"></span></span>
-            <span class="kpi" id="money-kpi"></span>
-            <svg class="sparkline" id="money-spark" viewBox="0 0 80 24"></svg>
-          </div>
-          <div class="drawer-body" id="money-body"></div>
-          <div class="drawer-body" id="money-recent-txns" style="border-top:1px solid var(--border,#333);margin-top:4px;padding-top:4px"></div>
-        </div>
-        <div class="drawer" data-drawer="health">
-          <div class="drawer-toggle">
-            <span class="drawer-label"><span class="drawer-name" data-i18n="drawer.health">Health</span><span id="health-summary" class="row-meta"></span></span>
-            <span class="kpi" id="health-kpi"></span>
-            <svg class="sparkline" id="health-spark" viewBox="0 0 80 24"></svg>
-          </div>
-          <div class="drawer-body" id="health-body"></div>
-        </div>
-        <div class="drawer" data-drawer="goals">
-          <div class="drawer-toggle">
-            <span class="drawer-label"><span class="drawer-name" data-i18n="drawer.goals">Goals</span><span id="goals-summary" class="row-meta"></span></span>
-            <span class="kpi" id="goals-kpi"></span>
-            <svg class="sparkline" id="goals-spark" viewBox="0 0 80 24"></svg>
-          </div>
-          <div class="drawer-body" id="goals-body"></div>
-        </div>
-        <div class="drawer" data-drawer="car">
-          <div class="drawer-toggle">
-            <span class="drawer-label"><span class="drawer-name" data-i18n="drawer.car">Car</span><span id="car-summary" class="row-meta"></span></span>
-            <span class="kpi" id="car-kpi"></span>
-            <svg class="sparkline" id="car-spark" viewBox="0 0 80 24"></svg>
-          </div>
-          <div class="drawer-body" id="car-body"></div>
-        </div>
-        <div class="drawer" data-drawer="contracts">
-          <div class="drawer-toggle">
-            <span class="drawer-label"><span class="drawer-name" data-i18n="drawer.contracts">Contracts</span><span id="contracts-summary" class="row-meta"></span></span>
-            <span class="kpi" id="contracts-kpi"></span>
-            <svg class="sparkline" id="contracts-spark" viewBox="0 0 80 24"></svg>
-          </div>
-          <div class="drawer-body" id="contracts-body"></div>
-        </div>
-        <div class="drawer" data-drawer="education">
-          <div class="drawer-toggle">
-            <span class="drawer-label"><span class="drawer-name" data-i18n="drawer.education">Education</span><span id="education-summary" class="row-meta"></span></span>
-            <span class="kpi" id="education-kpi"></span>
-            <svg class="sparkline" id="education-spark" viewBox="0 0 80 24"></svg>
-          </div>
-          <div class="drawer-body" id="education-body"></div>
-        </div>
+        <div id="portfolio-grid" class="portfolio-grid"></div>
       </div>
     </section>
 
@@ -257,6 +212,20 @@
       <button data-tab="settings" data-i18n="tabbar.settings">Settings</button>
     </nav>
   </div>
+
+  <!-- Bottom-sheet (V3.5) — ONE shared, data-driven drawer; opened per domain by
+       openSheet(). role=dialog + aria-modal; Esc / scrim / close dismiss; focus is
+       trapped while open and returned to the launching tile on close. -->
+  <div id="sheet-scrim" class="sheet-scrim" hidden></div>
+  <aside id="sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <header class="sheet-head">
+      <h2 id="sheet-title" class="sheet-title"></h2>
+      <span class="kpi num" id="sheet-kpi"></span>
+      <button id="sheet-close" class="sheet-close" type="button" aria-label="Close">✕</button>
+    </header>
+    <div id="sheet-body" class="sheet-body"></div>
+  </aside>
 
   <div id="toast" class="toast"></div>
 

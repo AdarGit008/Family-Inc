@@ -69,6 +69,9 @@
       'cal.allDay': 'כל היום',
       'cal.today': 'היום',
       'cal.tomorrow': 'מחר',
+      // Portfolio bottom-sheet
+      'sheet.close': 'סגור',
+      'sheet.recentTxns': 'עסקאות אחרונות',
       // Car field labels
       'car.annualTest': 'טסט שנתי',
       'car.insurance': 'ביטוח',
@@ -185,6 +188,8 @@
       'cal.allDay': 'all day',
       'cal.today': 'Today',
       'cal.tomorrow': 'Tomorrow',
+      'sheet.close': 'Close',
+      'sheet.recentTxns': 'Recent transactions',
       'car.annualTest': 'Annual test',
       'car.insurance': 'Insurance',
       'car.license': 'License',
@@ -302,6 +307,9 @@
     tokenClient: null,
     gapiReady: false,
     gisReady: false,
+    activeSheet: null,        // domain key of the open bottom-sheet, or null
+    sheetReturnFocus: null,   // domain key whose tile regains focus on close (NOT a
+                              // node ref — a bg reload rebuilds the grid; re-resolve live)
   };
 
   // ---------------- Utilities ----------------
@@ -771,7 +779,7 @@
     renderToday();
     render3DayCalendar();
     renderNext7();
-    renderDrawers();
+    renderPortfolios();
     renderSunday();
     renderSettings();
   }
@@ -1036,124 +1044,289 @@
   }
 
   // ---------------- Drawers ----------------
-  function renderDrawers() {
-    // Money
-    const totalTarget = state.data.budget.reduce((s, b) => s + b.target, 0);
-    const totalActual = state.data.budget.reduce((s, b) => s + b.actual, 0);
-    const overBudget = state.data.budget.filter(b => b.pct > 1.0);
-    document.getElementById('money-summary').textContent = `${formatILS(totalActual)} / ${formatILS(totalTarget)}${overBudget.length ? ` · ${t('summary.over', { n: overBudget.length })}` : ''}`;
-    document.getElementById('money-body').innerHTML = state.data.budget.map(b => `
-      <div class="kv"><span>${escapeHtml(b.category)}</span><span class="v">${amountHtml(b.actual)} / ${amountHtml(b.target)} (${Math.round(b.pct * 100)}%)</span></div>
-    `).join('') || `<div class="empty">${escapeHtml(t('empty.noBudget'))}</div>`;
+  // ---------------- Portfolios + bottom-sheet ----------------
+  // V3.5: the six domain accordions become a grid of portfolio TILES (glanceable
+  // faces) that open ONE shared, data-driven bottom-sheet on tap — never six
+  // panels. Money is the hero (overall-% donut + category bar + 7-day sparkline);
+  // Health shows initials-avatars with non-color urgency; Goals a simple % bar
+  // (the bright-line lives in the sheet, D8); Car/Contracts a next-date count.
+  // Education has no Today tile (its data stays parsed, folds into the V3.6
+  // timeline). Tiles are <button>s (native keyboard + role); status is never
+  // color-only — text + glyph carry it (DESIGN §8).
+  function renderPortfolios() {
+    const grid = document.getElementById('portfolio-grid');
+    if (!grid) return;
+    grid.innerHTML = [moneyTile(), healthTile(), goalsTile(), carTile(), contractsTile()].join('');
+    // The money sparkline needs a live <svg> (renderSparkline writes into it).
+    renderSparkline(document.getElementById('money-tile-spark'), txnTrend7d());
+    grid.querySelectorAll('.tile[data-portfolio]').forEach(tile => {
+      tile.addEventListener('click', () => openSheet(tile.dataset.portfolio));
+    });
+    // A sheet left open across a background reload rebuilds from fresh state.
+    if (state.activeSheet) refreshSheetBody();
+  }
 
-    // D4: Surface recent transactions (last 10) below the budget breakdown.
-    const recentTxns = (state.data.txns || [])
-      .filter(tx => tx.date && isSpendTxn(tx))
-      .sort((a, b) => b.date - a.date)
-      .slice(0, 10);
-    const txnHtml = recentTxns.map(tx => `
-      <div class="kv"><span>${escapeHtml(formatDateHE(tx.date))} · ${escapeHtml(tx.desc || tx.account || '')}</span><span class="v">${amountHtml(tx.amount)}</span></div>
-    `).join('');
-    const recentEl = document.getElementById('money-recent-txns');
-    if (recentEl) {
-      recentEl.innerHTML = txnHtml || `<div class="empty">${escapeHtml(t('empty.noRecentTxns'))}</div>`;
-    }
-
-    // Money KPI: % of monthly target. Sparkline: last 7 days of txn totals.
-    const moneyPct = totalTarget ? Math.round(100 * totalActual / totalTarget) : null;
-    renderKpi('money', moneyPct == null ? '' : `${moneyPct}%`, moneyPct != null && moneyPct > 100 ? 'neg' : 'pos');
-    renderSparkline(document.getElementById('money-spark'), txnTrend7d());
-
-    // Health (next 60d)
-    const upcomingHealth = state.data.health
+  // ---- domain selectors (shared by the tile face + the sheet body) ----
+  function upcomingHealth() {
+    return state.data.health
       .filter(h => h.nextDue && daysBetween(h.nextDue, state.today) <= 60 && daysBetween(h.nextDue, state.today) >= -30)
       .sort((a, b) => a.nextDue - b.nextDue);
-    document.getElementById('health-summary').textContent = upcomingHealth.length ? t('summary.upcoming', { n: upcomingHealth.length }) : t('state.allGood');
-    document.getElementById('health-body').innerHTML = upcomingHealth.map(h => `
-      <div class="kv"><span>${escapeHtml(h.person)} · ${escapeHtml(h.specialty || h.provider || '')}</span><span class="v">${escapeHtml(formatDateHE(h.nextDue))}</span></div>
-    `).join('') || `<div class="empty">${escapeHtml(t('empty.next60Days'))}</div>`;
-    renderKpi('health', upcomingHealth.length ? String(upcomingHealth.length) : '', upcomingHealth.length ? 'neg' : 'pos');
-    // No numeric trend for health — leave sparkline empty.
-    renderSparkline(document.getElementById('health-spark'), null);
-
-    // Goals
-    document.getElementById('goals-summary').textContent = t('summary.active', { n: state.data.goals.length });
-    document.getElementById('goals-body').innerHTML = state.data.goals.map((g, i) => {
-      const pctTimeElapsed = goalPctTimeElapsed(g);
-      return `
-      <div class="kv goal-kv" data-goal-idx="${i}"><span>${escapeHtml(g.goal)} <span class="row-meta">· ${escapeHtml(g.owner || '')}</span></span><span class="v">${g.pct}%</span></div>
-      <svg class="goal-line" id="goal-line-${i}" viewBox="0 0 100 40" preserveAspectRatio="none"></svg>
-      ${g.milestone ? `<div class="row-note" style="margin: -2px 0 6px">${escapeHtml(t('label.next'))} ${escapeHtml(g.milestone)}</div>` : ''}
-    `;
-    }).join('') || `<div class="empty">${escapeHtml(t('empty.noGoals'))}</div>`;
-    // After insertion, draw each goal-line.
-    state.data.goals.forEach((g, i) => {
-      const svg = document.getElementById(`goal-line-${i}`);
-      if (svg) renderGoalLine(svg, {
-        targetStart: 0,
-        targetEnd: 100,
-        current: g.pct,
-        pctTimeElapsed: goalPctTimeElapsed(g),
-      });
-    });
-    const avgPct = state.data.goals.length ? Math.round(state.data.goals.reduce((s, g) => s + (g.pct || 0), 0) / state.data.goals.length) : null;
-    renderKpi('goals', avgPct == null ? '' : `${avgPct}%`, 'pos');
-    renderSparkline(document.getElementById('goals-spark'), state.data.goals.length ? state.data.goals.map(g => g.pct || 0) : null);
-
-    // Car
-    const car = state.data.car[0];
-    if (car) {
-      const items = [
-        [t('car.annualTest'), car.test],
-        [t('car.insurance'), car.insurance],
-        [t('car.license'), car.license],
-      ].filter(([, d]) => d).map(([k, d]) => `<div class="kv"><span>${escapeHtml(k)}</span><span class="v">${escapeHtml(formatDateHE(d))} (${duePhrase(daysBetween(d, state.today))})</span></div>`);
-      const nextDate = [car.test, car.insurance, car.license].filter(Boolean).sort((a, b) => a - b)[0];
-      const next = nextDate ? `${t('label.next')} ${formatDateHE(nextDate)}` : '—';
-      document.getElementById('car-summary').textContent = next;
-      document.getElementById('car-body').innerHTML = items.join('');
-      // KPI: days to next test (or any next milestone).
-      if (nextDate) {
-        const days = daysBetween(nextDate, state.today);
-        renderKpi('car', `${days}d`, days < 14 ? 'neg' : 'pos');
-      } else {
-        renderKpi('car', '', null);
-      }
-    } else {
-      document.getElementById('car-summary').textContent = '—';
-      document.getElementById('car-body').innerHTML = `<div class="empty">${escapeHtml(t('empty.noVehicle'))}</div>`;
-      renderKpi('car', '', null);
-    }
-    renderSparkline(document.getElementById('car-spark'), null);
-
-    // Contracts (renewals within 60d)
-    const renewals = state.data.contracts
+  }
+  function upcomingRenewals() {
+    return state.data.contracts
       .filter(c => c.renewal && daysBetween(c.renewal, state.today) <= 60 && daysBetween(c.renewal, state.today) >= -30)
       .sort((a, b) => a.renewal - b.renewal);
-    document.getElementById('contracts-summary').textContent = renewals.length ? t('summary.within60', { n: renewals.length }) : t('state.allGood');
-    document.getElementById('contracts-body').innerHTML = renewals.map(c => `
+  }
+  function moneyTotals() {
+    const b = state.data.budget;
+    const target = b.reduce((s, x) => s + x.target, 0);
+    const actual = b.reduce((s, x) => s + x.actual, 0);
+    return { target, actual, over: b.filter(x => x.pct > 1.0), pct: target ? Math.round(100 * actual / target) : 0 };
+  }
+  function carNextDate() {
+    const car = state.data.car[0];
+    if (!car) return null;
+    return [car.test, car.insurance, car.license].filter(Boolean).sort((a, b) => a - b)[0] || null;
+  }
+  function goalsAvgPct() {
+    const g = state.data.goals;
+    return g.length ? Math.round(g.reduce((s, x) => s + (x.pct || 0), 0) / g.length) : null;
+  }
+
+  // ---- tile faces ----
+  function moneyTile() {
+    const m = moneyTotals();
+    const status = m.over.length
+      ? `<span class="tile-flag" aria-hidden="true">▲</span> ${escapeHtml(t('summary.over', { n: m.over.length }))}`
+      : escapeHtml(t('state.allGood'));
+    return `<button class="tile tile-money" data-portfolio="money" type="button">
+      <div class="tile-head">
+        <span class="tile-name">${escapeHtml(t('drawer.money'))}</span>
+        <span class="tile-status${m.over.length ? ' is-warn' : ''}">${status}</span>
+      </div>
+      <div class="tile-money-viz">
+        ${donut(m.pct)}
+        <div class="tile-money-side">
+          <div class="tile-amount">${amountHtml(m.actual)} <span class="tile-amount-of">/ ${amountHtml(m.target)}</span></div>
+          ${catBar(state.data.budget)}
+          <svg class="sparkline" id="money-tile-spark" viewBox="0 0 80 24"></svg>
+        </div>
+      </div>
+    </button>`;
+  }
+  function healthTile() {
+    const up = upcomingHealth();
+    const status = up.length ? t('summary.upcoming', { n: up.length }) : t('state.allGood');
+    const avatars = up.slice(0, 5).map(healthAvatar).join('');
+    return `<button class="tile" data-portfolio="health" type="button">
+      <div class="tile-head">
+        <span class="tile-name">${escapeHtml(t('drawer.health'))}</span>
+        <span class="tile-status${up.length ? ' is-warn' : ''}">${escapeHtml(status)}</span>
+      </div>
+      <div class="avatar-row">${avatars || `<span class="tile-allgood" aria-hidden="true">✓</span>`}</div>
+    </button>`;
+  }
+  function goalsTile() {
+    const g = state.data.goals;
+    const avg = goalsAvgPct();
+    const status = t('summary.active', { n: g.length });
+    const body = g.length
+      ? `<div class="goal-bar" aria-hidden="true"><span class="goal-bar-fill" style="inline-size:${avg}%"></span></div>
+         <div class="tile-sub num">${avg}%</div>`
+      : `<div class="empty">${escapeHtml(t('empty.noGoals'))}</div>`;
+    return `<button class="tile" data-portfolio="goals" type="button">
+      <div class="tile-head">
+        <span class="tile-name">${escapeHtml(t('drawer.goals'))}</span>
+        <span class="tile-status">${escapeHtml(status)}</span>
+      </div>
+      ${body}
+    </button>`;
+  }
+  function carTile() {
+    const nd = carNextDate();
+    const days = nd ? daysBetween(nd, state.today) : null;
+    const warn = days != null && days < 14;
+    // Warn carries a glyph + a due PHRASE (overdue/today/soon) — never color alone.
+    // Pre-escaped here, so it's interpolated raw below.
+    const status = nd
+      ? (warn ? `<span class="tile-flag" aria-hidden="true">▲</span> ${escapeHtml(duePhrase(days))}`
+              : `${escapeHtml(t('label.next'))} ${escapeHtml(formatDateHE(nd))}`)
+      : '—';
+    return `<button class="tile" data-portfolio="car" type="button">
+      <div class="tile-head">
+        <span class="tile-name">${escapeHtml(t('drawer.car'))}</span>
+        <span class="tile-status${warn ? ' is-warn' : ''}">${status}</span>
+      </div>
+      <div class="tile-kpi num">${days != null ? Math.abs(days) + 'd' : '—'}</div>
+    </button>`;
+  }
+  function contractsTile() {
+    const n = upcomingRenewals().length;
+    const status = n ? t('summary.within60', { n }) : t('state.allGood');
+    return `<button class="tile" data-portfolio="contracts" type="button">
+      <div class="tile-head">
+        <span class="tile-name">${escapeHtml(t('drawer.contracts'))}</span>
+        <span class="tile-status${n ? ' is-warn' : ''}">${escapeHtml(status)}</span>
+      </div>
+      <div class="tile-kpi num">${n || '—'}</div>
+    </button>`;
+  }
+
+  // ---- tile viz primitives (all aria-hidden; meaning lives in the adjacent text) ----
+  // Single-ring donut: arc = pct of circumference; the % numeral inside carries the
+  // meaning (so the ring is non-color-only); >100% reads 'over' via numeral + ▲.
+  function donut(pct) {
+    const r = 26, c = 2 * Math.PI * r;
+    const frac = Math.max(0, Math.min(1, (pct || 0) / 100));
+    return `<svg class="donut${pct > 100 ? ' donut-over' : ''}" viewBox="0 0 64 64" aria-hidden="true">
+      <circle class="donut-track" cx="32" cy="32" r="${r}" />
+      <circle class="donut-fill" cx="32" cy="32" r="${r}" transform="rotate(-90 32 32)" stroke-dasharray="${(frac * c).toFixed(1)} ${c.toFixed(1)}" />
+      <text class="donut-pct" x="32" y="33" text-anchor="middle" dominant-baseline="middle">${Math.round(pct || 0)}%</text>
+    </svg>`;
+  }
+  // Proportional bar of the top categories by spend — informational, not urgency,
+  // so neutral fills are fine (over-budget is flagged with ▲ in the sheet).
+  function catBar(budget) {
+    const cats = (budget || []).filter(b => b.actual > 0).sort((a, b) => b.actual - a.actual).slice(0, 6);
+    if (!cats.length) return '';
+    const total = cats.reduce((s, b) => s + b.actual, 0) || 1;
+    const segs = cats.map((b, i) => `<span class="cat-seg cat-seg-${i % 4}" style="flex:${(b.actual / total).toFixed(3)}"></span>`).join('');
+    return `<div class="cat-bar" aria-hidden="true">${segs}</div>`;
+  }
+  // Initials avatar (NO photo — no stored media) + a non-color urgency badge: a
+  // glyph + a day-count (3 buckets: overdue / ≤14d / later), never color alone.
+  function healthAvatar(h) {
+    const initials = (h.person || '?').trim().slice(0, 2);
+    const d = daysBetween(h.nextDue, state.today);
+    const bucket = d < 0 ? 'over' : d <= 14 ? 'soon' : 'ok';
+    const glyph = { over: '🔴', soon: '⚠', ok: '·' }[bucket];
+    return `<span class="avatar avatar-${bucket}" title="${escapeHtml(h.person)}">
+      <span class="avatar-initials">${escapeHtml(initials)}</span>
+      <span class="avatar-badge"><span aria-hidden="true">${glyph}</span><span class="num">${Math.abs(d)}d</span></span>
+    </span>`;
+  }
+
+  // ---- the shared bottom-sheet body, per domain (reuses the accordions' detail
+  // logic: kv lists, recent-txns, the goal bright-line). Rebuilt on every open and
+  // on background reload — one instance, never six. ----
+  function buildSheet(domain) {
+    switch (domain) {
+      case 'money': return moneySheet();
+      case 'health': return healthSheet();
+      case 'goals': return goalsSheet();
+      case 'car': return carSheet();
+      case 'contracts': return contractsSheet();
+      default: return '';
+    }
+  }
+  function moneySheet() {
+    const budgetRows = state.data.budget.map(b => `
+      <div class="kv"><span>${escapeHtml(b.category)}${b.pct > 1.0 ? ' <span class="tile-flag" aria-hidden="true">▲</span>' : ''}</span><span class="v">${amountHtml(b.actual)} / ${amountHtml(b.target)} (${Math.round(b.pct * 100)}%)</span></div>
+    `).join('') || `<div class="empty">${escapeHtml(t('empty.noBudget'))}</div>`;
+    const recent = (state.data.txns || []).filter(tx => tx.date && isSpendTxn(tx)).sort((a, b) => b.date - a.date).slice(0, 10);
+    const txnRows = recent.map(tx => `
+      <div class="kv"><span>${escapeHtml(formatDateHE(tx.date))} · ${escapeHtml(tx.desc || tx.account || '')}</span><span class="v">${amountHtml(tx.amount)}</span></div>
+    `).join('') || `<div class="empty">${escapeHtml(t('empty.noRecentTxns'))}</div>`;
+    return `${budgetRows}<div class="sheet-sub">${escapeHtml(t('sheet.recentTxns'))}</div>${txnRows}`;
+  }
+  function healthSheet() {
+    return upcomingHealth().map(h => `
+      <div class="kv"><span>${escapeHtml(h.person)} · ${escapeHtml(h.specialty || h.provider || '')}</span><span class="v">${escapeHtml(formatDateHE(h.nextDue))}</span></div>
+    `).join('') || `<div class="empty">${escapeHtml(t('empty.next60Days'))}</div>`;
+  }
+  function goalsSheet() {
+    return state.data.goals.map((g, i) => `
+      <div class="kv"><span>${escapeHtml(g.goal)} <span class="row-meta">· ${escapeHtml(g.owner || '')}</span></span><span class="v num">${g.pct}%</span></div>
+      <svg class="goal-line" id="sheet-goal-line-${i}" viewBox="0 0 100 40" preserveAspectRatio="none"></svg>
+      ${g.milestone ? `<div class="row-note" style="margin:-2px 0 6px">${escapeHtml(t('label.next'))} ${escapeHtml(g.milestone)}</div>` : ''}
+    `).join('') || `<div class="empty">${escapeHtml(t('empty.noGoals'))}</div>`;
+  }
+  function drawSheetGoalLines() {
+    state.data.goals.forEach((g, i) => {
+      const svg = document.getElementById(`sheet-goal-line-${i}`);
+      if (svg) renderGoalLine(svg, { targetStart: 0, targetEnd: 100, current: g.pct, pctTimeElapsed: goalPctTimeElapsed(g) });
+    });
+  }
+  function carSheet() {
+    const car = state.data.car[0];
+    if (!car) return `<div class="empty">${escapeHtml(t('empty.noVehicle'))}</div>`;
+    const rows = [[t('car.annualTest'), car.test], [t('car.insurance'), car.insurance], [t('car.license'), car.license]]
+      .filter(([, d]) => d)
+      .map(([k, d]) => `<div class="kv"><span>${escapeHtml(k)}</span><span class="v">${escapeHtml(formatDateHE(d))} (${escapeHtml(duePhrase(daysBetween(d, state.today)))})</span></div>`)
+      .join('');
+    return rows || `<div class="empty">${escapeHtml(t('empty.noVehicle'))}</div>`;
+  }
+  function contractsSheet() {
+    return upcomingRenewals().map(c => `
       <div class="kv"><span>${escapeHtml(c.contract)} · ${escapeHtml(c.provider || '')}</span><span class="v">${escapeHtml(formatDateHE(c.renewal))}</span></div>
     `).join('') || `<div class="empty">${escapeHtml(t('empty.noRenewals'))}</div>`;
-    renderKpi('contracts', renewals.length ? String(renewals.length) : '', renewals.length ? 'neg' : 'pos');
-    renderSparkline(document.getElementById('contracts-spark'), null);
+  }
+  // Headline metric shown in the sheet head (reuses renderKpi).
+  function sheetKpi(domain) {
+    if (domain === 'money') { const m = moneyTotals(); return { value: m.target ? `${m.pct}%` : '', trend: m.pct > 100 ? 'neg' : 'pos' }; }
+    if (domain === 'health') { const n = upcomingHealth().length; return { value: n ? String(n) : '', trend: n ? 'neg' : 'pos' }; }
+    if (domain === 'goals') { const a = goalsAvgPct(); return { value: a == null ? '' : `${a}%`, trend: 'pos' }; }
+    if (domain === 'car') { const nd = carNextDate(); const d = nd ? daysBetween(nd, state.today) : null; return { value: d == null ? '' : `${d}d`, trend: d != null && d < 14 ? 'neg' : 'pos' }; }
+    if (domain === 'contracts') { const n = upcomingRenewals().length; return { value: n ? String(n) : '', trend: n ? 'neg' : 'pos' }; }
+    return { value: '', trend: null };
+  }
 
-    // Education
-    const eduUp = state.data.education
-      .filter(e => e.nextDate && daysBetween(e.nextDate, state.today) <= 60 && daysBetween(e.nextDate, state.today) >= -7)
-      .sort((a, b) => a.nextDate - b.nextDate);
-    document.getElementById('education-summary').textContent = eduUp.length ? t('summary.upcoming', { n: eduUp.length }) : t('state.allGood');
-    document.getElementById('education-body').innerHTML = eduUp.map(e => `
-      <div class="kv"><span>${escapeHtml(e.child)} · ${escapeHtml(e.type || '')}</span><span class="v">${escapeHtml(formatDateHE(e.nextDate))}</span></div>
-      ${e.action ? `<div class="row-note" style="margin:-2px 0 6px">${escapeHtml(e.action)}</div>` : ''}
-    `).join('') || `<div class="empty">${escapeHtml(t('empty.next60Days'))}</div>`;
-    renderKpi('education', eduUp.length ? String(eduUp.length) : '', eduUp.length ? 'neg' : 'pos');
-    renderSparkline(document.getElementById('education-spark'), null);
-
-    // Attach drawer toggle handlers
-    document.querySelectorAll('.drawer').forEach(d => {
-      const toggle = d.querySelector('.drawer-toggle');
-      toggle.addEventListener('click', () => d.classList.toggle('open'));
-    });
+  // ---- sheet open/close machinery (focus-trap + scroll-lock + focus-return) ----
+  function openSheet(domain) {
+    state.activeSheet = domain;
+    state.sheetReturnFocus = domain;   // re-resolved to a live tile on close (grid may rebuild)
+    document.getElementById('sheet-title').textContent = t('drawer.' + domain);
+    refreshSheetBody();
+    document.getElementById('sheet-scrim').hidden = false;
+    const sheet = document.getElementById('sheet');
+    sheet.hidden = false;
+    requestAnimationFrame(() => sheet.classList.add('open'));   // slide up from hidden
+    document.body.classList.add('sheet-open');                  // scroll-lock the page
+    const app = document.getElementById('app');
+    if (app) app.inert = true;          // background out of the AT/focus tree (aria-modal alone doesn't)
+    document.getElementById('sheet-close').focus();
+    document.addEventListener('keydown', onSheetKeydown, true);
+  }
+  function refreshSheetBody() {
+    const domain = state.activeSheet;
+    if (!domain) return;
+    const body = document.getElementById('sheet-body');
+    if (body) {
+      const st = body.scrollTop;            // preserve read position across a bg-reload rebuild
+      body.innerHTML = buildSheet(domain);
+      body.scrollTop = st;
+    }
+    if (domain === 'goals') drawSheetGoalLines();
+    const k = sheetKpi(domain);
+    renderKpi('sheet', k.value, k.trend);
+  }
+  function closeSheet() {
+    if (!state.activeSheet) return;
+    const sheet = document.getElementById('sheet');
+    sheet.classList.remove('open');
+    sheet.hidden = true;
+    document.getElementById('sheet-scrim').hidden = true;
+    document.body.classList.remove('sheet-open');
+    const app = document.getElementById('app');
+    if (app) app.inert = false;
+    document.removeEventListener('keydown', onSheetKeydown, true);
+    state.activeSheet = null;
+    const dom = state.sheetReturnFocus;
+    state.sheetReturnFocus = null;
+    // Re-resolve the launching tile live — a background reload may have rebuilt the
+    // grid, detaching the node we opened from; query the fresh button by domain.
+    const tile = dom && document.querySelector(`.tile[data-portfolio="${dom}"]`);
+    if (tile) tile.focus();
+  }
+  function onSheetKeydown(e) {
+    if (e.key === 'Escape') { e.preventDefault(); closeSheet(); return; }
+    if (e.key !== 'Tab') return;
+    const sheet = document.getElementById('sheet');
+    const f = sheet.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
 
   // Card-settlement mirror lines (an immediate-debit card's spend also lands on the
@@ -1490,6 +1663,12 @@
     // Settings buttons
     document.getElementById('signout-btn').addEventListener('click', signOut);
     document.getElementById('refresh-btn').addEventListener('click', loadAll);
+
+    // Bottom-sheet dismissers (V3.5): the close button + tapping the scrim. The
+    // close button is icon-only, so name it for AT (until the V3.8 aria walker).
+    document.getElementById('sheet-close').addEventListener('click', closeSheet);
+    document.getElementById('sheet-close').setAttribute('aria-label', t('sheet.close'));
+    document.getElementById('sheet-scrim').addEventListener('click', closeSheet);
     document.getElementById('settings-save').addEventListener('click', async () => {
       const newSheetId = document.getElementById('settings-sheetid').value.trim();
       const newDemoMode = document.getElementById('settings-demo').value === 'true';

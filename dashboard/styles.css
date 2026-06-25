@@ -345,69 +345,116 @@ time {
   .cal-strip { scroll-behavior: auto; }
 }
 
-/* Drawer */
-.drawer {
-  background: var(--card);
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  margin-top: 6px;
-  overflow: hidden;
-}
-.drawer-toggle {
-  padding: 12px 14px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  cursor: pointer;
-  user-select: none;
+/* ── Portfolios — a grid of domain TILES (V3.5; replaced the accordions). Each
+   tile is a <button> with a glanceable face; tapping opens the one shared bottom-
+   sheet. Money is the hero (spans the row). Status is never color-only — text +
+   glyph carry it (DESIGN §8); the semantic hues are redundant reinforcement. */
+.portfolio-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
+  margin-top: 6px;
 }
-.drawer-toggle .drawer-label {
-  flex: 1;
-  min-width: 0;
+.tile {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  overflow: hidden;
+  flex-direction: column;
+  gap: 10px;
+  text-align: start;
+  background: var(--tile);
+  border: 1px solid var(--line);
+  border-radius: var(--rad);
+  box-shadow: var(--shadow);
+  padding: 14px;
+  min-block-size: 104px;
+  font-family: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  transition: transform 0.08s ease;
 }
-.drawer-toggle .drawer-name {
-  font-weight: 500;
+.tile:active { transform: scale(0.99); }
+.tile-money { grid-column: 1 / -1; }   /* the hero spans the row */
+.tile-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.tile-name { font-weight: 600; font-size: 15px; }
+.tile-status { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.tile-status.is-warn { color: var(--amber); }
+.tile-flag { font-size: 12px; }
+.tile-kpi { font-size: 28px; font-weight: 500; color: var(--accent); line-height: 1; margin-block-start: auto; }
+.tile-sub { font-size: 13px; color: var(--muted); }
+
+/* Money hero face: donut (overall %) + side column (amount · category bar · spark) */
+.tile-money-viz { display: flex; align-items: center; gap: 14px; }
+.tile-money-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.tile-amount { font-size: 18px; font-weight: 500; }
+.tile-amount-of { color: var(--muted); font-size: 14px; }
+.donut { inline-size: 64px; block-size: 64px; flex-shrink: 0; }
+.donut-track { fill: none; stroke: var(--line); stroke-width: 7; }
+.donut-fill { fill: none; stroke: var(--accent); stroke-width: 7; stroke-linecap: round; }
+.donut-over .donut-fill { stroke: var(--red); }
+.donut-pct { fill: var(--ink); font-family: var(--font-mono); font-size: 15px; font-weight: 600; }
+.cat-bar { display: flex; gap: 2px; block-size: 8px; border-radius: 999px; overflow: hidden; }
+.cat-seg { display: block; min-inline-size: 2px; }
+.cat-seg-0 { background: var(--accent); }
+.cat-seg-1 { background: color-mix(in srgb, var(--accent) 70%, var(--tile2)); }
+.cat-seg-2 { background: color-mix(in srgb, var(--accent) 45%, var(--tile2)); }
+.cat-seg-3 { background: color-mix(in srgb, var(--accent) 25%, var(--tile2)); }
+
+/* Standalone KPI + sparkline (relocated off the deleted drawer-toggle; used on the
+   money tile face + in the sheet head). */
+.kpi { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 500; color: var(--accent); white-space: nowrap; }
+.kpi.kpi-neg { color: var(--red); }
+.kpi.kpi-pos { color: var(--accent); }
+.kpi:empty { display: none; }
+.sparkline { width: 80px; height: 24px; color: var(--accent); stroke: currentColor; fill: none; stroke-width: 1.5; }
+.sparkline:empty { display: none; }
+
+/* Health avatars: initials (NO photo — no stored media) + a non-color urgency
+   badge (glyph + day-count); the ring hue is redundant reinforcement. */
+.avatar-row { display: flex; gap: 10px; flex-wrap: wrap; margin-block-start: auto; }
+.tile-allgood { color: var(--green); font-size: 20px; }
+.avatar { position: relative; display: inline-flex; align-items: center; justify-content: center; inline-size: 38px; block-size: 38px; border-radius: 999px; background: var(--tile2); border: 1px solid var(--line); }
+.avatar-initials { font-size: 13px; font-weight: 600; }
+.avatar-badge { position: absolute; inset-block-end: -7px; inset-inline-end: -7px; display: inline-flex; align-items: center; gap: 1px; font-size: 9px; background: var(--tile); border: 1px solid var(--line); border-radius: 999px; padding: 0 3px; }
+.avatar-badge .num { font-size: 9px; }
+.avatar-over { border-color: var(--red); }
+.avatar-soon { border-color: var(--amber); }
+
+/* Goals tile bar (D8: tile = simple % bar; the bright-line lives in the sheet) */
+.goal-bar { block-size: 8px; border-radius: 999px; background: var(--tile2); overflow: hidden; margin-block-start: auto; }
+.goal-bar-fill { display: block; block-size: 100%; background: var(--accent); }
+
+/* ── Bottom-sheet — ONE shared, data-driven drawer (V3.5; replaced the six
+   inline accordions). Slides up over a scrim; focus-trapped + scroll-locked. */
+.sheet-scrim {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgba(18, 21, 28, .38);
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
 }
-.drawer-toggle .kpi {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 20px;
-  font-weight: 500;
-  color: var(--accent);
-  margin-inline-start: auto;
-  white-space: nowrap;
+.sheet {
+  position: fixed; inset-inline: 0; inset-block-end: 0; z-index: 91;
+  max-width: 640px; margin-inline: auto;
+  display: flex; flex-direction: column;
+  background: var(--tile);
+  border-start-start-radius: var(--rad); border-start-end-radius: var(--rad);
+  box-shadow: var(--sheet-shadow);
+  max-block-size: 80vh;
+  padding: 8px 16px calc(16px + env(safe-area-inset-bottom, 0));
+  transform: translateY(100%);
+  transition: transform 0.24s ease;
 }
-.drawer-toggle .kpi.kpi-neg { color: var(--red); }
-.drawer-toggle .kpi.kpi-pos { color: var(--accent); }
-.drawer-toggle .kpi:empty { display: none; }
-.drawer-toggle .sparkline {
-  flex-shrink: 0;
-  width: 80px;
-  height: 24px;
-  color: var(--accent);
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 1.5;
+.sheet.open { transform: translateY(0); }
+.sheet-grip { flex-shrink: 0; inline-size: 36px; block-size: 4px; border-radius: 999px; background: var(--line); margin: 4px auto 8px; }
+.sheet-head { flex-shrink: 0; display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.sheet-title { font-size: 17px; font-weight: 600; margin: 0; flex: 1; min-width: 0; }
+.sheet-close { margin-inline-start: auto; border: none; background: transparent; color: var(--muted); font-size: 18px; cursor: pointer; min-inline-size: 44px; min-block-size: 44px; font-family: inherit; }
+/* flex:1 + min-block-size:0 make this the shrinkable scroll region (the grip/head
+   stay pinned) — without min-block-size:0 a flex item won't scroll below content. */
+.sheet-body { flex: 1 1 auto; min-block-size: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.sheet-sub { color: var(--muted); margin-top: 12px; margin-bottom: 2px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+body.sheet-open { overflow: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet, .tile { transition: none; }
 }
-.drawer-toggle .sparkline:empty { display: none; }
-.drawer-toggle::after {
-  content: '\25B8';
-  color: var(--ink-dim);
-  transition: transform 0.15s ease;
-  flex-shrink: 0;
-}
-.drawer.open .drawer-toggle::after { transform: rotate(90deg); }
-.drawer-body {
-  display: none;
-  padding: 4px 14px 14px;
-  border-top: 1px solid var(--border);
-}
-.drawer.open .drawer-body { display: block; }
 .kv {
   display: flex;
   justify-content: space-between;
