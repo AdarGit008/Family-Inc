@@ -24,12 +24,12 @@ Active lanes (🔵 in progress — work the focus above first; don't open the ot
 
 Recent commits (the dated decision record — decisions fold into the canon, not a separate log):
 
+- 2026-06-25 feat(dashboard): V3.5 — portfolios + one data-driven bottom-sheet (replaces the accordions)
 - 2026-06-25 feat(dashboard): V3.4 — 3-day scroll-snap calendar strip
 - 2026-06-25 feat(dashboard): V3.2 — Today scaffold + 3-tier status pill (replaces pill + banner)
 - 2026-06-25 fix(kickoff): focus follows a PO Focus pin + all 🔵 lanes, not a stale section title
 - 2026-06-25 docs: regenerate next-session prompt (post V3.1 retone)
 - 2026-06-25 feat(dashboard): V3.1 — cool token retone (IBM Plex Mono all-numerals, AA-cleared amber/muted)
-- 2026-06-25 docs(v3): resolve the 4 Today-redesign build blockers + add file-level build plan
 
 Session contract: don't open lanes outside the current focus without a PO call ·
 constants → config, utilities → `automation/lib/`, message copy → templates ·
