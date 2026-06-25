@@ -38,6 +38,7 @@
       'drawer.car': 'רכב',
       'drawer.contracts': 'מנויים וחוזים',
       'drawer.education': 'חינוך',
+      'drawer.timeline': 'ציר זמן',
       // Status pill (3-tier; V3.2 replaced the status banner). Labels are
       // count-free — the count renders as its own mono span beside the label.
       'pill.overdue': 'באיחור',
@@ -60,6 +61,7 @@
       'empty.noGoals': 'אין יעדים.',
       'empty.noVehicle': 'אין רכב.',
       'empty.noRenewals': 'אין חידושים בחודשיים הקרובים.',
+      'empty.noMilestones': 'אין אבני דרך בטווח שנבחר.',
       'empty.noUpcoming': 'אין פריטים קרובים.',
       'empty.noOverdue': 'אין פריטים באיחור.',
       'empty.allClean': 'הכל נקי.',
@@ -72,6 +74,24 @@
       // Portfolio bottom-sheet
       'sheet.close': 'סגור',
       'sheet.recentTxns': 'עסקאות אחרונות',
+      // Cross-domain timeline (V3.6) — zoom rungs + category-filter chips
+      'timeline.zoomLabel': 'טווח זמן',
+      'timeline.filterLabel': 'סינון לפי תחום',
+      'timeline.now': 'עכשיו',
+      'timeline.zoom.1wk': 'שבוע',
+      'timeline.zoom.1mo': 'חודש',
+      'timeline.zoom.3mo': '3 ח׳',
+      'timeline.zoom.1yr': 'שנה',
+      'timeline.zoom.5yr': '5 ש׳',
+      'timeline.cat.all': 'הכל',
+      'timeline.cat.finance': 'כספים',
+      'timeline.cat.health': 'בריאות',
+      'timeline.cat.car': 'רכב',
+      'timeline.cat.education': 'חינוך',
+      'timeline.cat.goals': 'יעדים',
+      'timeline.cat.contracts': 'חוזים',
+      'timeline.cat.calendar': 'יומן',
+      'timeline.cat.other': 'אחר',
       // Car field labels
       'car.annualTest': 'טסט שנתי',
       'car.insurance': 'ביטוח',
@@ -162,6 +182,7 @@
       'drawer.car': 'Car',
       'drawer.contracts': 'Subscriptions & contracts',
       'drawer.education': 'Education',
+      'drawer.timeline': 'Timeline',
       'pill.overdue': 'overdue',
       'pill.dueToday': 'due today',
       'pill.allClear': 'Nothing urgent',
@@ -180,6 +201,7 @@
       'empty.noGoals': 'No goals yet.',
       'empty.noVehicle': 'No vehicle.',
       'empty.noRenewals': 'No renewals in the next two months.',
+      'empty.noMilestones': 'Nothing in the selected range.',
       'empty.noUpcoming': 'No upcoming items.',
       'empty.noOverdue': 'No overdue items.',
       'empty.allClean': 'All clean.',
@@ -190,6 +212,23 @@
       'cal.tomorrow': 'Tomorrow',
       'sheet.close': 'Close',
       'sheet.recentTxns': 'Recent transactions',
+      'timeline.zoomLabel': 'Time range',
+      'timeline.filterLabel': 'Filter by domain',
+      'timeline.now': 'now',
+      'timeline.zoom.1wk': '1wk',
+      'timeline.zoom.1mo': '1mo',
+      'timeline.zoom.3mo': '3mo',
+      'timeline.zoom.1yr': '1yr',
+      'timeline.zoom.5yr': '5yr',
+      'timeline.cat.all': 'all',
+      'timeline.cat.finance': 'finance',
+      'timeline.cat.health': 'health',
+      'timeline.cat.car': 'car',
+      'timeline.cat.education': 'education',
+      'timeline.cat.goals': 'goals',
+      'timeline.cat.contracts': 'contracts',
+      'timeline.cat.calendar': 'calendar',
+      'timeline.cat.other': 'other',
       'car.annualTest': 'Annual test',
       'car.insurance': 'Insurance',
       'car.license': 'License',
@@ -310,6 +349,7 @@
     activeSheet: null,        // domain key of the open bottom-sheet, or null
     sheetReturnFocus: null,   // domain key whose tile regains focus on close (NOT a
                               // node ref — a bg reload rebuilds the grid; re-resolve live)
+    timeline: { zoom: '3mo', filter: 'all' },  // V3.6 cross-domain timeline view state
   };
 
   // ---------------- Utilities ----------------
@@ -1056,7 +1096,7 @@
   function renderPortfolios() {
     const grid = document.getElementById('portfolio-grid');
     if (!grid) return;
-    grid.innerHTML = [moneyTile(), healthTile(), goalsTile(), carTile(), contractsTile()].join('');
+    grid.innerHTML = [moneyTile(), timelineTile(), healthTile(), goalsTile(), carTile(), contractsTile()].join('');
     // The money sparkline needs a live <svg> (renderSparkline writes into it).
     renderSparkline(document.getElementById('money-tile-spark'), txnTrend7d());
     grid.querySelectorAll('.tile[data-portfolio]').forEach(tile => {
@@ -1216,6 +1256,7 @@
       case 'goals': return goalsSheet();
       case 'car': return carSheet();
       case 'contracts': return contractsSheet();
+      case 'timeline': return timelineSheet();
       default: return '';
     }
   }
@@ -1268,12 +1309,16 @@
     if (domain === 'goals') { const a = goalsAvgPct(); return { value: a == null ? '' : `${a}%`, trend: 'pos' }; }
     if (domain === 'car') { const nd = carNextDate(); const d = nd ? daysBetween(nd, state.today) : null; return { value: d == null ? '' : `${d}d`, trend: d != null && d < 14 ? 'neg' : 'pos' }; }
     if (domain === 'contracts') { const n = upcomingRenewals().length; return { value: n ? String(n) : '', trend: n ? 'neg' : 'pos' }; }
+    if (domain === 'timeline') { const n = buildTimelineItems().filter(i => i.daysUntil >= 0).length; return { value: n ? String(n) : '', trend: 'pos' }; }
     return { value: '', trend: null };
   }
 
   // ---- sheet open/close machinery (focus-trap + scroll-lock + focus-return) ----
   function openSheet(domain) {
     state.activeSheet = domain;
+    // Each open lands on the documented default lens (DESIGN §2/§9.13: zoom 3mo,
+    // all categories) rather than a stale zoom/filter from a previous open.
+    if (domain === 'timeline') state.timeline = { zoom: '3mo', filter: 'all' };
     state.sheetReturnFocus = domain;   // re-resolved to a live tile on close (grid may rebuild)
     document.getElementById('sheet-title').textContent = t('drawer.' + domain);
     refreshSheetBody();
@@ -1292,13 +1337,25 @@
     if (!domain) return;
     const body = document.getElementById('sheet-body');
     if (body) {
-      const st = body.scrollTop;            // preserve read position across a bg-reload rebuild
+      const st = body.scrollTop;            // preserve read position + the focused control across a bg-reload rebuild
+      const tlSel = _timelineFocusSelector();  // the timeline is the only sheet with focusables in its body
       body.innerHTML = buildSheet(domain);
       body.scrollTop = st;
+      if (tlSel) { const b = body.querySelector(tlSel); if (b) b.focus(); }
     }
     if (domain === 'goals') drawSheetGoalLines();
+    if (domain === 'timeline') wireTimeline();
     const k = sheetKpi(domain);
     renderKpi('sheet', k.value, k.trend);
+  }
+  // If a timeline zoom/filter control holds focus, return a selector to re-find it
+  // after #sheet-body is rebuilt — so a background reload doesn't drop keyboard focus.
+  function _timelineFocusSelector() {
+    const a = document.activeElement;
+    if (!a || !a.dataset) return null;
+    if (a.dataset.tlZoom) return `[data-tl-zoom="${a.dataset.tlZoom}"]`;
+    if (a.dataset.tlFilter) return `[data-tl-filter="${a.dataset.tlFilter}"]`;
+    return null;
   }
   function closeSheet() {
     if (!state.activeSheet) return;
@@ -1351,6 +1408,150 @@
     }
     if (days.every(v => v === 0)) return null;
     return days;
+  }
+
+  // ---------------- Cross-domain timeline (V3.6) ----------------
+  // A read-only chronological flattening of every dated row across the Sheet's
+  // domains into one time axis, opened from the Timeline portfolio tile. The two
+  // pure functions below are the ratified contract (graduated to SPEC §7.6):
+  // domainCategory (the filter map) + buildTimelineItems (the milestone-inclusion
+  // rule). Read-only — items are edited at their source tab, never here.
+
+  // Filterable categories. The reminder Domain is free text (SPEC §6.1 col B:
+  // Car/Health/Education/Finance/Contracts/Goals/Other) and maps near-identity
+  // (lowercased); calendar/other are assigned by source. Anything unrecognised
+  // falls to 'other' and is STILL shown — never dropped.
+  const TIMELINE_CATEGORIES = ['finance', 'health', 'car', 'education', 'goals', 'contracts', 'calendar', 'other'];
+  function domainCategory(domain) {
+    const d = String(domain || '').trim().toLowerCase();
+    return TIMELINE_CATEGORIES.includes(d) ? d : 'other';
+  }
+
+  // Zoom rungs (exponential 1wk→5yr). The visible window is today−tail … today+days;
+  // a short recent-past tail gives the now-marker context without burying the future.
+  const TIMELINE_ZOOMS = [
+    { key: '1wk', days: 7 },
+    { key: '1mo', days: 31 },
+    { key: '3mo', days: 92 },
+    { key: '1yr', days: 366 },
+    { key: '5yr', days: 1830 },
+  ];
+  const TIMELINE_PAST_TAIL = 14;   // days of recent past kept above the now-marker
+  const TIMELINE_MAX_DAYS = 1830;  // +5y horizon (5×366 — a deliberate round over-approximation of 5y); the hard inclusion ceiling
+
+  // The milestone-inclusion rule (SPEC §7.6): one item per dated field across every
+  // domain — done/skipped/archived reminders, undated rows, and dates outside
+  // [−tail, +5y] excluded. An unmapped reminder Domain still appears (→ 'other').
+  function buildTimelineItems() {
+    const d = state.data;
+    if (!d) return [];
+    const items = [];
+    const add = (date, title, category, meta) => {
+      if (!(date instanceof Date) || isNaN(date)) return;
+      if (!String(title || '').trim()) return;   // a dated row with no label is not a useful milestone
+      const daysUntil = daysBetween(date, state.today);
+      if (daysUntil < -TIMELINE_PAST_TAIL || daysUntil > TIMELINE_MAX_DAYS) return;
+      items.push({ date, daysUntil, title, category, meta: meta || '' });
+    };
+    (d.reminders || []).forEach(r => {
+      const st = String(r.status || '').toLowerCase();
+      if (st === 'done' || st === 'skipped') return;   // terminal statuses — matches flagFor (Sent/Snoozed/Overdue stay)
+      add(r.due, r.title, domainCategory(r.domain), r.owner);
+    });
+    (d.calendarEvents || []).forEach(e => add(e.date, e.title, 'calendar', e.start || ''));
+    (d.goals || []).forEach(g => add(g.targetDate, g.goal, 'goals', g.pct != null ? g.pct + '%' : ''));
+    (d.health || []).forEach(h => add(h.nextDue, [h.person, h.specialty || h.provider].filter(Boolean).join(' · '), 'health', h.action));
+    (d.car || []).forEach(c => {
+      add(c.test, t('car.annualTest'), 'car', c.vehicle);
+      add(c.insurance, t('car.insurance'), 'car', c.vehicle);
+      add(c.license, t('car.license'), 'car', c.vehicle);
+    });
+    (d.education || []).forEach(e => add(e.nextDate, [e.child, e.type].filter(Boolean).join(' · '), 'education', e.action));
+    (d.contracts || []).forEach(c => add(c.renewal, [c.contract, c.provider].filter(Boolean).join(' · '), 'contracts', ''));
+    return items.sort((a, b) => a.date - b.date);
+  }
+
+  // ---- timeline tile face (count of upcoming items + the nearest one) ----
+  function timelineTile() {
+    const upcoming = buildTimelineItems().filter(i => i.daysUntil >= 0);
+    const next = upcoming[0];
+    const warn = !!next && next.daysUntil <= 14;   // 'soon' boundary — matches timelineItemHtml + healthAvatar
+    const status = next
+      ? (warn ? `<span class="tile-flag" aria-hidden="true">▲</span> ${escapeHtml(duePhrase(next.daysUntil))}`
+              : `${escapeHtml(t('label.next'))} ${escapeHtml(formatDateHE(next.date))}`)
+      : '—';
+    return `<button class="tile" data-portfolio="timeline" type="button">
+      <div class="tile-head">
+        <span class="tile-name">${escapeHtml(t('drawer.timeline'))}</span>
+        <span class="tile-status${warn ? ' is-warn' : ''}">${status}</span>
+      </div>
+      <div class="tile-kpi num">${upcoming.length || '—'}</div>
+    </button>`;
+  }
+
+  // ---- timeline sheet body: sticky controls (zoom rungs + filter chips) + the track ----
+  function timelineSheet() {
+    const zooms = TIMELINE_ZOOMS.map(z =>
+      `<button class="tl-zoom" type="button" data-tl-zoom="${z.key}" aria-pressed="${state.timeline.zoom === z.key}">${escapeHtml(t('timeline.zoom.' + z.key))}</button>`
+    ).join('');
+    const chips = ['all', ...TIMELINE_CATEGORIES].map(c =>
+      `<button class="tl-chip" type="button" data-tl-filter="${c}" aria-pressed="${state.timeline.filter === c}">${escapeHtml(t('timeline.cat.' + c))}</button>`
+    ).join('');
+    return `<div class="tl-controls">
+      <div class="tl-zooms" role="group" aria-label="${escapeHtml(t('timeline.zoomLabel'))}">${zooms}</div>
+      <div class="tl-chips" role="group" aria-label="${escapeHtml(t('timeline.filterLabel'))}">${chips}</div>
+    </div>
+    <div id="tl-track" class="tl-track">${timelineTrackHtml()}</div>`;
+  }
+  function timelineTrackHtml() {
+    const z = TIMELINE_ZOOMS.find(x => x.key === state.timeline.zoom) || TIMELINE_ZOOMS[2];
+    const f = state.timeline.filter;
+    const items = buildTimelineItems().filter(i => i.daysUntil <= z.days && (f === 'all' || i.category === f));
+    if (!items.length) return `<div class="empty">${escapeHtml(t('empty.noMilestones'))}</div>`;
+    const nowMarker = `<div class="tl-now"><span class="tl-now-label">${escapeHtml(t('timeline.now'))}</span></div>`;
+    let html = '', placed = false;
+    items.forEach(i => {
+      if (!placed && i.daysUntil >= 0) { html += nowMarker; placed = true; }   // marker before the first future/today item
+      html += timelineItemHtml(i);
+    });
+    if (!placed) html += nowMarker;   // every shown item is in the past tail → marker at the foot
+    return html;
+  }
+  // One read-only timeline row. Urgency is carried by the glyph + the due phrase
+  // (text), never color alone (DESIGN §8); the inline-start border is a redundant
+  // cue. The muted category tag keeps the cross-domain mix legible at a glance.
+  function timelineItemHtml(i) {
+    const bucket = i.daysUntil < 0 ? 'over' : i.daysUntil <= 14 ? 'soon' : 'ok';
+    const glyph = { over: '🔴', soon: '⚠', ok: '·' }[bucket];
+    return `<div class="tl-item tl-${bucket}">
+      <span class="tl-glyph" aria-hidden="true">${glyph}</span>
+      <span class="tl-date num">${escapeHtml(fmtDate(i.date))}</span>
+      <span class="tl-body">
+        <span class="tl-title">${escapeHtml(i.title)}</span>
+        <span class="tl-cat">${escapeHtml(t('timeline.cat.' + i.category))}${i.meta ? ' · ' + escapeHtml(i.meta) : ''}</span>
+      </span>
+      <span class="tl-due num">${escapeHtml(duePhrase(i.daysUntil))}</span>
+    </div>`;
+  }
+  // Wire the zoom/filter controls each time the sheet body is built. A control
+  // click mutates view state and swaps ONLY #tl-track (+ the aria-pressed flags),
+  // so the clicked button keeps focus — never rebuilds the whole body (which would
+  // drop focus). innerHTML rebuilds discard old buttons, so re-binding can't leak.
+  function wireTimeline() {
+    const body = document.getElementById('sheet-body');
+    if (!body) return;
+    body.querySelectorAll('[data-tl-zoom]').forEach(b =>
+      b.addEventListener('click', () => { state.timeline.zoom = b.dataset.tlZoom; updateTimelineView(); }));
+    body.querySelectorAll('[data-tl-filter]').forEach(b =>
+      b.addEventListener('click', () => { state.timeline.filter = b.dataset.tlFilter; updateTimelineView(); }));
+  }
+  function updateTimelineView() {
+    const body = document.getElementById('sheet-body');
+    if (!body) return;
+    body.querySelectorAll('[data-tl-zoom]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tlZoom === state.timeline.zoom)));
+    body.querySelectorAll('[data-tl-filter]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tlFilter === state.timeline.filter)));
+    const track = document.getElementById('tl-track');
+    if (track) track.innerHTML = timelineTrackHtml();
   }
 
   // Estimate % of the goal's time window that has elapsed (0..100).

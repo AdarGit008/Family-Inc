@@ -217,6 +217,8 @@ The ledger is shared across **all** senders — the engine and the summarizer ca
 
 Read: `batchGet` over all bound ranges (UI contract in `DESIGN.md`). Write: per the §6.1 write contract — optimistic UI, an offline queue in `localStorage.pendingWrites[]` (cap 50), flushed on reconnect in tap order, failed flushes retried on the next online event. Identity: Google sign-in → `Settings.UserMap` → display name. Demo mode renders `mock_data.json` and never calls gapi.
 
+**Cross-domain timeline (read-only derived view, V3.6).** The Today *Timeline* tile flattens every dated row already read above into one chronology, governed by two ratified rules. **Milestone-inclusion:** one timeline item per dated field — `Reminders.Due Date` (excluding the terminal Status values {Done, Skipped}), `Calendar-Events.Date`, `Goals.Target Date`, `Health.Next Due`, `Car`'s {Annual Test, Insurance Renewal, License Expiry}, `Education.Next Key Date`, `Contracts.Renewal Date` — kept only within the window `today − 14d … today + 5y`; undated and out-of-window rows are excluded. **Domain→category** (the filter set): each item carries exactly one of `finance · health · car · education · goals · contracts · calendar · other`; calendar and other are assigned by source, every other source maps to its own domain, and a reminder's free-text `Domain` (§6.1 col B) maps near-identity (lower-cased) with any unrecognised value falling to `other` — **never dropped**. The view is read-only (no write contract — items are edited at their source tab) and fully Sheet-derived (no new tab). This timeline is **Education's only Today home** (Education has no portfolio tile).
+
 ## 8. Cross-cutting policies
 
 ### 8.1 Alert budget
