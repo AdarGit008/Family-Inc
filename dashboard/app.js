@@ -33,7 +33,7 @@
       // Today screen sections
       'section.todayList': 'להיום',
       'section.calendar': 'יומן',
-      'section.next7': 'השבוע הקרוב',
+      'section.comingUp': 'בקרוב',
       'section.domains': 'תחומים',
       // Drawers
       'drawer.money': 'כספים',
@@ -49,11 +49,20 @@
       'pill.dueToday': 'להיום',
       'pill.allClear': 'אין דברים דחופים',
       'pill.sundayReady': 'סיכום ראשון מוכן',
-      // Row actions
+      // Desk batch actions (V3.3 select-to-act). row.* double as the batch-bar labels.
       'row.done': '✓ בוצע',
       'row.snooze': '+ דחה',
       'row.note': '+ הערה',
-      'prompt.addNote': 'הוסף הערה (תתווסף לעמודת הערות):',
+      'desk.selected': 'נבחרו: {n}',
+      'desk.notePlaceholder': 'כתבו הערה…',
+      // Absolute-snooze chips (V3.3) — each resolves to an absolute Due date.
+      'snooze.tomorrow': 'מחר',
+      'snooze.in3': '+3',
+      'snooze.week': 'שבוע',
+      'snooze.twoweeks': 'שבועיים',
+      'snooze.month': 'חודש',
+      'snooze.pickDate': 'בחר תאריך',
+      'snooze.label': 'דחה ל…',
       // Empty states
       'empty.nothingOnFire': 'שום דבר לא בוער. ☕',
       'empty.nothingThisWeek': 'אין אירועים השבוע.',
@@ -181,8 +190,11 @@
       'toast.writesPaused': 'מבנה הגיליון השתנה — כתיבות מושהות (בדקו את כותרות העמודות)',
       // Action labels (used in toasts after write-back)
       'action.markedDone': 'בוצע: {title}',
-      'action.snoozed': 'נדחה ב-+{days}d: {title}',
+      'action.doneN': '{n} בוצעו',
+      'action.snoozedTo': 'נדחה ל-{date}: {title}',
+      'action.snoozedN': '{n} נדחו ל-{date}',
       'action.noteAdded': 'הערה נוספה',
+      'action.noteAddedN': 'הערה נוספה ל-{n}',
     },
     en: {
       'tabbar.today': 'Today',
@@ -190,7 +202,7 @@
       'tabbar.settings': 'Settings',
       'section.todayList': 'For today',
       'section.calendar': 'Calendar',
-      'section.next7': 'This coming week',
+      'section.comingUp': 'Coming up',
       'section.domains': 'Domains',
       'drawer.money': 'Money',
       'drawer.health': 'Health',
@@ -206,7 +218,15 @@
       'row.done': '✓ done',
       'row.snooze': '+ snooze',
       'row.note': '+ note',
-      'prompt.addNote': 'Add a note (will be appended to the Notes column):',
+      'desk.selected': '{n} selected',
+      'desk.notePlaceholder': 'Write a note…',
+      'snooze.tomorrow': 'Tomorrow',
+      'snooze.in3': '+3d',
+      'snooze.week': '1 week',
+      'snooze.twoweeks': '2 weeks',
+      'snooze.month': '1 month',
+      'snooze.pickDate': 'Pick a date',
+      'snooze.label': 'Snooze to…',
       'empty.nothingOnFire': 'Nothing on fire. ☕',
       'empty.nothingThisWeek': 'Nothing scheduled this week.',
       'empty.noEventsDay': 'No events.',
@@ -321,8 +341,11 @@
       'toast.flushed': 'Flushed {n} queued action(s)',
       'toast.writesPaused': 'Sheet structure changed — writes paused (check the column headers)',
       'action.markedDone': '{title} → done',
-      'action.snoozed': '{title} → +{days}d',
+      'action.doneN': '{n} → done',
+      'action.snoozedTo': '{title} → {date}',
+      'action.snoozedN': '{n} → {date}',
       'action.noteAdded': 'Note added',
+      'action.noteAddedN': 'Note added to {n}',
     },
   };
   function currentLang() {
@@ -381,6 +404,8 @@
     loveNote: { inbound: null, outbound: null },  // V3.7 — note FROM partner / note I left
     loveNoteSending: false,                       // one-shot guard while a PUT/DELETE is in flight
     driftWarned: false,                           // Lane C — one-shot "writes paused" toast on header drift
+    deskSelection: new Set(),                     // V3.3 — selected desk row numbers (strings); ephemeral,
+                                                  // cleared on every renderToday rebuild + after each batch
   };
 
   // ---------------- Utilities ----------------
@@ -904,7 +929,7 @@
     renderLoveNote();
     renderToday();
     render3DayCalendar();
-    renderNext7();
+    renderComingUp();
     renderPortfolios();
     renderSunday();
     renderSettings();
@@ -1207,44 +1232,189 @@
     `;
   }
 
+  // ---------------- Desk (V3.3 select-to-act) ----------------
+  // The Today desk: OVERDUE + FIRE-TODAY reminders as checkbox-semantics rows.
+  // Selecting ≥1 reveals a sticky batch bar (done / snooze / note) that fans out
+  // to ONE applyWrites batch. Selection is ephemeral — cleared on every rebuild
+  // (a background reload can re-number _row) and after each batch.
   function renderToday() {
+    state.deskSelection.clear();
     const list = state.data.reminders
       .filter(r => r.flag === 'OVERDUE' || r.flag === 'FIRE TODAY')
       .sort((a, b) => (a.daysUntil ?? 9e9) - (b.daysUntil ?? 9e9));
     const el = document.getElementById('today-list');
     if (!list.length) {
       el.innerHTML = `<div class="empty-caught-up">${escapeHtml(t('empty.nothingOnFire'))} <span class="empty-date">${escapeHtml(formatDateHE(state.today))}</span></div>`;
+      syncDeskActionbar();
       return;
     }
-    el.innerHTML = list.map(renderReminderRow).join('');
+    el.innerHTML = list.map(deskRow).join('');
     attachRowHandlers(el);
+    syncDeskActionbar();
   }
 
-  function renderNext7() {
-    const list = state.data.reminders
-      .filter(r => r.flag === 'WEEK OUT')
-      .sort((a, b) => (a.daysUntil ?? 9e9) - (b.daysUntil ?? 9e9));
-    // Calendar events for days 3–7 only: the 3-day strip (V3.4) owns today+2, so
-    // this list starts at +3 — no event renders in both surfaces. (V3.3 folds
-    // this into the coming-up strip with the same 3–7 window.)
-    const events = state.data.calendarEvents
-      .filter(e => e.date && daysBetween(e.date, state.today) >= 3 && daysBetween(e.date, state.today) <= 7)
-      .sort((a, b) => a.date - b.date);
-    const el = document.getElementById('next7-list');
-    let html = '';
-    list.forEach(r => { html += renderReminderRow(r); });
-    events.forEach(e => {
-      const d = daysBetween(e.date, state.today);
-      html += `<div class="row cal-event">
+  // A desk row is a checkbox (keyboard-operable; non-color selection = a ✓ box +
+  // wash + aria-checked). NO inline done/snooze/note — action lives in the shared
+  // batch bar so one tap acts on the whole selection.
+  function deskRow(r) {
+    const emoji = flagEmoji(r.flag);
+    const cls = flagClass(r.flag);
+    return `<div class="row desk-row" data-row="${r._row}" role="checkbox" aria-checked="false" tabindex="0">
+      <span class="desk-check" aria-hidden="true"></span>
+      <div class="desk-row-body">
         <div class="row-top">
-          <span class="row-title">📆 ${escapeHtml(e.title)}</span>
-          <span class="row-meta">${fmtDate(e.date)} ${e.start || ''}</span>
+          <span class="row-title"><span class="flag ${cls}" aria-hidden="true">${emoji}</span> ${escapeHtml(r.title)}</span>
+          <span class="row-meta">${duePhrase(r.daysUntil)}</span>
         </div>
-        ${e.location ? `<div class="row-note">${escapeHtml(e.location)}${e.owner ? ' · ' + escapeHtml(e.owner) : ''}</div>` : ''}
-      </div>`;
+        ${r.notes ? `<div class="row-note">${escapeHtml(r.notes)}</div>` : ''}
+      </div>
+    </div>`;
+  }
+
+  // Selection toggles (click + Space/Enter). V3.3 replaced the .expanded/.snoozing
+  // accordion with desk selection — the inline per-row actions are gone.
+  function attachRowHandlers(container) {
+    container.querySelectorAll('.desk-row[data-row]').forEach(rowEl => {
+      rowEl.addEventListener('click', () => toggleDeskSelection(rowEl));
+      rowEl.addEventListener('keydown', (ev) => {
+        if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); toggleDeskSelection(rowEl); }
+      });
     });
-    el.innerHTML = html || `<div class="empty">${escapeHtml(t('empty.nothingThisWeek'))}</div>`;
-    attachRowHandlers(el);
+  }
+  function toggleDeskSelection(rowEl) {
+    const row = rowEl.dataset.row;
+    const sel = state.deskSelection;
+    const on = !sel.has(row);
+    if (on) sel.add(row); else sel.delete(row);
+    rowEl.classList.toggle('selected', on);
+    rowEl.setAttribute('aria-checked', String(on));
+    syncDeskActionbar();
+  }
+  // Show/hide the batch bar + count from the live selection; collapse the snooze/
+  // note sub-rows whenever the selection empties.
+  function syncDeskActionbar() {
+    const bar = document.getElementById('desk-actionbar');
+    if (!bar) return;
+    const n = state.deskSelection.size;
+    bar.hidden = n === 0;
+    const countEl = document.getElementById('desk-sel-count');
+    if (countEl) countEl.textContent = n ? t('desk.selected', { n }) : '';
+    if (n === 0) collapseDeskSubrows();
+  }
+  function collapseDeskSubrows() {
+    const s = document.getElementById('desk-snooze-row'); if (s) s.hidden = true;
+    const nr = document.getElementById('desk-note-row'); if (nr) nr.hidden = true;
+  }
+  // Toggle one sub-row (snooze chips OR the note composer), never both at once.
+  function toggleDeskSubrow(which) {
+    const s = document.getElementById('desk-snooze-row');
+    const nr = document.getElementById('desk-note-row');
+    if (!s || !nr) return;
+    if (which === 'snooze') { const open = s.hidden; nr.hidden = true; s.hidden = !open; }
+    else { const open = nr.hidden; s.hidden = true; nr.hidden = !open; if (open) document.getElementById('desk-note-input')?.focus(); }
+  }
+  function selectedReminders() {
+    return [...state.deskSelection].map(findReminder).filter(Boolean);
+  }
+  // After a batch, focus would otherwise fall to <body> (the batch bar that held
+  // it is now hidden + the desk re-rendered). Move it to a stable desk anchor so a
+  // keyboard/SR user keeps their place. Programmatic focus after a pointer tap
+  // won't trip :focus-visible, so touch users see no stray ring.
+  function focusDeskAfterBatch() {
+    const list = document.getElementById('today-list');
+    if (!list) return;
+    const firstRow = list.querySelector('.desk-row');
+    if (firstRow) { firstRow.focus(); return; }
+    list.setAttribute('tabindex', '-1');
+    list.focus();
+  }
+
+  // ---------------- Coming-up strip (V3.3) ----------------
+  // A read-only ±30-day horizontal scroll band with a now-marker. Two sources,
+  // date-sorted: WEEK-OUT/MONTH-OUT reminders (the future side) + calendar events
+  // (past 30d ↔ +30d, minus today/+1/+2 which the 3-day strip owns). The desk owns
+  // overdue/today reminders, so they are NOT repeated here (PO call 2026-06-26:
+  // the back-scroll shows past EVENTS only). Opens positioned at "now"; scroll
+  // back for the past, forward for what's coming. No write affordance.
+  function renderComingUp() {
+    const el = document.getElementById('coming-up-strip');
+    if (!el) return;
+    const items = comingUpItems();
+    if (!items.length) {
+      el.innerHTML = `<div class="empty">${escapeHtml(t('empty.noUpcoming'))}</div>`;
+      return;
+    }
+    let html = '', placed = false;
+    items.forEach(it => {
+      if (!placed && it.daysUntil >= 0) { html += comingUpNowMarker(); placed = true; }
+      html += comingUpChip(it);
+    });
+    if (!placed) html += comingUpNowMarker();   // everything is past → marker at the end
+    el.innerHTML = html;
+    scrollComingUpToNow(el);
+  }
+
+  function comingUpItems() {
+    const out = [];
+    // Future reminders only (WEEK-OUT/MONTH-OUT = daysUntil 2..30). Overdue +
+    // fire-today live on the desk; Done/Skipped carry no flag.
+    (state.data.reminders || []).forEach(r => {
+      if (!r.due) return;
+      if (r.flag === 'WEEK OUT' || r.flag === 'MONTH OUT') {
+        out.push({ date: r.due, daysUntil: r.daysUntil, kind: 'reminder', glyph: flagEmoji(r.flag), title: r.title });
+      }
+    });
+    // Calendar events across ±30d, EXCEPT today/+1/+2 (owned by the 3-day strip).
+    (state.data.calendarEvents || []).forEach(e => {
+      if (!e.date) return;
+      const du = daysBetween(e.date, state.today);
+      if (du < -30 || du > 30 || (du >= 0 && du <= 2)) return;
+      out.push({ date: e.date, daysUntil: du, kind: 'event', glyph: '📆', title: e.title, shabbat: e.source === 'shabbat' });
+    });
+    return out.sort((a, b) => a.date - b.date);
+  }
+
+  function comingUpChip(it) {
+    const glyph = it.shabbat ? '🕯' : it.glyph;
+    return `<div class="coming-up-chip coming-up-${it.kind}${it.shabbat ? ' shabbat' : ''}">
+      <div class="cu-top"><span class="cu-glyph" aria-hidden="true">${glyph}</span><span class="cu-date num">${escapeHtml(fmtDate(it.date))}</span></div>
+      <div class="cu-title">${escapeHtml(it.title)}</div>
+      <div class="cu-due num">${escapeHtml(relDayPhrase(it.daysUntil))}</div>
+    </div>`;
+  }
+  function comingUpNowMarker() {
+    return `<div class="coming-up-now" data-now="1"><span class="cu-now-bar" aria-hidden="true"></span><span class="cu-now-label">${escapeHtml(t('timeline.now'))}</span></div>`;
+  }
+  // Relative-day phrase for the band: future reuses duePhrase (today/tomorrow/in
+  // Nd); past reads "yesterday / N days ago" (a past EVENT is not "overdue").
+  function relDayPhrase(daysUntil) {
+    if (daysUntil == null) return '';
+    if (daysUntil >= 0) return duePhrase(daysUntil);
+    const abs = -daysUntil;
+    if (currentLang() === 'he') {
+      if (abs === 1) return 'אתמול';
+      if (abs === 2) return 'לפני יומיים';
+      return `לפני ${abs} ימים`;
+    }
+    if (abs === 1) return 'yesterday';
+    return `${abs}d ago`;
+  }
+  // Position the now-marker near the inline-start so the future is the default
+  // view and the past is a scroll-back — horizontal only (never scrollIntoView,
+  // which would scroll the PAGE to this below-the-fold strip on load). Uses a
+  // bounding-rect delta + scrollBy (the modern unified RTL scrollLeft model:
+  // 0 = inline-start, negative toward inline-end), so it works in he-RTL + en-LTR.
+  function scrollComingUpToNow(el) {
+    requestAnimationFrame(() => {
+      const marker = el.querySelector('[data-now="1"]');
+      if (!marker) return;
+      const isRtl = getComputedStyle(el).direction === 'rtl';
+      const er = el.getBoundingClientRect();
+      const mr = marker.getBoundingClientRect();
+      const PEEK = 48;   // leave a sliver of the immediate past visible past the marker
+      const delta = isRtl ? (mr.right - er.right) + PEEK : (mr.left - er.left) - PEEK;
+      if (Math.abs(delta) > 1) el.scrollBy({ left: delta, behavior: 'auto' });
+    });
   }
 
   // Minutes-since-midnight for an 'HH:MM' start; all-day ('') sorts first as -1.
@@ -1308,51 +1478,6 @@
       </div>
       ${e.location ? `<div class="row-note">${escapeHtml(e.location)}${e.owner ? ' · ' + escapeHtml(e.owner) : ''}</div>` : ''}
     </div>`;
-  }
-
-  function renderReminderRow(r) {
-    const emoji = flagEmoji(r.flag);
-    const cls = flagClass(r.flag);
-    return `<div class="row" data-row="${r._row}" data-id="${r._row}">
-      <div class="row-top">
-        <span class="row-title"><span class="flag ${cls}">${emoji}</span> ${escapeHtml(r.title)}</span>
-        <span class="row-meta">${duePhrase(r.daysUntil)}</span>
-      </div>
-      ${r.notes ? `<div class="row-note">${escapeHtml(r.notes)}</div>` : ''}
-      <div class="actions">
-        <button class="action-btn primary" data-act="done">${escapeHtml(t('row.done'))}</button>
-        <button class="action-btn" data-act="snooze">${escapeHtml(t('row.snooze'))}</button>
-        <button class="action-btn" data-act="note">${escapeHtml(t('row.note'))}</button>
-      </div>
-      <div class="snooze-pills">
-        ${[1,3,7,14,30].map(n => `<button class="snooze-pill" data-snooze="${n}">+${n}d</button>`).join('')}
-      </div>
-    </div>`;
-  }
-
-  function attachRowHandlers(container) {
-    container.querySelectorAll('.row[data-row]').forEach(rowEl => {
-      rowEl.addEventListener('click', (ev) => {
-        const actBtn = ev.target.closest('[data-act]');
-        const snoozeBtn = ev.target.closest('[data-snooze]');
-        if (snoozeBtn) {
-          ev.stopPropagation();
-          const days = parseInt(snoozeBtn.dataset.snooze, 10);
-          handleSnooze(rowEl.dataset.row, days);
-          return;
-        }
-        if (actBtn) {
-          ev.stopPropagation();
-          const act = actBtn.dataset.act;
-          if (act === 'done') handleDone(rowEl.dataset.row);
-          else if (act === 'snooze') rowEl.classList.toggle('snoozing');
-          else if (act === 'note') handleAddNote(rowEl.dataset.row);
-          return;
-        }
-        rowEl.classList.toggle('expanded');
-        rowEl.classList.remove('snoozing');
-      });
-    });
   }
 
   // ---------------- Drawers ----------------
@@ -1945,78 +2070,114 @@
     return idx ? `${cfg.TABS.reminders}!${colLetter(idx)}${rowNum}` : null;
   }
 
-  async function handleDone(rowNum) {
-    const r = findReminder(rowNum);
-    if (!r) return;
+  // ---- Desk batch write-backs (V3.3) ----
+  // Each fans the current desk selection out to ONE applyWrites batch. SPEC §6.1
+  // write contract: intent columns + M, N (on completion) + always O, every
+  // column resolved by HEADER NAME (Lane C), never a hardcoded letter. A selection
+  // of one is just the n=1 case — there is no separate single-row path anymore.
+
+  async function handleBatchDone() {
     if (!remindersWritable()) { toast(t('toast.writesPaused')); return; }
-    r.status = 'Done';
-    r.flag = '';
+    const rows = selectedReminders();
+    if (!rows.length) return;
     const now = new Date();
     const ts = fmtISOts(now);
     const userName = (state.user && state.user.name) || 'Dashboard';
-    r.lastDoneBy = userName;
-    r.doneAt = now;
-    r.writeQueueTombstone = now;
-    // SPEC §6.1 write contract: intent columns + M, N (completion) + always O.
-    // Columns resolved by header NAME (Lane C), never hardcoded letters. Col H
-    // (Last Sent) is ENGINE-owned — the dashboard never writes it, except
-    // clearing it as part of the §7.1 recurrence bump below.
-    const writes = [
-      { range: remRange('Status', rowNum), value: 'Done' },
-      { range: remRange('LastDoneBy', rowNum), value: userName },
-      { range: remRange('DoneAt', rowNum), value: ts },
-      { range: remRange('WriteQueue_Tombstone', rowNum), value: ts, tomb: true },
-    ];
-    // Bump recurring (mirror of automation/lib/dates.bump_due — keep in sync)
-    if (r.recurrence && r.recurrence !== 'One-off' && r.due) {
-      const bumped = bumpDate(r.due, r.recurrence);
-      if (bumped) {
-        writes.push({ range: remRange('Due Date', rowNum), value: fmtISO(bumped) });
-        writes.push({ range: remRange('Status', rowNum), value: 'Pending' });
-        writes.push({ range: remRange('Last Sent', rowNum), value: '' }); // Last Sent cleared (§7.1)
-        r.due = bumped; r.status = 'Pending';
-        r.daysUntil = daysBetween(bumped, state.today);
-        r.flag = flagFor(r.daysUntil, r.status);
+    const writes = [];
+    rows.forEach(r => {
+      const rowNum = r._row;
+      r.status = 'Done'; r.flag = '';
+      r.lastDoneBy = userName; r.doneAt = now; r.writeQueueTombstone = now;
+      // Col H (Last Sent) is ENGINE-owned — never written except to clear it on the
+      // §7.1 recurrence bump below.
+      writes.push({ range: remRange('Status', rowNum), value: 'Done' });
+      writes.push({ range: remRange('LastDoneBy', rowNum), value: userName });
+      writes.push({ range: remRange('DoneAt', rowNum), value: ts });
+      writes.push({ range: remRange('WriteQueue_Tombstone', rowNum), value: ts, tomb: true });
+      // Bump recurring (mirror of automation/lib/dates.bump_due — keep in sync).
+      // Each recurring row adds its own bump triplet to the batch (the build-plan
+      // "batch-done multiplies the bump write set" note — handled per row here).
+      if (r.recurrence && r.recurrence !== 'One-off' && r.due) {
+        const bumped = bumpDate(r.due, r.recurrence);
+        if (bumped) {
+          writes.push({ range: remRange('Due Date', rowNum), value: fmtISO(bumped) });
+          writes.push({ range: remRange('Status', rowNum), value: 'Pending' });
+          writes.push({ range: remRange('Last Sent', rowNum), value: '' });
+          r.due = bumped; r.status = 'Pending';
+          r.daysUntil = daysBetween(bumped, state.today);
+          r.flag = flagFor(r.daysUntil, r.status);
+        }
+        // Unbumpable period (Custom/unknown): row stays Done; the engine flags it
+        // for review (logs/engine_flags.jsonl) instead of either side guessing.
       }
-      // Unbumpable period (Custom/unknown): row stays Done; the engine flags
-      // it for review (logs/engine_flags.jsonl) instead of either side guessing.
-    }
-    await applyWrites(writes, t('action.markedDone', { title: r.title }));
+    });
+    state.deskSelection.clear();
+    await applyWrites(writes, batchLabel('done', rows));
     renderAll();
+    focusDeskAfterBatch();
   }
 
-  async function handleSnooze(rowNum, days) {
-    const r = findReminder(rowNum);
-    if (!r || !r.due) return;
+  // Absolute snooze (V3.3, D4): write Due = an ABSOLUTE date (today + offset, or a
+  // picked date), NOT Due += N. So an overdue row's daysUntil goes ≥ 0 and flagFor
+  // drops OVERDUE — the +Nd-from-due path could leave an already-late row overdue.
+  async function handleBatchSnooze(absDate) {
     if (!remindersWritable()) { toast(t('toast.writesPaused')); return; }
-    const newDate = new Date(r.due);
-    newDate.setDate(newDate.getDate() + days);
-    r.due = newDate;
-    r.status = 'Snoozed';
-    r.daysUntil = daysBetween(newDate, state.today);
-    r.flag = flagFor(r.daysUntil, r.status);
-    await applyWrites([
-      { range: remRange('Due Date', rowNum), value: fmtISO(newDate) },
-      { range: remRange('Status', rowNum), value: 'Snoozed' },
-      { range: remRange('WriteQueue_Tombstone', rowNum), value: fmtISOts(new Date()), tomb: true },
-    ], t('action.snoozed', { title: r.title, days }));
+    if (!(absDate instanceof Date) || isNaN(absDate)) return;
+    const rows = selectedReminders();
+    if (!rows.length) return;
+    const iso = fmtISO(absDate);
+    const ts = fmtISOts(new Date());
+    const writes = [];
+    rows.forEach(r => {
+      const rowNum = r._row;
+      r.due = absDate; r.status = 'Snoozed';
+      r.daysUntil = daysBetween(absDate, state.today);
+      r.flag = flagFor(r.daysUntil, r.status);
+      writes.push({ range: remRange('Due Date', rowNum), value: iso });
+      writes.push({ range: remRange('Status', rowNum), value: 'Snoozed' });
+      writes.push({ range: remRange('WriteQueue_Tombstone', rowNum), value: ts, tomb: true });
+    });
+    const di = document.getElementById('desk-snooze-date'); if (di) di.value = '';   // re-arm the picker (a repeat of the same date fires no 'change')
+    state.deskSelection.clear();
+    await applyWrites(writes, batchLabel('snooze', rows, absDate));
     renderAll();
+    focusDeskAfterBatch();
   }
 
-  async function handleAddNote(rowNum) {
-    const r = findReminder(rowNum);
-    if (!r) return;
+  async function handleBatchNote() {
     if (!remindersWritable()) { toast(t('toast.writesPaused')); return; }
-    const text = window.prompt(t('prompt.addNote'));
+    const input = document.getElementById('desk-note-input');
+    const text = ((input && input.value) || '').trim();
     if (!text) return;
+    const rows = selectedReminders();
+    if (!rows.length) return;
     const stamp = `[${fmtISO(new Date())} ${state.user?.name || 'You'}]`;
-    const newNotes = (r.notes ? r.notes + ' \n' : '') + `${stamp} ${text}`;
-    r.notes = newNotes;
-    await applyWrites([
-      { range: remRange('Notes', rowNum), value: newNotes },
-      { range: remRange('WriteQueue_Tombstone', rowNum), value: fmtISOts(new Date()), tomb: true },
-    ], t('action.noteAdded'));
+    const ts = fmtISOts(new Date());
+    const writes = [];
+    rows.forEach(r => {
+      const rowNum = r._row;
+      const newNotes = (r.notes ? r.notes + ' \n' : '') + `${stamp} ${text}`;
+      r.notes = newNotes;
+      writes.push({ range: remRange('Notes', rowNum), value: newNotes });
+      writes.push({ range: remRange('WriteQueue_Tombstone', rowNum), value: ts, tomb: true });
+    });
+    if (input) input.value = '';
+    state.deskSelection.clear();
+    await applyWrites(writes, batchLabel('note', rows));
     renderAll();
+    focusDeskAfterBatch();
+  }
+
+  // One toast label for the batch — n=1 names the row, n>1 counts.
+  function batchLabel(kind, rows, date) {
+    const n = rows.length;
+    if (kind === 'done') return n === 1 ? t('action.markedDone', { title: rows[0].title }) : t('action.doneN', { n });
+    if (kind === 'snooze') {
+      const ds = formatDateHE(date);
+      return n === 1 ? t('action.snoozedTo', { title: rows[0].title, date: ds }) : t('action.snoozedN', { n, date: ds });
+    }
+    if (kind === 'note') return n === 1 ? t('action.noteAdded') : t('action.noteAddedN', { n });
+    return '';
   }
 
   // Mirror of automation/lib/dates.bump_due (SPEC §7.1) — same periods, same
@@ -2158,6 +2319,35 @@
     document.getElementById('sheet-close').addEventListener('click', closeSheet);
     document.getElementById('sheet-close').setAttribute('aria-label', t('sheet.close'));
     document.getElementById('sheet-scrim').addEventListener('click', closeSheet);
+
+    // Desk batch action bar (V3.3). The bar markup is static, so wire it ONCE here;
+    // renderToday only fills #today-list + toggles the bar's visibility/count. The
+    // snooze chips resolve to ABSOLUTE dates (today + offset); the date picker any day.
+    const deskBar = document.getElementById('desk-actionbar');
+    if (deskBar) {
+      deskBar.querySelector('[data-batch="done"]')?.addEventListener('click', handleBatchDone);
+      deskBar.querySelector('[data-batch="snooze"]')?.addEventListener('click', () => toggleDeskSubrow('snooze'));
+      deskBar.querySelector('[data-batch="note"]')?.addEventListener('click', () => toggleDeskSubrow('note'));
+      deskBar.querySelectorAll('[data-snooze-days]').forEach(chip =>
+        chip.addEventListener('click', () => {
+          const target = new Date(state.today);
+          target.setDate(target.getDate() + parseInt(chip.dataset.snoozeDays, 10));
+          handleBatchSnooze(target);
+        }));
+      const dateInput = document.getElementById('desk-snooze-date');
+      if (dateInput) {
+        dateInput.min = fmtISO(state.today);   // discourage snoozing into the past
+        dateInput.setAttribute('aria-label', t('snooze.pickDate'));
+        // Reject a past date even if a UA lets one slip past the min guard (DESIGN §9 #17).
+        dateInput.addEventListener('change', () => { const d = parseDate(dateInput.value); if (d && daysBetween(d, state.today) >= 0) handleBatchSnooze(d); });
+      }
+      document.getElementById('desk-snooze-row')?.setAttribute('aria-label', t('snooze.label'));
+      document.getElementById('desk-note-input')?.setAttribute('aria-label', t('desk.notePlaceholder'));
+      document.getElementById('desk-note-send')?.addEventListener('click', handleBatchNote);
+    }
+    // The coming-up strip is a focusable scroll region so keyboard users can arrow
+    // through the ±30-day band (its chips are read-only, non-focusable).
+    document.getElementById('coming-up-strip')?.setAttribute('aria-label', t('section.comingUp'));
     document.getElementById('settings-save').addEventListener('click', async () => {
       const newSheetId = document.getElementById('settings-sheetid').value.trim();
       const newDemoMode = document.getElementById('settings-demo').value === 'true';

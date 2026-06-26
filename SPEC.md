@@ -134,7 +134,7 @@ Authoritative tab list. The three tabs with code contracts get column-level sche
 | O | WriteQueue_Tombstone | dashboard | ISO datetime stamped on **every** dashboard write; the engine skips rows tombstoned <6h (§8.3) |
 | P | Guide URL | humans | optional how-to / Kol-Zchut link, appended to messages |
 
-**Dashboard write contract:** every write-back is one `batchUpdate` touching its intent columns **plus M, N (when completing), and always O.** A dashboard that doesn't stamp O is non-conformant.
+**Dashboard write contract:** every write-back is one `batchUpdate` touching its intent columns **plus M, N (when completing), and always O.** A dashboard that doesn't stamp O is non-conformant. **Snooze writes an *absolute* future Due date** (today + the chosen offset, or a picked date — never `Due += N`), so an already-overdue row snoozed forward clears OVERDUE cleanly. The Today **desk** is select-to-act (V3.3): a multi-row selection fans its done / snooze / note out to **one** `batchUpdate`, every row's columns resolved by header name (Lane C, §7.6).
 
 ### 6.2 `WhatsApp_Inbox` (hot, 30-day rolloff) + `WhatsApp_Archive` (text-only, forever)
 

@@ -104,16 +104,45 @@
         <div id="today-cal-strip" class="cal-strip"></div>
       </div>
 
-      <!-- Desk slot (V3.3 → select-to-act desk) — holds the OVERDUE/today list for now. -->
+      <!-- Desk slot (V3.3) — a select-to-act list: each OVERDUE/FIRE-TODAY reminder
+           is a checkbox-semantics row; selecting ≥1 reveals the sticky batch bar
+           (done / snooze / note) that fans out to ONE applyWrites batch. -->
       <div id="desk" class="section">
         <h2 data-i18n="section.todayList">Today</h2>
-        <div id="today-list"></div>
+        <div id="today-list" role="group"></div>
+        <!-- Sticky batch action bar — hidden until ≥1 row is selected. The snooze
+             chips resolve to ABSOLUTE Due dates (an overdue row snoozed forward
+             clears OVERDUE — the D4 fix); the note row is an inline composer. -->
+        <div id="desk-actionbar" class="desk-actionbar" hidden>
+          <div class="desk-actionbar-main">
+            <span class="desk-sel-count num" id="desk-sel-count" role="status" aria-live="polite"></span>
+            <div class="desk-actionbar-btns">
+              <button class="action-btn primary" type="button" data-batch="done" data-i18n="row.done">✓ done</button>
+              <button class="action-btn" type="button" data-batch="snooze" data-i18n="row.snooze">+ snooze</button>
+              <button class="action-btn" type="button" data-batch="note" data-i18n="row.note">+ note</button>
+            </div>
+          </div>
+          <div class="desk-snooze-row" id="desk-snooze-row" hidden role="group">
+            <button class="snooze-chip" type="button" data-snooze-days="1" data-i18n="snooze.tomorrow">Tomorrow</button>
+            <button class="snooze-chip" type="button" data-snooze-days="3" data-i18n="snooze.in3">+3d</button>
+            <button class="snooze-chip" type="button" data-snooze-days="7" data-i18n="snooze.week">1 week</button>
+            <button class="snooze-chip" type="button" data-snooze-days="14" data-i18n="snooze.twoweeks">2 weeks</button>
+            <button class="snooze-chip" type="button" data-snooze-days="30" data-i18n="snooze.month">1 month</button>
+            <input type="date" id="desk-snooze-date" class="snooze-date" />
+          </div>
+          <div class="desk-note-row" id="desk-note-row" hidden>
+            <textarea id="desk-note-input" rows="2" maxlength="500" data-i18n-placeholder="desk.notePlaceholder" placeholder="Write a note…"></textarea>
+            <button class="action-btn primary" type="button" id="desk-note-send" data-i18n="lovenote.send">Send</button>
+          </div>
+        </div>
       </div>
 
-      <!-- Coming-up slot (V3.3 → coming-up strip) — holds the next-7 list for now. -->
+      <!-- Coming-up slot (V3.3) — a read-only ±30-day horizontal scroll band with a
+           now-marker: scroll back for past calendar events, forward for week/month-
+           out reminders + upcoming events. today/+1/+2 events stay in the 3-day strip. -->
       <div id="coming-up" class="section">
-        <h2 data-i18n="section.next7">Next 7 days</h2>
-        <div id="next7-list"></div>
+        <h2 data-i18n="section.comingUp">Coming up</h2>
+        <div id="coming-up-strip" class="coming-up-strip" tabindex="0" role="group"></div>
       </div>
 
       <!-- Portfolios slot (V3.5) — a grid of domain TILES that open one shared,
