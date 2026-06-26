@@ -1,0 +1,11 @@
+; Fire the love-note sweep hourly (Persistent: a missed window — box asleep —
+; runs once on resume). The lazy read-expiry is the belt; this is the suspenders.
+[Unit]
+Description=Family inc. love-note sweep — hourly
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

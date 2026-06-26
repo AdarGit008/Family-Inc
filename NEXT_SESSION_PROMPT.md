@@ -11,7 +11,7 @@ Paste everything below this line to open the session:
 You are opening a Family Inc working session as Lead Architect. Read `CLAUDE.md`
 (roles, principles, guardrails), then work the current focus only.
 
-**Current focus: v3 Today redesign — V3.7 love-notes (parent-to-parent ephemeral note; appliance endpoint + Cloudflare Tunnel, **text first / voice second**) (V3.6 cross-domain timeline landed 2026-06-25 — PO calls ratified, SPEC §7.6 graduated; V3.7 is Sheet-independent — the first dashboard datum that is **neither the Sheet nor the outbox** — and needs the love-note on-box storage shape + the `pages.yml` sed / `DASHBOARD_LOVENOTE_URL` secret / 4th config-smoke anchor; the voice phase needs the SPEC §4 carve-out; V3.3 snooze still gates on Lane C).**
+**Current focus: v3 Today redesign — **V3.8 i18n + a11y + Settings** (V3.7 love-notes **text** phase landed 2026-06-25: the first dashboard datum **neither the Sheet nor the outbox** — appliance endpoint + Cloudflare-Tunnel exposure, flat-JSON-per-direction storage, access_token→tokeninfo auth (opt-in audience check), **459 tests green** + an 11-fix adversarial review pass, **deploy-gated** on the PO standing up the tunnel + the `DASHBOARD_LOVENOTE_URL` secret; **voice** is a frozen phase-2 needing the SPEC §4/§7.7 carve-out — not built. **V3.3** desk + absolute snooze still gates on **Lane C** / col-D).**
 
 *(The focus headline is set by a `**Focus:** …` pin in `BACKLOG.md` → `## Now`; absent a pin it's the freshest 🔵 lane.)*
 
@@ -24,12 +24,12 @@ Active lanes (🔵 in progress — work the focus above first; don't open the ot
 
 Recent commits (the dated decision record — decisions fold into the canon, not a separate log):
 
+- 2026-06-25 feat(dashboard): V3.6 — cross-domain timeline (1wk→5yr zoom + category filter)
 - 2026-06-25 docs: regenerate next-session prompt (post V3.5)
 - 2026-06-25 feat(dashboard): V3.5 — portfolios + one data-driven bottom-sheet (replaces the accordions)
 - 2026-06-25 feat(dashboard): V3.4 — 3-day scroll-snap calendar strip
 - 2026-06-25 feat(dashboard): V3.2 — Today scaffold + 3-tier status pill (replaces pill + banner)
 - 2026-06-25 fix(kickoff): focus follows a PO Focus pin + all 🔵 lanes, not a stale section title
-- 2026-06-25 docs: regenerate next-session prompt (post V3.1 retone)
 
 Session contract: don't open lanes outside the current focus without a PO call ·
 constants → config, utilities → `automation/lib/`, message copy → templates ·

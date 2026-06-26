@@ -1,0 +1,18 @@
+; Love-note sweep (V3.7). Hourly oneshot behind the server's lazy read-expiry:
+; unlink every note past its 24h window even if no dashboard open triggered the
+; lazy path. Shares the server's StateDirectory (same files).
+[Unit]
+Description=Family inc. love-note sweep (expire notes past 24h)
+OnFailure=family-fail-flag@%n.service
+
+[Service]
+Type=oneshot
+User=familyinc
+WorkingDirectory=/opt/family-inc
+EnvironmentFile=-/etc/family-inc/env
+Environment=FAMILY_INC_LOVENOTE_DIR=/var/lib/family-inc/lovenote
+StateDirectory=family-inc/lovenote
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/usr/local/bin/uv run --no-sync python automation/sweep_love_notes.py
+NoNewPrivileges=true

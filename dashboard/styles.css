@@ -167,6 +167,48 @@ header.app-header .date {
    reserve space (no layout shift on the rebuilt Today). */
 #love-note-slot[hidden] { display: none; }
 
+/* Love-note (V3.7) — a parent-to-parent ephemeral note. The inbound card is set
+   apart by an accent wash + an inline-start border + the 💌 glyph, never hue
+   alone (DESIGN §8); the composer is a quiet textarea + Send/Clear (reusing the
+   shared .action-btn styles). RTL "just works" via logical properties. */
+.love-note { margin-block: 4px 18px; }
+.love-note-heading {
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0 4px 8px;
+  font-weight: 600;
+}
+.love-note-card {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-inline-start: 3px solid var(--accent);
+  border-radius: var(--rad);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.love-note-from { font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 4px; }
+.love-note-text { font-size: 15px; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.love-note-when { font-size: 11px; color: var(--muted); margin-top: 6px; }
+.love-note-compose { display: flex; flex-direction: column; gap: 8px; }
+.love-note-input {
+  width: 100%;
+  resize: vertical;
+  min-block-size: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  background: var(--tile);
+  color: var(--ink);
+  border-radius: var(--rad-sm);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.love-note-input::placeholder { color: var(--muted); }
+.love-note-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.love-note-waiting { font-size: 12px; color: var(--muted); margin-inline-end: auto; }
+
 /* Sections */
 .section {
   margin-bottom: 18px;

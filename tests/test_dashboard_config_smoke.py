@@ -1,11 +1,11 @@
 """Dashboard config.js smoke (ROADMAP §1, lane 1 — the config-smoke gate).
 
 Pages generates dashboard/config.js from config.example.js on every dashboard/**
-push (.github/workflows/pages.yml) via three `sed` substitutions. config.js is
+push (.github/workflows/pages.yml) via four `sed` substitutions. config.js is
 gitignored and only exists at deploy time, so a template edit that silently
 breaks the sed — or produces invalid JS — would only surface as a broken live
 dashboard. This pins the contract three ways:
-  • the three sed ANCHORS still exist in config.example.js (so a drifted template
+  • the four sed ANCHORS still exist in config.example.js (so a drifted template
     fails here, not at deploy — the "config.example.js still applies" check);
   • the generated output carries no placeholder and the full Finance tab names;
   • the generated output is valid JavaScript (node --check).
@@ -26,6 +26,7 @@ TEMPLATE = ROOT / "dashboard" / "config.example.js"
 # The exact anchors pages.yml's sed depends on — keep in lockstep with that file.
 _CLIENT_ANCHOR = "PASTE_YOUR_CLIENT_ID_HERE.apps.googleusercontent.com"
 _SHEET_ANCHOR = "PASTE_YOUR_SHEET_ID_HERE"
+_LOVENOTE_ANCHOR = "PASTE_YOUR_LOVENOTE_URL_HERE"   # V3.7 love-note endpoint URL
 _DEMO_ANCHOR = "DEMO_MODE: true"
 
 _EXPECTED_TAB_KEYS = {
@@ -43,17 +44,19 @@ def _template() -> str:
 
 
 def _generate(client="dummy-client.apps.googleusercontent.com",
-              sheet="dummySheetId1234567890") -> str:
-    """Mirror pages.yml's three sed substitutions, in Python, with dummy secrets."""
+              sheet="dummySheetId1234567890",
+              lovenote="https://lovenote.dummy.example") -> str:
+    """Mirror pages.yml's four sed substitutions, in Python, with dummy secrets."""
     return (_template()
             .replace(_CLIENT_ANCHOR, client)
             .replace(_SHEET_ANCHOR, sheet)
+            .replace(_LOVENOTE_ANCHOR, lovenote)
             .replace(_DEMO_ANCHOR, "DEMO_MODE: false"))
 
 
 def test_sed_anchors_present_in_template():
     t = _template()
-    for anchor in (_CLIENT_ANCHOR, _SHEET_ANCHOR, _DEMO_ANCHOR):
+    for anchor in (_CLIENT_ANCHOR, _SHEET_ANCHOR, _LOVENOTE_ANCHOR, _DEMO_ANCHOR):
         assert anchor in t, (
             f"pages.yml's sed anchor {anchor!r} is missing from config.example.js — "
             "Pages config generation would silently no-op. Keep the anchors in sync "

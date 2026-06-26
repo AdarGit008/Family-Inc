@@ -94,7 +94,7 @@ Boundary rules (convention, reviewer-checked — no CI enforces them yet): scrip
 
 1. Create user `familyinc` (no sudo); `timedatectl set-timezone Asia/Jerusalem`.
 2. Install uv + Node 22; clone the repo to `/opt/family-inc`; `uv sync --frozen`; `npm ci --omit=dev` in `bridge/` and `finance/`; install xvfb+xauth (the Playwright browser and Puppeteer's Chromium are pulled per-lane, not by an apt package).
-3. Copy `deploy/systemd/*` → `/etc/systemd/system/`; `systemctl enable --now` the bridge service + all timers.
+3. Copy `deploy/systemd/*` → `/etc/systemd/system/`; `systemctl enable --now` the bridge service + all timers + the love-note + tunnel services (V3.7; install `cloudflared` and place `CLOUDFLARED_TUNNEL_TOKEN` first).
 4. Place secrets in `/etc/family-inc/` by hand (never scripted, never copied off the box).
 5. Pair Baileys: `systemctl stop family-bridge && node bridge/baileys_listener.js` once, scan the QR, restart. `bridge/state/auth_state/` is in the weekly backup — **after a VPS rebuild, restore it before re-pairing**; a fresh QR scan is the fallback, not the default. (A Baileys *major*-version bump is the one case that requires wiping `auth_state/` and re-pairing.)
 
@@ -110,8 +110,13 @@ Units (schedules are code — change them via PR, not on the box):
 | `family-summarizer.timer` | hourly, 24h | classifier — runs at night so **criticals** can fire any hour; ordinary alerts are still held 22:00–07:00 by the outbox |
 | `family-weekly.timer` | Sat 21:00 | weekly briefing + classifier-accuracy section |
 | `family-backup.timer` | Sun 03:00 | tar `bridge/state` + `logs/` → Drive via rclone |
+| `family-lovenote.service` | always-on, `Restart=on-failure` | love-note endpoint (V3.7, SPEC §7.7) — localhost HTTP, fronted by the tunnel |
+| `family-lovenote-tunnel.service` | always-on, `Restart=on-failure` | Cloudflare Tunnel → the love-note endpoint (token-managed; ingress set in the Cloudflare dashboard) |
+| `family-lovenote-sweep.timer` | hourly | expire love-notes past 24h (belt-and-suspenders behind the server's lazy read-expiry) |
 
 All timers: `Persistent=true`; `OnFailure=family-fail-flag@%n.service` appends the failing unit to `logs/fail.flag`. The next **delivered** digest reports it (a Hebrew line prepended) and clears the file; a flag still present on Saturday means digests aren't landing, and the weekly briefing says so.
+
+**The love-note endpoint is the box's FIRST inbound HTTP listener** (everything else is an outbound timer/sender). It binds `127.0.0.1:8787` only; the Cloudflare Tunnel is the sole public path, so there is no port-forward and no home-IP exposure. It reads `Settings.UserMap` (the live Sheet, service account) and needs `FAMILY_INC_LOVENOTE_ORIGIN` (the Pages origin, for CORS) + `CLOUDFLARED_TUNNEL_TOKEN` in `/etc/family-inc/env`; a blank origin keeps the feature inert. Unlike the timers, the server is long-running — a deploy that changes its code needs an explicit `systemctl restart family-lovenote` (add it to the `familyinc` sudoers whitelist alongside `family-bridge`), since no timer picks it up.
 
 ## 6. Deployment
 
@@ -121,10 +126,11 @@ All timers: `Persistent=true`; `OnFailure=family-fail-flag@%n.service` appends t
 git pull --ff-only
 uv sync --frozen && (cd automation/bridge && npm ci --omit=dev) && (cd automation/finance && npm ci --omit=dev)
 FAMILY_INC_SHEET_ID= uv run --frozen pytest -q   # red tests abort the deploy; running code is untouched
-sudo /usr/bin/systemctl restart family-bridge    # the one whitelisted sudoers line
+sudo /usr/bin/systemctl restart family-bridge    # whitelisted sudoers line
+# family-lovenote restarted too when installed (guarded; long-running, not a timer)
 ```
 
-Timers pick up new code automatically on the next fire (they exec scripts from the repo); only the long-running bridge needs a restart. **Committed is not deployed** — a placed secret or a merged feature is inert until `deploy.sh` pulls it; confirm the box is at origin HEAD before declaring anything live. The `familyinc` user has exactly one sudo capability (restart `family-bridge`), so a compromised script can't escalate.
+Timers pick up new code automatically on the next fire (they exec scripts from the repo); the two **long-running** services — `family-bridge` and `family-lovenote` (V3.7) — are the exception and `deploy.sh` restarts both (the love-note restart is guarded, so it no-ops until the unit is installed). **Committed is not deployed** — a placed secret or a merged feature is inert until `deploy.sh` pulls it; confirm the box is at origin HEAD before declaring anything live. The `familyinc` user has exactly two sudo capabilities (restart `family-bridge` / `family-lovenote`, both restart-only), so a compromised script can't escalate.
 
 **Pre-merge CI:** `.github/workflows/tests.yml` runs the hermetic pytest suite — including the seed-safety guard, the repo-wide PII-leak guard (`tests/test_repo_pii_guard.py` + the shared patterns in `lib/pii.py`), and the dashboard `config.js` smoke — on every push + PR to `main`, so a red commit can't merge. It gates **merge**, not the box: `deploy.sh` still runs the same suite on the appliance as the safety net before restarting the bridge (no `deploy.sh` change — the guards are plain pytest, so they ride the existing run). The job has no path filter (the PII guard scans the whole tree, so a leaked value in docs or config trips it too) and installs Node 22 so the `@requires_node` syntax-check tests run rather than skip.
 

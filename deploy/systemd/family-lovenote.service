@@ -1,0 +1,38 @@
+; Love-note endpoint (V3.7, SPEC §7.7). The FIRST inbound HTTP listener on the
+; box and the one dashboard datum that is neither the Sheet nor the outbox: a
+; localhost-bound stdlib server holding ONE ephemeral note per direction
+; (24h-or-on-replacement). A Cloudflare Tunnel (family-lovenote-tunnel.service)
+; fronts it — the server never binds a public port. Reads Settings.UserMap to
+; map a verified Google email→parent; never writes the Sheet, never the outbox,
+; never persists the OAuth token. Text-only; voice is a frozen phase-2 (§4).
+[Unit]
+Description=Family inc. love-note endpoint (dashboard ↔ appliance, localhost)
+OnFailure=family-fail-flag@%n.service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=familyinc
+WorkingDirectory=/opt/family-inc
+EnvironmentFile=-/etc/family-inc/env
+; FAMILY_INC_LOVENOTE_ORIGIN (the Pages origin, for CORS) + FAMILY_INC_SHEET_ID
+; come from the env file above. Blank origin → CORS denies all → feature inert.
+Environment=FAMILY_INC_LOVENOTE_DIR=/var/lib/family-inc/lovenote
+StateDirectory=family-inc/lovenote
+; Owner-only: the dir holds the (ephemeral) note text between the two adults.
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=5
+MemoryMax=200M
+; Bound the blast radius of the box's only inbound listener: ThreadingHTTPServer
+; spawns a thread per connection, so cap threads + CPU so a request flood can't
+; starve the rest of the appliance (the body-size 413 guard is the first line).
+TasksMax=64
+CPUQuota=50%
+ExecStart=/usr/local/bin/uv run --no-sync python automation/love_note_server.py
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

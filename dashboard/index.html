@@ -88,7 +88,12 @@
         <span class="pill-label" id="status-pill-text" data-i18n="state.loading">Loading…</span>
       </div>
 
-      <!-- Love-note slot (V3.7) — empty + hidden until there's an inbound note. -->
+      <!-- Love-note slot (V3.7) — a parent-to-parent ephemeral note. renderLoveNote
+           fills it: an inbound card (the note your partner left, hidden when none)
+           above a small composer (write/replace/clear your own note). Stays hidden
+           entirely unless the feature is configured (cfg.LOVENOTE_URL) + signed in,
+           so it never promises a dead affordance (SPEC §3). The note shows on the
+           recipient's next open — no push, no "seen" signal (SPEC §3.7). -->
       <div id="love-note-slot" hidden></div>
 
       <!-- Calendar slot (V3.4) — a 3-day scroll-snap strip (today/+1/+2),

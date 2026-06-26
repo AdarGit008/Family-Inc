@@ -1,0 +1,30 @@
+; Cloudflare Tunnel for the love-note endpoint (V3.7, decided 2026-06-25). The
+; box dials OUT to Cloudflare and gets a stable public HTTPS hostname that routes
+; to the localhost server — no port-forward, no home-IP exposure, TLS handled.
+; This is a Cloudflare-MANAGED (token) tunnel: the public hostname → service
+; ingress (lovenote.<domain> → http://localhost:8787) is configured once in the
+; Cloudflare Zero Trust dashboard. That tunnel hostname is the DASHBOARD_LOVENOTE_URL
+; GitHub secret the Pages build bakes into config.js (the URL the PWA fetches).
+; NOTE the server's FAMILY_INC_LOVENOTE_ORIGIN is a DIFFERENT value — the *Pages*
+; origin the PWA is served from (e.g. https://<user>.github.io), which is what the
+; browser sends as Origin and what CORS must allow — not this tunnel hostname.
+;
+; Provision: install cloudflared, create a tunnel, copy its token into
+; /etc/family-inc/env as CLOUDFLARED_TUNNEL_TOKEN (mode 600), enable this unit.
+[Unit]
+Description=Family inc. Cloudflare Tunnel (love-note endpoint)
+OnFailure=family-fail-flag@%n.service
+After=network-online.target family-lovenote.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=familyinc
+EnvironmentFile=/etc/family-inc/env
+ExecStart=/usr/local/bin/cloudflared tunnel --no-autoupdate run --token ${CLOUDFLARED_TUNNEL_TOKEN}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

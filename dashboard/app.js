@@ -92,6 +92,17 @@
       'timeline.cat.contracts': 'חוזים',
       'timeline.cat.calendar': 'יומן',
       'timeline.cat.other': 'אחר',
+      // Love-note (V3.7) — parent-to-parent ephemeral note
+      'lovenote.heading': 'פתק',
+      'lovenote.inboundFrom': 'פתק מ{name}',
+      'lovenote.composePlaceholder': 'פתק ל{name}…',
+      'lovenote.composeGeneric': 'השאר פתק…',
+      'lovenote.send': 'שלח',
+      'lovenote.clear': 'מחק',
+      'lovenote.waiting': 'ממתין ל{name}',
+      'lovenote.sentToast': 'הפתק נשלח ל{name}',
+      'lovenote.clearedToast': 'הפתק נמחק',
+      'lovenote.failedToast': 'שליחת הפתק נכשלה — נסו שוב',
       // Car field labels
       'car.annualTest': 'טסט שנתי',
       'car.insurance': 'ביטוח',
@@ -229,6 +240,17 @@
       'timeline.cat.contracts': 'contracts',
       'timeline.cat.calendar': 'calendar',
       'timeline.cat.other': 'other',
+      // Love-note (V3.7) — parent-to-parent ephemeral note
+      'lovenote.heading': 'Note',
+      'lovenote.inboundFrom': 'A note from {name}',
+      'lovenote.composePlaceholder': 'Leave a note for {name}…',
+      'lovenote.composeGeneric': 'Leave a note…',
+      'lovenote.send': 'Send',
+      'lovenote.clear': 'Clear',
+      'lovenote.waiting': 'Waiting for {name}',
+      'lovenote.sentToast': 'Note sent to {name}',
+      'lovenote.clearedToast': 'Note cleared',
+      'lovenote.failedToast': 'Couldn’t send — try again',
       'car.annualTest': 'Annual test',
       'car.insurance': 'Insurance',
       'car.license': 'License',
@@ -350,6 +372,8 @@
     sheetReturnFocus: null,   // domain key whose tile regains focus on close (NOT a
                               // node ref — a bg reload rebuilds the grid; re-resolve live)
     timeline: { zoom: '3mo', filter: 'all' },  // V3.6 cross-domain timeline view state
+    loveNote: { inbound: null, outbound: null },  // V3.7 — note FROM partner / note I left
+    loveNoteSending: false,                       // one-shot guard while a PUT/DELETE is in flight
   };
 
   // ---------------- Utilities ----------------
@@ -593,6 +617,7 @@
       const json = await resp.json();
       state.data = parseAll(json);
       state.cachedAt = new Date();
+      state.loveNote = state.data.loveNote || { inbound: null, outbound: null };  // V3.7 demo fixture
       renderAll();
       return;
     }
@@ -637,6 +662,7 @@
       applySheetLang();
       renderAll();
       await flushQueue();
+      loadLoveNote();   // V3.7 — the appliance endpoint, not the Sheet; re-renders the slot when it lands
     } catch (e) {
       console.error('Live load failed', e);
       const cached = localStorage.getItem(CACHE_KEY);
@@ -804,7 +830,10 @@
       monthly: parseFloat(r['Monthly Cost (ILS)']) || 0,
     })).filter(c => c.contract);
 
-    return { reminders, calendarEvents, people, budget, txns, goals, health, education, car, contracts, settings };
+    // V3.7 love-note: live data comes from the appliance endpoint (loadLoveNote),
+    // NOT the Sheet; in DEMO_MODE the fixture rides along in mock_data.json.
+    const loveNote = named.loveNote || null;
+    return { reminders, calendarEvents, people, budget, txns, goals, health, education, car, contracts, settings, loveNote };
   }
 
   // ---------------- Render ----------------
@@ -816,6 +845,7 @@
     const _hdrLocale = currentLang() === 'en' ? 'en-GB' : 'he-IL';
     document.getElementById('header-date').textContent = state.today.toLocaleDateString(_hdrLocale, { weekday: 'long', day: 'numeric', month: 'long' });
     renderStatusPill();
+    renderLoveNote();
     renderToday();
     render3DayCalendar();
     renderNext7();
@@ -870,6 +900,192 @@
       setStatusPill({ tier: 'clear', glyph: '✅', label: t('pill.sundayReady') });
     } else {
       setStatusPill({ tier: 'clear', glyph: '✅', label: t('pill.allClear') });
+    }
+  }
+
+  // ---------------- Love-note (V3.7) ----------------
+  // The one dashboard datum that is neither the Sheet nor the outbox: a parent-
+  // to-parent ephemeral note over a small authenticated appliance endpoint
+  // (automation/love_note_server.py), fronted by a Cloudflare Tunnel. ONE note
+  // per direction, 24h-or-on-replacement; it shows on the recipient's NEXT open
+  // — no push, and no "seen"/delivery signal back to the sender (SPEC §3.7).
+  // Text-only here; voice is a frozen phase-2 (SPEC §4 carve-out).
+
+  // The endpoint base (no trailing slash), or null when unconfigured — in which
+  // case the whole slot stays hidden (never promise an affordance that's dead).
+  function loveNoteBase() {
+    const u = String(cfg.LOVENOTE_URL || '').trim();
+    if (!u || u.startsWith('PASTE_')) return null;
+    return u.replace(/\/+$/, '');
+  }
+  // The live Google access_token the server re-verifies against Google userinfo.
+  function loveNoteToken() {
+    try {
+      return (window.gapi && gapi.client && gapi.client.getToken && gapi.client.getToken()?.access_token)
+        || state.token?.access_token || null;
+    } catch { return null; }
+  }
+  // Is the signed-in account actually one of the two parents in UserMap (with a
+  // distinct partner to address)? A non-parent viewer with Sheet access would
+  // otherwise be shown a live composer the server 403s — a dead affordance.
+  function loveNoteIsParent() {
+    const um = (state.data && state.data.settings && state.data.settings.userMap) || {};
+    const me = ((state.user && state.user.email) || '').toLowerCase();
+    if (!me) return false;
+    const keys = Object.keys(um).map(e => e.toLowerCase());
+    return keys.includes(me) && keys.some(e => e !== me);
+  }
+  // Demo always shows the component (so the card + composer can be reviewed);
+  // live needs the endpoint configured AND the signer to be a known parent.
+  function loveNoteEnabled() {
+    if (cfg.DEMO_MODE) return true;
+    return !!(loveNoteBase() && state.user && loveNoteToken() && loveNoteIsParent());
+  }
+  // The other adult — the note's recipient. Live: the UserMap entry that isn't
+  // me. Fallback (incl. demo, where no one is signed in): whoever wrote to me /
+  // whom I last wrote to / the configured pair.
+  function loveNotePartnerName() {
+    const um = (state.data && state.data.settings && state.data.settings.userMap) || {};
+    const me = ((state.user && state.user.email) || '').toLowerCase();
+    if (me) { for (const [email, name] of Object.entries(um)) { if (email.toLowerCase() !== me) return name; } }
+    if (state.loveNote.inbound?.from) return state.loveNote.inbound.from;
+    if (state.loveNote.outbound?.to) return state.loveNote.outbound.to;
+    const vals = Object.values(cfg.USERS || {});
+    return vals[vals.length - 1] || '';
+  }
+  // A short, localized "when" for the note timestamp (time if today, else date).
+  function loveNoteWhen(iso) {
+    const d = parseDate(iso);
+    if (!d) return '';
+    const locale = currentLang() === 'en' ? 'en-GB' : 'he-IL';
+    return daysBetween(d, state.today) === 0
+      ? d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+  }
+
+  // Fetch the note pair {inbound, outbound} for the signed-in user from the
+  // appliance endpoint, then re-render the slot. Failures degrade quiet.
+  async function loadLoveNote() {
+    if (cfg.DEMO_MODE) {
+      state.loveNote = (state.data && state.data.loveNote) || { inbound: null, outbound: null };
+      renderLoveNote();
+      return;
+    }
+    const base = loveNoteBase(), token = loveNoteToken();
+    if (!base || !token) { renderLoveNote(); return; }
+    try {
+      const resp = await fetch(`${base}/lovenote`, { headers: { Authorization: `Bearer ${token}` } });
+      if (resp.ok) state.loveNote = await resp.json();
+    } catch (e) {
+      console.warn('love-note load failed', e);   // slot just stays empty
+    }
+    renderLoveNote();
+  }
+
+  function renderLoveNote() {
+    const slot = document.getElementById('love-note-slot');
+    if (!slot) return;
+    // Preserve an in-progress draft across this full-innerHTML rebuild: a
+    // background re-render (e.g. tapping done/snooze on a reminder while
+    // composing) must not wipe unsent text the user is still typing.
+    const prevInput = document.getElementById('love-note-input');
+    const draft = prevInput ? prevInput.value : null;
+    const hadFocus = !!prevInput && document.activeElement === prevInput;
+    if (!loveNoteEnabled()) { slot.hidden = true; slot.innerHTML = ''; return; }
+    const partner = loveNotePartnerName();
+    const inbound = state.loveNote.inbound;
+    const outbound = state.loveNote.outbound;
+    const placeholder = partner ? t('lovenote.composePlaceholder', { name: partner }) : t('lovenote.composeGeneric');
+    // Inbound card: hidden when empty. The 💌 glyph + the "from {name}" label +
+    // the wash/border carry it — never color alone (DESIGN §8).
+    const inboundCard = inbound ? `
+      <div class="love-note-card">
+        <div class="love-note-from"><span aria-hidden="true">💌</span> ${escapeHtml(t('lovenote.inboundFrom', { name: inbound.from || partner }))}</div>
+        <div class="love-note-text">${escapeHtml(inbound.text || '')}</div>
+        ${inbound.sent_at ? `<div class="love-note-when num">${escapeHtml(loveNoteWhen(inbound.sent_at))}</div>` : ''}
+      </div>` : '';
+    const waiting = outbound
+      ? `<span class="love-note-waiting">${escapeHtml(t('lovenote.waiting', { name: partner || outbound.to || '' }))}${outbound.sent_at ? ' · ' + escapeHtml(loveNoteWhen(outbound.sent_at)) : ''}</span>`
+      : '';
+    const clearBtn = outbound ? `<button class="action-btn danger" id="love-note-clear" type="button">${escapeHtml(t('lovenote.clear'))}</button>` : '';
+    slot.innerHTML = `
+      <div class="love-note">
+        <h2 class="love-note-heading"><span aria-hidden="true">💌</span> ${escapeHtml(t('lovenote.heading'))}</h2>
+        ${inboundCard}
+        <div class="love-note-compose">
+          <textarea id="love-note-input" class="love-note-input" rows="2" maxlength="500"
+            placeholder="${escapeHtml(placeholder)}" aria-label="${escapeHtml(placeholder)}">${escapeHtml(outbound?.text || '')}</textarea>
+          <div class="love-note-actions">
+            ${waiting}
+            ${clearBtn}
+            <button class="action-btn primary" id="love-note-send" type="button">${escapeHtml(t('lovenote.send'))}</button>
+          </div>
+        </div>
+      </div>`;
+    slot.hidden = false;
+    const send = document.getElementById('love-note-send');
+    if (send) send.addEventListener('click', () => handleSendLoveNote());
+    const clear = document.getElementById('love-note-clear');
+    if (clear) clear.addEventListener('click', () => handleClearLoveNote());
+    // Restore a divergent unsent draft the rebuild would otherwise have wiped.
+    const input = document.getElementById('love-note-input');
+    if (input && draft != null && draft !== input.value) {
+      input.value = draft;
+      if (hadFocus) { input.focus(); try { const n = draft.length; input.setSelectionRange(n, n); } catch (_) {} }
+    }
+  }
+
+  async function handleSendLoveNote() {
+    if (state.loveNoteSending) return;
+    const input = document.getElementById('love-note-input');
+    const text = ((input && input.value) || '').trim();
+    if (!text) return;
+    const partner = loveNotePartnerName();
+    if (cfg.DEMO_MODE) {
+      state.loveNote.outbound = { to: partner, text, sent_at: new Date().toISOString() };
+      toast(t('toast.demoPrefix', { label: t('lovenote.sentToast', { name: partner }) }));
+      renderLoveNote();
+      return;
+    }
+    const base = loveNoteBase(), token = loveNoteToken();
+    if (!base || !token) return;
+    state.loveNoteSending = true;
+    try {
+      const resp = await fetch(`${base}/lovenote`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (resp.ok) { toast(t('lovenote.sentToast', { name: partner })); await loadLoveNote(); }
+      else toast(t('lovenote.failedToast'));
+    } catch (e) {
+      console.warn('love-note send failed', e);
+      toast(t('lovenote.failedToast'));
+    } finally {
+      state.loveNoteSending = false;
+    }
+  }
+
+  async function handleClearLoveNote() {
+    if (state.loveNoteSending) return;
+    if (cfg.DEMO_MODE) {
+      state.loveNote.outbound = null;
+      toast(t('toast.demoPrefix', { label: t('lovenote.clearedToast') }));
+      renderLoveNote();
+      return;
+    }
+    const base = loveNoteBase(), token = loveNoteToken();
+    if (!base || !token) return;
+    state.loveNoteSending = true;
+    try {
+      const resp = await fetch(`${base}/lovenote`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      if (resp.ok) { toast(t('lovenote.clearedToast')); await loadLoveNote(); }
+      else toast(t('lovenote.failedToast'));
+    } catch (e) {
+      console.warn('love-note clear failed', e);
+      toast(t('lovenote.failedToast'));
+    } finally {
+      state.loveNoteSending = false;
     }
   }
 

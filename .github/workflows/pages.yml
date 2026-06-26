@@ -33,13 +33,19 @@ jobs:
         env:
           CLIENT_ID: ${{ secrets.DASHBOARD_CLIENT_ID }}
           SHEET_ID: ${{ secrets.DASHBOARD_SHEET_ID }}
+          # V3.7 love-note endpoint (Cloudflare Tunnel URL). OPTIONAL — when the
+          # secret is unset the placeholder is replaced with "" and the dashboard
+          # love-note feature self-disables (no hard-fail like the two ids above).
+          LOVENOTE_URL: ${{ secrets.DASHBOARD_LOVENOTE_URL }}
         run: |
           test -n "$CLIENT_ID" || { echo "::error::DASHBOARD_CLIENT_ID secret missing"; exit 1; }
           test -n "$SHEET_ID"  || { echo "::error::DASHBOARD_SHEET_ID secret missing"; exit 1; }
-          # config.example.js is the template of record; override only the two ids.
-          # USERS fallback stays placeholder — live identity is Settings.UserMap (SPEC §7.6).
+          # config.example.js is the template of record; override only the two ids
+          # (+ the optional love-note URL). USERS fallback stays placeholder —
+          # live identity is Settings.UserMap (SPEC §7.6).
           sed -e "s|PASTE_YOUR_CLIENT_ID_HERE.apps.googleusercontent.com|$CLIENT_ID|" \
               -e "s|PASTE_YOUR_SHEET_ID_HERE|$SHEET_ID|" \
+              -e "s|PASTE_YOUR_LOVENOTE_URL_HERE|$LOVENOTE_URL|" \
               -e "s|DEMO_MODE: true|DEMO_MODE: false|" \
               dashboard/config.example.js > dashboard/config.js
           grep -q "DEMO_MODE: false" dashboard/config.js || { echo "::error::DEMO_MODE still true in generated config.js"; exit 1; }

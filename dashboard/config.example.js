@@ -43,4 +43,11 @@ window.FAMILY_INC_CONFIG = {
 
   // Asia/Jerusalem matches the rest of Family inc.
   TIMEZONE: "Asia/Jerusalem",
+
+  // Love-note endpoint (V3.7) — the public HTTPS URL of the appliance love-note
+  // server, fronted by a Cloudflare Tunnel. Set at deploy time from the
+  // DASHBOARD_LOVENOTE_URL secret (pages.yml). BLANK or left as the placeholder
+  // → the love-note card/composer never renders (never promise a dead
+  // affordance). No trailing slash; the dashboard appends "/lovenote".
+  LOVENOTE_URL: "PASTE_YOUR_LOVENOTE_URL_HERE",
 };

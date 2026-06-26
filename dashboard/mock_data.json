@@ -700,5 +700,9 @@
       "lang",
       "he"
     ]
-  ]
+  ],
+  "loveNote": {
+    "inbound": { "from": "Shanee", "text": "אל תשכח לנשום היום ❤️ אני איתך", "sent_at": "2026-06-25T07:40:00" },
+    "outbound": null
+  }
 }

@@ -137,4 +137,7 @@ def tmp_runtime(tmp_path, monkeypatch):
     # sandbox so a test run never reads /etc/family-inc or writes /var/lib.
     monkeypatch.setattr(config, "FINANCE_STATE_DIR", tmp_path / "state" / "finance")
     monkeypatch.setattr(config, "FINANCE_CREDS_FILE", tmp_path / "etc" / "bank_creds.json")
+    # Love-notes (V3.7) — the ephemeral note files live in the sandbox, never
+    # /var/lib/family-inc/lovenote.
+    monkeypatch.setattr(config, "LOVENOTE_STATE_DIR", tmp_path / "state" / "lovenote")
     return tmp_path

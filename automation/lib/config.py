@@ -213,6 +213,42 @@ FINANCE_STALE_IMPORT_DAYS = 35
 FINANCE_CATEGORY_RULES = SEEDS_DIR / "14_Finance_Category_Rules.csv"
 
 # ---------------------------------------------------------------------------
+# Love-notes (V3.7, SPEC §7.7 — the one dashboard datum that is neither the
+# Sheet nor the outbox). A tiny authenticated dashboard→appliance endpoint
+# (love_note_server.py) holds ONE ephemeral note per direction (Adar→Shanee,
+# Shanee→Adar), dies at 24h-or-on-replacement, shows on the recipient's next
+# dashboard open — no push, no alert-budget spend, never the Sheet, never the
+# outbox, never a stored OAuth token. Voice is a frozen phase-2 (SPEC §4).
+# ---------------------------------------------------------------------------
+# One JSON file per direction ({slug(from)}__to__{slug(to)}.json). VPS =
+# /var/lib/family-inc/lovenote (systemd StateDirectory, set via
+# FAMILY_INC_LOVENOTE_DIR in the unit); dev/tests fall back to the gitignored
+# automation/cache so a local run never needs root (mirrors PROPERTY/FINANCE).
+LOVENOTE_STATE_DIR = Path(os.environ.get("FAMILY_INC_LOVENOTE_DIR")
+                          or (CACHE_DIR / "lovenote"))
+LOVENOTE_TTL_HOURS = 24            # a note expires this long after it is sent
+LOVENOTE_MAX_CHARS = 500          # cap one note (a love-note, not a letter)
+# The server binds localhost; a Cloudflare Tunnel fronts it (ENGINEERING §5).
+LOVENOTE_PORT = int(os.environ.get("FAMILY_INC_LOVENOTE_PORT") or 8787)
+# CORS allow-origin — the GitHub-Pages origin the PWA is served from. PERSONAL-
+# ish (public github user) → kept out of this committed file: set in
+# /etc/family-inc/env. BLANK → CORS denies every browser origin, so the feature
+# self-disables fail-safe (never promise an affordance that doesn't exist, §3).
+LOVENOTE_ALLOWED_ORIGIN = os.environ.get("FAMILY_INC_LOVENOTE_ORIGIN", "").strip()
+LOVENOTE_SETTINGS_TTL_S = 300     # re-read Settings.UserMap at most this often
+LOVENOTE_HTTP_TIMEOUT_S = 10      # per Google token-verification call
+LOVENOTE_MAX_BODY_BYTES = 8192    # reject a request body larger than this (pre-auth, 413)
+LOVENOTE_VERIFY_CACHE_TTL_S = 120 # cache a verified token-hash→email this long (cuts Google calls under a burst; in-memory only, keyed by SHA-256 of the token so no raw token is held)
+# Token verification uses Google's tokeninfo endpoint — unlike userinfo it returns
+# the token's `aud` (the OAuth client it was minted for), so the server can reject
+# a token issued to a DIFFERENT app (the confused-deputy / token-substitution gap).
+GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
+# The OAuth client id the dashboard signs in with (= the GitHub `DASHBOARD_CLIENT_ID`
+# secret). Set it in /etc/family-inc/env to ENFORCE the audience check; BLANK = email
+# verification only (no aud check) — non-personal default, so it stays out of the repo.
+LOVENOTE_ALLOWED_AUD = os.environ.get("FAMILY_INC_LOVENOTE_AUD", "").strip()
+
+# ---------------------------------------------------------------------------
 # LLM (SPEC.md §8.6–8.7 — model ids live here, not at call sites)
 #
 # Provider direction (D-032, wired M4/D-044): DeepSeek is the single configured

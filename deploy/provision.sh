@@ -70,8 +70,13 @@ cat <<'EOF'
                             deploy/bank_creds.example.json)
 EOF
 
-echo "== 6. sudoers — the ONE whitelisted line (ENGINEERING §6)"
-echo "$APP_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart family-bridge" > /etc/sudoers.d/familyinc
+echo "== 6. sudoers — the whitelisted restart lines (ENGINEERING §6)"
+# The two long-running services deploy.sh restarts (timers exec fresh code on
+# next fire and need no restart). Each line is restart-only — no escalation.
+cat > /etc/sudoers.d/familyinc <<EOF
+$APP_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart family-bridge
+$APP_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart family-lovenote
+EOF
 chmod 440 /etc/sudoers.d/familyinc
 visudo -c -q
 
