@@ -122,16 +122,16 @@
               <button class="action-btn" type="button" data-batch="note" data-i18n="row.note">+ note</button>
             </div>
           </div>
-          <div class="desk-snooze-row" id="desk-snooze-row" hidden role="group">
+          <div class="desk-snooze-row" id="desk-snooze-row" hidden role="group" data-i18n-aria="snooze.label" aria-label="Snooze to…">
             <button class="snooze-chip" type="button" data-snooze-days="1" data-i18n="snooze.tomorrow">Tomorrow</button>
             <button class="snooze-chip" type="button" data-snooze-days="3" data-i18n="snooze.in3">+3d</button>
             <button class="snooze-chip" type="button" data-snooze-days="7" data-i18n="snooze.week">1 week</button>
             <button class="snooze-chip" type="button" data-snooze-days="14" data-i18n="snooze.twoweeks">2 weeks</button>
             <button class="snooze-chip" type="button" data-snooze-days="30" data-i18n="snooze.month">1 month</button>
-            <input type="date" id="desk-snooze-date" class="snooze-date" />
+            <input type="date" id="desk-snooze-date" class="snooze-date" data-i18n-aria="snooze.pickDate" aria-label="Pick a date" />
           </div>
           <div class="desk-note-row" id="desk-note-row" hidden>
-            <textarea id="desk-note-input" rows="2" maxlength="500" data-i18n-placeholder="desk.notePlaceholder" placeholder="Write a note…"></textarea>
+            <textarea id="desk-note-input" rows="2" maxlength="500" data-i18n-placeholder="desk.notePlaceholder" data-i18n-aria="desk.notePlaceholder" placeholder="Write a note…" aria-label="Write a note…"></textarea>
             <button class="action-btn primary" type="button" id="desk-note-send" data-i18n="lovenote.send">Send</button>
           </div>
         </div>
@@ -142,7 +142,7 @@
            out reminders + upcoming events. today/+1/+2 events stay in the 3-day strip. -->
       <div id="coming-up" class="section">
         <h2 data-i18n="section.comingUp">Coming up</h2>
-        <div id="coming-up-strip" class="coming-up-strip" tabindex="0" role="group"></div>
+        <div id="coming-up-strip" class="coming-up-strip" tabindex="0" role="group" data-i18n-aria="section.comingUp" aria-label="Coming up"></div>
       </div>
 
       <!-- Portfolios slot (V3.5) — a grid of domain TILES that open one shared,
@@ -186,6 +186,11 @@
         <div class="row">
           <div id="settings-account" data-i18n="state.loading">Loading…</div>
           <div class="actions" style="display:flex">
+            <!-- D3: a real Google account switch (sign-out → re-auth with the account
+                 chooser), never a label flip — keeps col-M LastDoneBy = the parent
+                 actually signed in (SPEC §7.6). No notif / bank-connect / export
+                 controls live here (D7). -->
+            <button class="action-btn" id="switch-account-btn" data-i18n="settings.switchAccount">Switch account</button>
             <button class="action-btn" id="signout-btn" data-i18n="settings.signOut">Sign out</button>
             <button class="action-btn" id="refresh-btn" data-i18n="settings.forceRefresh">Force refresh</button>
           </div>
@@ -256,7 +261,7 @@
     <header class="sheet-head">
       <h2 id="sheet-title" class="sheet-title"></h2>
       <span class="kpi num" id="sheet-kpi"></span>
-      <button id="sheet-close" class="sheet-close" type="button" aria-label="Close">✕</button>
+      <button id="sheet-close" class="sheet-close" type="button" data-i18n-aria="sheet.close" aria-label="Close">✕</button>
     </header>
     <div id="sheet-body" class="sheet-body"></div>
   </aside>

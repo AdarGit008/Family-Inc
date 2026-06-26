@@ -14,20 +14,17 @@
   --green: #2F8559;        /* sage — success (AA) */
   --amber: #8A5E12;        /* amber — warning (darkened to clear AA) */
   --red: #C4403B;          /* terracotta — alert */
-  --blue: #4A6FA5;         /* info — no v3 home yet; kept for .cal-time, revisit V3.8 */
+  --blue: #4A6FA5;         /* info — calendar event times (.cal-time); theme-paired (dark below) */
   --shadow: 0 1px 2px rgba(0,0,0,.03), 0 8px 22px rgba(0,0,0,.05);
   --sheet-shadow: 0 -8px 40px rgba(18,21,28,.22);
   --rad: 20px;             /* cards / sheets */
   --rad-sm: 8px;           /* inputs / small chips */
   --font: 'Inter', 'Heebo', -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, "Courier New", monospace;
-  /* ── back-compat aliases — retired as later V3 slices migrate selectors; do NOT remove until a zero-ref audit (V3.8/V3.9) ── */
-  --card: var(--tile);
-  --border: var(--line);
-  --ink-dim: var(--muted);
-  --orange: var(--amber);
-  --yellow: var(--amber);
-  --radius: var(--rad);
+  /* V3.8 alias endgame: the V3.1 back-compat aliases (--card/--border/--ink-dim/
+     --orange/--yellow/--radius) are retired — every selector now uses the canonical
+     token (a zero-ref audit confirmed none remained). --blue stays: it is a real
+     info token (calendar times), not an alias, and is theme-paired in every block. */
 }
 
 /* Dark mode is PROVISIONAL (prior hues, cool-retoned) — gets its own pass later.
@@ -46,6 +43,7 @@
     --green: #4CA877;        /* provisional dark semantics */
     --amber: #C79A4A;
     --red: #DB6B63;
+    --blue: #82A9D9;         /* info (dark) — calendar times stay legible on dark tiles (6.7:1) */
     --shadow: 0 1px 2px rgba(0,0,0,.30), 0 8px 22px rgba(0,0,0,.38);
     --sheet-shadow: 0 -8px 40px rgba(0,0,0,.55);
   }
@@ -65,6 +63,7 @@
   --green: #4CA877;
   --amber: #C79A4A;
   --red: #DB6B63;
+  --blue: #82A9D9;
   --shadow: 0 1px 2px rgba(0,0,0,.30), 0 8px 22px rgba(0,0,0,.38);
   --sheet-shadow: 0 -8px 40px rgba(0,0,0,.55);
 }
@@ -83,11 +82,22 @@
   --green: #2F8559;
   --amber: #8A5E12;
   --red: #C4403B;
+  --blue: #4A6FA5;
   --shadow: 0 1px 2px rgba(0,0,0,.03), 0 8px 22px rgba(0,0,0,.05);
   --sheet-shadow: 0 -8px 40px rgba(18,21,28,.22);
 }
 
 * { box-sizing: border-box; }
+
+/* A11y (V3.8) — keyboard focus is always visible. :where() keeps specificity 0, so
+   an element wanting a *tuned* ring (.coming-up-strip adds a matching border-radius)
+   still wins; the rest inherit this baseline. Programmatic focus after a pointer tap
+   won't trip :focus-visible, so touch users see no stray ring. Outline follows the
+   element's border-radius in modern browsers. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 html, body {
   margin: 0;
@@ -126,7 +136,7 @@ header.app-header h1 {
 }
 header.app-header .date {
   font-size: 14px;
-  color: var(--ink-dim);
+  color: var(--muted);
 }
 
 /* Status pill (Today) — single 3-tier signal (V3.2; replaces the old pill +
@@ -217,19 +227,19 @@ header.app-header .date {
   text-transform: uppercase;
   font-size: 11px;
   letter-spacing: 0.08em;
-  color: var(--ink-dim);
+  color: var(--muted);
   margin: 0 4px 8px;
   font-weight: 600;
 }
 
 /* Row card */
 .row {
-  background: var(--card);
-  border-radius: var(--radius);
+  background: var(--tile);
+  border-radius: var(--rad);
   padding: 12px 14px;
   margin-bottom: 8px;
   box-shadow: var(--shadow);
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   cursor: pointer;
   transition: transform 0.08s ease;
 }
@@ -249,18 +259,18 @@ header.app-header .date {
 }
 .row-meta {
   font-size: 13px;
-  color: var(--ink-dim);
+  color: var(--muted);
   white-space: nowrap;
 }
 .row-note {
   font-size: 13px;
-  color: var(--ink-dim);
+  color: var(--muted);
   margin-top: 4px;
 }
 .flag { font-size: 13px; }
 .flag-OVERDUE { color: var(--red); }
-.flag-FIRE { color: var(--orange); }
-.flag-WEEK { color: var(--yellow); }
+.flag-FIRE { color: var(--amber); }
+.flag-WEEK { color: var(--amber); }
 .flag-MONTH { color: var(--green); }
 
 /* Amounts — tabular mono, bidi-safe for Hebrew + ₪ */
@@ -283,7 +293,7 @@ time {
   gap: 6px;
 }
 .action-btn {
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   background: transparent;
   color: var(--ink);
   padding: 7px 12px;
@@ -302,7 +312,7 @@ time {
 
 /* Empty state */
 .empty {
-  color: var(--ink-dim);
+  color: var(--muted);
   font-size: 14px;
   padding: 8px 4px;
   font-style: italic;
@@ -310,7 +320,7 @@ time {
 .empty-caught-up {
   background: color-mix(in srgb, var(--green) 10%, transparent);
   color: var(--green);
-  border-radius: var(--radius);
+  border-radius: var(--rad);
   padding: 24px 16px;
   text-align: center;
   font-size: 15px;
@@ -322,7 +332,7 @@ time {
   margin-top: 6px;
   font-size: 13px;
   font-weight: 400;
-  color: var(--ink-dim);
+  color: var(--muted);
   font-family: var(--font-mono);
 }
 
@@ -345,7 +355,7 @@ time {
 .desk-row[aria-checked="true"] { border-color: var(--accent); background: var(--soft); }
 .desk-row[aria-checked="true"] .desk-check { background: var(--accent); border-color: var(--accent); }
 .desk-row[aria-checked="true"] .desk-check::after { content: "✓"; color: var(--on-accent); font-size: 13px; line-height: 1; }
-.desk-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* .desk-row (a div[tabindex=0]) inherits the global :where([tabindex]):focus-visible ring. */
 
 /* Sticky batch action bar — appears when ≥1 row is selected, floats above the
    tabbar while the desk scrolls (sticky-bottom; sits inline when the desk is
@@ -444,8 +454,13 @@ time {
 .cu-now-bar { flex: 1; inline-size: 2px; min-block-size: 44px; background: var(--accent); border-radius: 2px; }
 .cu-now-label { color: var(--accent); font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 
+/* Reduced motion (V3.8) — one consolidated block. Neutralizes every transition,
+   scroll animation, and :active scale-feedback in the app for users who ask for
+   less motion (replaces the three per-component blocks the earlier slices added). */
 @media (prefers-reduced-motion: reduce) {
-  .coming-up-strip { scroll-behavior: auto; }
+  .coming-up-strip, .cal-strip { scroll-behavior: auto; }
+  .row, .tile, .sheet, .desk-check, .toast { transition: none; }
+  .row:active, .tile:active { transform: none; }
 }
 
 /* Calendar — 3-day scroll-snap strip (V3.4). Always 3 panes (today/+1/+2) so an
@@ -489,10 +504,6 @@ time {
 .cal-time { color: var(--blue); font-size: 13px; }   /* .num supplies mono + tnum */
 /* Shabbat line (🕯) — non-color inline-start border + glyph carry it, not hue alone */
 .cal-event.shabbat { border-inline-start: 3px solid var(--amber); }
-
-@media (prefers-reduced-motion: reduce) {
-  .cal-strip { scroll-behavior: auto; }
-}
 
 /* ── Portfolios — a grid of domain TILES (V3.5; replaced the accordions). Each
    tile is a <button> with a glanceable face; tapping opens the one shared bottom-
@@ -601,20 +612,17 @@ time {
 .sheet-sub { color: var(--muted); margin-top: 12px; margin-bottom: 2px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
 body.sheet-open { overflow: hidden; }
 
-@media (prefers-reduced-motion: reduce) {
-  .sheet, .tile { transition: none; }
-}
 .kv {
   display: flex;
   justify-content: space-between;
   padding: 6px 0;
   font-size: 14px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--line);
   gap: 12px;
 }
 .kv:last-child { border-bottom: none; }
 .kv .v {
-  color: var(--ink-dim);
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
   font-family: var(--font-mono);
   white-space: nowrap;
@@ -630,7 +638,7 @@ body.sheet-open { overflow: hidden; }
 .goal-line .band-ok { fill: color-mix(in srgb, var(--green) 12%, transparent); }
 .goal-line .band-warn { fill: color-mix(in srgb, var(--amber) 14%, transparent); }
 .goal-line .band-bad { fill: color-mix(in srgb, var(--red) 12%, transparent); }
-.goal-line .target-line { stroke: var(--ink-dim); stroke-width: 1; stroke-dasharray: 3 3; fill: none; }
+.goal-line .target-line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; fill: none; }
 .goal-line .actual-line { stroke: var(--accent); stroke-width: 2; fill: none; }
 .goal-line .now-dot { fill: var(--accent); }
 
@@ -711,8 +719,8 @@ nav.tabbar {
   bottom: 0;
   left: 0;
   right: 0;
-  background: var(--card);
-  border-top: 1px solid var(--border);
+  background: var(--tile);
+  border-top: 1px solid var(--line);
   display: flex;
   justify-content: space-around;
   padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0));
@@ -723,7 +731,7 @@ nav.tabbar button {
   flex: 1;
   border: none;
   background: transparent;
-  color: var(--ink-dim);
+  color: var(--muted);
   font-size: 13px;
   cursor: pointer;
   padding: 6px 0;
@@ -742,7 +750,7 @@ nav.tabbar button.active { color: var(--accent); font-weight: 600; }
   padding: 24px;
 }
 .signin h2 { margin: 8px 0; font-weight: 600; }
-.signin p { color: var(--ink-dim); max-width: 320px; }
+.signin p { color: var(--muted); max-width: 320px; }
 .signin-btn {
   margin-top: 18px;
   background: var(--accent);
@@ -771,18 +779,18 @@ nav.tabbar button.active { color: var(--accent); font-weight: 600; }
 
 /* Sunday view */
 .sunday h2.briefing-title { font-size: 22px; font-weight: 600; margin: 12px 4px 4px; }
-.sunday .week { color: var(--ink-dim); margin: 0 4px 16px; font-size: 14px; }
-.sunday .sub { color: var(--ink-dim); margin-top: 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
-.sunday .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--bg); margin-inline-end: 4px; font-size: 12px; color: var(--ink-dim); }
+.sunday .week { color: var(--muted); margin: 0 4px 16px; font-size: 14px; }
+.sunday .sub { color: var(--muted); margin-top: 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+.sunday .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--bg); margin-inline-end: 4px; font-size: 12px; color: var(--muted); }
 
 /* Settings */
 .settings .row { cursor: default; }
-.settings label { font-size: 13px; color: var(--ink-dim); display: block; margin-top: 8px; }
+.settings label { font-size: 13px; color: var(--muted); display: block; margin-top: 8px; }
 .settings input, .settings select {
   width: 100%;
   padding: 8px;
   margin-top: 4px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   background: var(--bg);
   color: var(--ink);
   border-radius: var(--rad-sm);

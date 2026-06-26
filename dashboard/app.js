@@ -154,6 +154,7 @@
       'settings.demoModeLabel': 'מצב הדגמה',
       'settings.demoOn': 'דלוק (נתוני הדגמה)',
       'settings.demoOff': 'כבוי (גיליון אמיתי)',
+      'settings.switchAccount': 'החלף חשבון',
       'settings.signOut': 'התנתק',
       'settings.forceRefresh': 'רענן עכשיו',
       'settings.saveReload': 'שמור וטען מחדש',
@@ -309,6 +310,7 @@
       'settings.demoModeLabel': 'Demo mode',
       'settings.demoOn': 'On (use mock data)',
       'settings.demoOff': 'Off (live Google Sheet)',
+      'settings.switchAccount': 'Switch account',
       'settings.signOut': 'Sign out',
       'settings.forceRefresh': 'Force refresh',
       'settings.saveReload': 'Save & reload',
@@ -381,6 +383,15 @@
       const key = el.dataset.i18nPlaceholder;
       const v = t(key);
       if (v != null && v !== key) el.setAttribute('placeholder', v);
+    });
+    // data-i18n-aria → aria-label, so icon-only / unlabelled controls (the sheet
+    // close ✕, the coming-up scroll region, the snooze date picker + note textarea)
+    // are named in the active language declaratively — replacing the hand-rolled
+    // setAttribute calls the earlier slices scattered through boot() (V3.8).
+    document.querySelectorAll('[data-i18n-aria]').forEach(el => {
+      const key = el.dataset.i18nAria;
+      const v = t(key);
+      if (v != null && v !== key) el.setAttribute('aria-label', v);
     });
   }
 
@@ -627,6 +638,20 @@
       google.accounts.oauth2.revoke(gapi.client.getToken()?.access_token, () => {});
     }
     showSignIn();
+  }
+
+  // D3 — switch the signed-in Google account for real (SPEC §7.6): force the account
+  // chooser (prompt:'select_account', not 'consent'), so the OTHER parent can sign in.
+  // Identity is always the live OAuth session, never a label flip — the token callback
+  // → afterSignIn re-resolves the new email → UserMap name, so col-M LastDoneBy stays
+  // truthful. Cancelling the chooser is a no-op (the callback never fires; the current
+  // session is untouched). We deliberately do NOT revoke the prior token: revoke() drops
+  // the whole user+client GRANT, which would both force the other parent to re-consent
+  // next time AND kill the new session if the user re-picks the SAME account (a fresh
+  // token over the same grant). The superseded token is dropped from the app and expires.
+  function switchAccount() {
+    if (!state.tokenClient) { toast(t('toast.oauthNotConfigured')); return; }
+    state.tokenClient.requestAccessToken({ prompt: 'select_account' });
   }
 
   async function afterSignIn() {
@@ -2311,13 +2336,13 @@
     });
 
     // Settings buttons
+    document.getElementById('switch-account-btn').addEventListener('click', switchAccount);
     document.getElementById('signout-btn').addEventListener('click', signOut);
     document.getElementById('refresh-btn').addEventListener('click', loadAll);
 
     // Bottom-sheet dismissers (V3.5): the close button + tapping the scrim. The
-    // close button is icon-only, so name it for AT (until the V3.8 aria walker).
+    // icon-only close button is named via data-i18n-aria (the V3.8 aria walker).
     document.getElementById('sheet-close').addEventListener('click', closeSheet);
-    document.getElementById('sheet-close').setAttribute('aria-label', t('sheet.close'));
     document.getElementById('sheet-scrim').addEventListener('click', closeSheet);
 
     // Desk batch action bar (V3.3). The bar markup is static, so wire it ONCE here;
@@ -2337,17 +2362,13 @@
       const dateInput = document.getElementById('desk-snooze-date');
       if (dateInput) {
         dateInput.min = fmtISO(state.today);   // discourage snoozing into the past
-        dateInput.setAttribute('aria-label', t('snooze.pickDate'));
         // Reject a past date even if a UA lets one slip past the min guard (DESIGN §9 #17).
         dateInput.addEventListener('change', () => { const d = parseDate(dateInput.value); if (d && daysBetween(d, state.today) >= 0) handleBatchSnooze(d); });
       }
-      document.getElementById('desk-snooze-row')?.setAttribute('aria-label', t('snooze.label'));
-      document.getElementById('desk-note-input')?.setAttribute('aria-label', t('desk.notePlaceholder'));
+      // aria-labels for the snooze row, date picker, and note textarea are now
+      // declarative (data-i18n-aria, applied by applyChromeStrings at boot).
       document.getElementById('desk-note-send')?.addEventListener('click', handleBatchNote);
     }
-    // The coming-up strip is a focusable scroll region so keyboard users can arrow
-    // through the ±30-day band (its chips are read-only, non-focusable).
-    document.getElementById('coming-up-strip')?.setAttribute('aria-label', t('section.comingUp'));
     document.getElementById('settings-save').addEventListener('click', async () => {
       const newSheetId = document.getElementById('settings-sheetid').value.trim();
       const newDemoMode = document.getElementById('settings-demo').value === 'true';

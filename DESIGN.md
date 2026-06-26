@@ -28,8 +28,9 @@
 | `--green` | `#2F8559` | `#4CA877` | all-clear, success |
 | `--amber` | `#8A5E12` | `#C79A4A` | due-today (darkened to clear AA) |
 | `--red` | `#C4403B` | `#DB6B63` | overdue |
+| `--blue` | `#4A6FA5` | `#82A9D9` | info — calendar event times (`.cal-time`) |
 
-Semantic colors appear only on status; the accent is the single brand color. No gradients. Semantic washes are `color-mix` off these tokens so they track the palette. Dark mode is **provisional** (its own pass later). Back-compat aliases (`--card`/`--border`/`--ink-dim`/`--orange`/`--yellow`/`--radius`, plus `--blue` for `.cal-time`) remain in `styles.css` until later V3 slices migrate their selectors. `--rad 20px` (cards/sheets), `--rad-sm 8px` (inputs), 999px pills; card shadow `0 1px 2px/0 8px 22px`, bottom-sheet `--sheet-shadow`.
+Semantic colors appear only on status; the accent is the single brand color. No gradients. Semantic washes are `color-mix` off these tokens so they track the palette. Dark mode is **provisional** (its own pass later). The V3.1 back-compat aliases (`--card`/`--border`/`--ink-dim`/`--orange`/`--yellow`/`--radius`) were **retired in V3.8** — every selector now uses the canonical token (a zero-ref audit confirmed none remained); `--blue` stays as a real info token, theme-paired in every block (V3.8 gave it its dark value). `--rad 20px` (cards/sheets), `--rad-sm 8px` (inputs), 999px pills; card shadow `0 1px 2px/0 8px 22px`, bottom-sheet `--sheet-shadow`.
 
 ### Type
 
@@ -60,7 +61,7 @@ Today (home)
 ├── COMING UP — a read-only ±30-day scroll band (now-marker): week/month-out reminders + calendar events (today/+1/+2 stay in the calendar strip); scroll back for past events
 └── PORTFOLIOS — domain tiles (Money · Timeline · Health · Goals · Car · Contracts) → one shared bottom-sheet; the Timeline tile opens a read-only cross-domain chronology (1wk→5yr zoom + category filter); Education folds in here (no separate tile)
 Sunday tab — a live week-ahead view computed from the Sheet (week ahead · reminders this week · overdue · Money · Goals · data hygiene), NOT the rendered weekly-briefing markdown
-Settings tab — sign-in · Sheet ID · language toggle · demo toggle · queue inspector (pending-write count)
+Settings tab — account (switch-account = a real Google re-auth · sign-out · force-refresh) · language toggle · theme · Sheet ID · demo toggle · queue inspector (pending-write count); no notification-toggle / bank-connect / export controls (D7)
 ```
 
 Today-first wins the 8 AM glance; tiles demote to drawers; the Sunday week-ahead gets a tab, not the home.
@@ -145,7 +146,7 @@ Bridge-health warning prepends, never replaces: `⚠ הגשר שקט 14 שעות
 
 ## 8. Accessibility & ergonomics
 
-Tap targets ≥44px; contrast AA against both surfaces (the muted zinc fails on dark — use `#A1A1AA` minimum); focus-visible outlines on; the PWA `apple-touch-icon` relies on the OS glass treatment, no fake translucency in-app; thumb-zone — action pills render below the row, not above.
+Tap targets ≥44px. Contrast clears **AA on both surfaces**, pinned by a hermetic test (`tests/test_dashboard_a11y_contrast.py`) over the deliberately-engineered tokens — `--muted`/`--amber` darkened to clear AA, `--on-accent` paired per theme, `--blue` given a dark value (V3.8) — so a future retone can't silently regress them ("assert, don't re-pick"). A **global `:focus-visible`** outline (`:where(a, button, input, select, textarea, [tabindex])`) covers every interactive element; a single **`prefers-reduced-motion`** block neutralizes transitions, the `:active` scale, and scroll animation. Icon-only / unlabelled controls are named in **both languages** declaratively via the `data-i18n-aria` walker (applied at boot from STRINGS). The PWA `apple-touch-icon` relies on the OS glass treatment, no fake translucency in-app; thumb-zone — action pills render below the row, not above.
 
 ## 9. Manual smoke checklist (per dashboard deploy)
 
@@ -167,3 +168,4 @@ Tap targets ≥44px; contrast AA against both surfaces (the muted zinc fails on 
 16. (V3.3 desk) The TODAY desk is **select-to-act**: each overdue/fire-today reminder is a checkbox row (tap or Space/Enter toggles; selection is never color-only — a ✓ box + wash + `aria-checked`); no inline expand. Selecting ≥1 reveals the **sticky batch bar** with the live count; tapping ✓ done marks **all** selected rows in one write (recurring rows recurrence-bump), they clear the desk, and the selection + bar reset. The selection also clears on a background reload (no stale `_row`).
 17. (V3.3 absolute snooze) On the desk, select a row → `+ snooze` → the chips (tomorrow · +3 · 1 week · 2 weeks · 1 month) **and** the date picker each write an **absolute** Due date. An **OVERDUE** row snoozed to any future date leaves the desk (OVERDUE cleared — the D4 fix); snoozing to tomorrow keeps it as today/fire-today. The picker won't offer past dates (min = today). One snooze over a multi-selection writes all rows in one batch.
 18. (V3.3 coming-up) The coming-up slot is a **read-only** ±30-day horizontal scroll band with a **now**-marker; it opens positioned at "now". Scroll **back** shows past calendar events (overdue reminders are **not** repeated here — they live on the desk); scroll **forward** shows week/month-out reminders + upcoming events. today/+1/+2 events appear only in the 3-day calendar strip (no double-render). Verify the RTL scroll direction on **iOS** specifically; chips carry no done/snooze affordance. EN fallback flips copy; every new STRINGS key he+en.
+19. (V3.8 i18n + a11y + Settings) **Keyboard-tab** the Today surface: every interactive element shows a visible **`:focus-visible`** ring; tab into the desk rows, the coming-up region, the snooze chips/date-picker, the portfolio tiles, the bottom-sheet (focus stays trapped). With a **screen reader / EN toggle**, the icon-only controls are **named in the active language** (sheet close ✕, coming-up region, snooze date-picker, note field) — flip he↔en and the names flip. With **reduce-motion** on, no transition/scale/scroll animation fires. **Settings → Switch account** opens the Google **account chooser**: pick the *other* parent → the dashboard reloads as them and a new `LastDoneBy` writes their name; **cancel** the chooser → nothing changes (current session intact); re-picking the **same** account does **not** sign you out. Settings shows **no** notif/bank-connect/export controls. Contrast holds AA on both surfaces (the `test_dashboard_a11y_contrast` floor); every new STRINGS key is he+en.
