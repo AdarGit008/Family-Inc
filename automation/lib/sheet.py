@@ -136,9 +136,11 @@ class Reminder:
 @dataclass
 class CellWrite:
     """One cell of a Reminders write-back batch, addressed by field name so
-    callers never hardcode column letters. Values: date → DD/MM/YYYY (§8.5),
-    datetime → ISO-T text (round-trips exactly; Sheets won't coerce the T
-    form into a locale-formatted date cell), None → clear."""
+    callers never hardcode column letters. Values: date → ISO `YYYY-MM-DD`
+    (Lane C: locale-unambiguous for Sheets; the dashboard reads back either ISO
+    or the he-IL DD/MM render), datetime → ISO-T text (round-trips exactly;
+    Sheets won't coerce the T form into a locale-formatted date cell), None →
+    clear."""
     row: int
     field: str
     value: object
@@ -169,7 +171,11 @@ def encode_value(v) -> object:
     if isinstance(v, datetime):
         return v.isoformat(timespec="seconds")
     if isinstance(v, date):
-        return v.strftime("%d/%m/%Y")          # §6.1 col D contract
+        # col-D (Due Date) — emit the ISO literal (Lane C). Under USER_ENTERED a
+        # he-IL Sheet still renders it DD/MM, but ISO 8601 is parsed
+        # locale-unambiguously by Sheets, where "25/06/2026" would misparse under
+        # any other locale; the dashboard's parseDate reads back either form.
+        return v.strftime("%Y-%m-%d")
     if isinstance(v, bool):
         return "TRUE" if v else "FALSE"
     return v

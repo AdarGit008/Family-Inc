@@ -286,8 +286,15 @@ class TestSchemaGuard:
 # the gspread backend shares encode_value and the same call shapes)
 # ---------------------------------------------------------------------------
 class TestEncodeValue:
-    def test_date_is_ddmmyyyy(self):
-        assert encode_value(date(2028, 2, 29)) == "29/02/2028"
+    def test_date_is_iso(self):
+        # Lane C: col-D (the only date-typed write) emits ISO YYYY-MM-DD — Sheets
+        # parses ISO locale-unambiguously; the dashboard's parseDate reads back
+        # either ISO or the he-IL DD/MM render. round-trips via to_date below.
+        assert encode_value(date(2028, 2, 29)) == "2028-02-29"
+
+    def test_due_date_round_trips_through_to_date(self):
+        from automation.lib.dates import to_date
+        assert to_date(encode_value(date(2026, 6, 25))) == date(2026, 6, 25)
 
     def test_datetime_is_iso_t_text(self):
         assert encode_value(datetime(2026, 6, 12, 7, 30)) == "2026-06-12T07:30:00"

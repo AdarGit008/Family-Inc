@@ -15,6 +15,10 @@
   const MAX_PENDING_WRITES = 50;   // offline-queue cap (SPEC §7.6 / DESIGN §6) —
                                    // a one-shot warning fires at the cap, then
                                    // further taps are dropped, not silently lost
+  // Lane C — the §6.1 Reminders columns the dashboard WRITES, resolved by header
+  // NAME at load so a column insert can't corrupt a position-write; writes pause
+  // if any is missing (the JS half of the engine's §7.1 schema-drift guard).
+  const REMINDER_WRITE_COLS = ['Due Date', 'Status', 'Last Sent', 'Notes', 'LastDoneBy', 'DoneAt', 'WriteQueue_Tombstone'];
 
   // ---------------- i18n ----------------
   // Single source of truth for chrome strings. Hebrew is canonical; English
@@ -174,6 +178,7 @@
       'toast.queued': 'נשמר בתור: {label}',
       'toast.queueFull': 'התור מלא ({max}) — התחברו לאינטרנט כדי לסנכרן לפני שמירת פעולות נוספות',
       'toast.flushed': 'הוזרמו {n} פעולות מהתור',
+      'toast.writesPaused': 'מבנה הגיליון השתנה — כתיבות מושהות (בדקו את כותרות העמודות)',
       // Action labels (used in toasts after write-back)
       'action.markedDone': 'בוצע: {title}',
       'action.snoozed': 'נדחה ב-+{days}d: {title}',
@@ -314,6 +319,7 @@
       'toast.queued': 'Queued: {label}',
       'toast.queueFull': 'Queue full ({max}) — reconnect to sync before queuing more',
       'toast.flushed': 'Flushed {n} queued action(s)',
+      'toast.writesPaused': 'Sheet structure changed — writes paused (check the column headers)',
       'action.markedDone': '{title} → done',
       'action.snoozed': '{title} → +{days}d',
       'action.noteAdded': 'Note added',
@@ -374,6 +380,7 @@
     timeline: { zoom: '3mo', filter: 'all' },  // V3.6 cross-domain timeline view state
     loveNote: { inbound: null, outbound: null },  // V3.7 — note FROM partner / note I left
     loveNoteSending: false,                       // one-shot guard while a PUT/DELETE is in flight
+    driftWarned: false,                           // Lane C — one-shot "writes paused" toast on header drift
   };
 
   // ---------------- Utilities ----------------
@@ -433,6 +440,12 @@
     const p = (n) => String(n).padStart(2, '0');
     return `${fmtISO(d)}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
   }
+  // Lane C: col-D (Due Date) is a real Sheets date cell, so the API renders it
+  // back in the he-IL locale (DD/MM/YYYY or DD.MM.YYYY) even when we WRITE ISO.
+  // parseDate therefore reads BOTH: ISO (incl. the ISO-T stamps + calendar dates)
+  // first — unambiguous — then the locale day-first render. A bare `new Date()`
+  // alone returns Invalid for "25/06/2026", which would silently drop a snoozed/
+  // recurrence-bumped reminder from Today; this is the read half of that fix.
   function parseDate(v) {
     if (!v) return null;
     if (v instanceof Date) return isNaN(v) ? null : v;
@@ -441,7 +454,23 @@
       // returns formatted strings, so this branch is rare.
       return new Date(Math.round((v - 25569) * 86400 * 1000));
     }
-    const d = new Date(v);
+    const s = String(v).trim();
+    if (!s) return null;
+    // ISO YYYY-MM-DD (optionally with a time/stamp) — let Date parse it.
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+      const d = new Date(s);
+      return isNaN(d) ? null : d;
+    }
+    // he-IL date render: DD/MM/YYYY or DD.MM.YYYY (day-first; the Sheet locale).
+    const m = s.match(/^(\d{1,2})[./](\d{1,2})[./](\d{2,4})$/);
+    if (m) {
+      const dd = +m[1], mm = +m[2];
+      const yy = +m[3] < 100 ? 2000 + +m[3] : +m[3];
+      const d = new Date(yy, mm - 1, dd);
+      // Reject impossible dates (e.g. 31/02): Date rolls them over, so verify.
+      return (isNaN(d) || d.getMonth() !== mm - 1 || d.getDate() !== dd) ? null : d;
+    }
+    const d = new Date(s);   // last resort (other ISO-ish shapes)
     return isNaN(d) ? null : d;
   }
   function flagFor(daysUntil, status) {
@@ -833,7 +862,28 @@
     // V3.7 love-note: live data comes from the appliance endpoint (loadLoveNote),
     // NOT the Sheet; in DEMO_MODE the fixture rides along in mock_data.json.
     const loveNote = named.loveNote || null;
-    return { reminders, calendarEvents, people, budget, txns, goals, health, education, car, contracts, settings, loveNote };
+    // Lane C: resolve the Reminders write columns by header name (row 1) so a
+    // drifted/inserted column pauses writes instead of corrupting the wrong cell.
+    const reminderCols = resolveReminderCols(named.reminders && named.reminders[0]);
+    return { reminders, calendarEvents, people, budget, txns, goals, health, education, car, contracts, settings, loveNote, reminderCols };
+  }
+
+  // Build {name → 1-based column index} for the columns the dashboard writes,
+  // from the actual header row. ok=false when any required write column is absent
+  // (a renamed/removed/shifted-out header) → writes pause.
+  function resolveReminderCols(headerRow) {
+    const byName = {};
+    (headerRow || []).forEach((h, i) => {
+      const key = String(h ?? '').trim().toLowerCase();
+      if (key && !(key in byName)) byName[key] = i + 1;
+    });
+    const cols = {};
+    let ok = true;
+    REMINDER_WRITE_COLS.forEach(name => {
+      const idx = byName[name.toLowerCase()];
+      if (idx) cols[name] = idx; else ok = false;
+    });
+    return { cols, ok };
   }
 
   // ---------------- Render ----------------
@@ -844,6 +894,12 @@
     // either language.
     const _hdrLocale = currentLang() === 'en' ? 'en-GB' : 'he-IL';
     document.getElementById('header-date').textContent = state.today.toLocaleDateString(_hdrLocale, { weekday: 'long', day: 'numeric', month: 'long' });
+    // Lane C: surface a header-drift "writes paused" once (re-arms when resolved).
+    if (state.data && state.data.reminderCols && !state.data.reminderCols.ok) {
+      if (!state.driftWarned) { state.driftWarned = true; toast(t('toast.writesPaused')); }
+    } else {
+      state.driftWarned = false;
+    }
     renderStatusPill();
     renderLoveNote();
     renderToday();
@@ -1875,9 +1931,24 @@
     return state.data.reminders.find(r => String(r._row) === String(rowNum));
   }
 
+  // Lane C — true only when the Reminders columns resolved cleanly. Fails CLOSED
+  // (absent data/cols → not writable): a write guard must pause, never assume.
+  // Write handlers no-op + toast rather than hit the wrong column.
+  function remindersWritable() {
+    return !!(state.data && state.data.reminderCols && state.data.reminderCols.ok);
+  }
+  // Resolve a Reminders write range by HEADER NAME, e.g. remRange('Due Date', 7)
+  // → 'Reminders!D7' — never a hardcoded column letter.
+  function remRange(name, rowNum) {
+    const cols = state.data && state.data.reminderCols && state.data.reminderCols.cols;
+    const idx = cols && cols[name];
+    return idx ? `${cfg.TABS.reminders}!${colLetter(idx)}${rowNum}` : null;
+  }
+
   async function handleDone(rowNum) {
     const r = findReminder(rowNum);
     if (!r) return;
+    if (!remindersWritable()) { toast(t('toast.writesPaused')); return; }
     r.status = 'Done';
     r.flag = '';
     const now = new Date();
@@ -1886,25 +1957,23 @@
     r.lastDoneBy = userName;
     r.doneAt = now;
     r.writeQueueTombstone = now;
-    const colM = colLetter(13);  // LastDoneBy
-    const colN = colLetter(14);  // DoneAt
-    const colO = colLetter(15);  // WriteQueue_Tombstone
     // SPEC §6.1 write contract: intent columns + M, N (completion) + always O.
-    // Col H (Last Sent) is ENGINE-owned — the dashboard never writes it,
-    // except clearing it as part of the §7.1 recurrence bump below.
+    // Columns resolved by header NAME (Lane C), never hardcoded letters. Col H
+    // (Last Sent) is ENGINE-owned — the dashboard never writes it, except
+    // clearing it as part of the §7.1 recurrence bump below.
     const writes = [
-      { range: `${cfg.TABS.reminders}!G${rowNum}`, value: 'Done' },
-      { range: `${cfg.TABS.reminders}!${colM}${rowNum}`, value: userName },
-      { range: `${cfg.TABS.reminders}!${colN}${rowNum}`, value: ts },
-      { range: `${cfg.TABS.reminders}!${colO}${rowNum}`, value: ts },
+      { range: remRange('Status', rowNum), value: 'Done' },
+      { range: remRange('LastDoneBy', rowNum), value: userName },
+      { range: remRange('DoneAt', rowNum), value: ts },
+      { range: remRange('WriteQueue_Tombstone', rowNum), value: ts, tomb: true },
     ];
     // Bump recurring (mirror of automation/lib/dates.bump_due — keep in sync)
     if (r.recurrence && r.recurrence !== 'One-off' && r.due) {
       const bumped = bumpDate(r.due, r.recurrence);
       if (bumped) {
-        writes.push({ range: `${cfg.TABS.reminders}!D${rowNum}`, value: fmtISO(bumped) });
-        writes.push({ range: `${cfg.TABS.reminders}!G${rowNum}`, value: 'Pending' });
-        writes.push({ range: `${cfg.TABS.reminders}!H${rowNum}`, value: '' }); // Last Sent cleared (§7.1)
+        writes.push({ range: remRange('Due Date', rowNum), value: fmtISO(bumped) });
+        writes.push({ range: remRange('Status', rowNum), value: 'Pending' });
+        writes.push({ range: remRange('Last Sent', rowNum), value: '' }); // Last Sent cleared (§7.1)
         r.due = bumped; r.status = 'Pending';
         r.daysUntil = daysBetween(bumped, state.today);
         r.flag = flagFor(r.daysUntil, r.status);
@@ -1919,6 +1988,7 @@
   async function handleSnooze(rowNum, days) {
     const r = findReminder(rowNum);
     if (!r || !r.due) return;
+    if (!remindersWritable()) { toast(t('toast.writesPaused')); return; }
     const newDate = new Date(r.due);
     newDate.setDate(newDate.getDate() + days);
     r.due = newDate;
@@ -1926,9 +1996,9 @@
     r.daysUntil = daysBetween(newDate, state.today);
     r.flag = flagFor(r.daysUntil, r.status);
     await applyWrites([
-      { range: `${cfg.TABS.reminders}!D${rowNum}`, value: fmtISO(newDate) },
-      { range: `${cfg.TABS.reminders}!G${rowNum}`, value: 'Snoozed' },
-      { range: `${cfg.TABS.reminders}!O${rowNum}`, value: fmtISOts(new Date()) },
+      { range: remRange('Due Date', rowNum), value: fmtISO(newDate) },
+      { range: remRange('Status', rowNum), value: 'Snoozed' },
+      { range: remRange('WriteQueue_Tombstone', rowNum), value: fmtISOts(new Date()), tomb: true },
     ], t('action.snoozed', { title: r.title, days }));
     renderAll();
   }
@@ -1936,14 +2006,15 @@
   async function handleAddNote(rowNum) {
     const r = findReminder(rowNum);
     if (!r) return;
+    if (!remindersWritable()) { toast(t('toast.writesPaused')); return; }
     const text = window.prompt(t('prompt.addNote'));
     if (!text) return;
     const stamp = `[${fmtISO(new Date())} ${state.user?.name || 'You'}]`;
     const newNotes = (r.notes ? r.notes + ' \n' : '') + `${stamp} ${text}`;
     r.notes = newNotes;
     await applyWrites([
-      { range: `${cfg.TABS.reminders}!J${rowNum}`, value: newNotes },
-      { range: `${cfg.TABS.reminders}!O${rowNum}`, value: fmtISOts(new Date()) },
+      { range: remRange('Notes', rowNum), value: newNotes },
+      { range: remRange('WriteQueue_Tombstone', rowNum), value: fmtISOts(new Date()), tomb: true },
     ], t('action.noteAdded'));
     renderAll();
   }
@@ -1978,7 +2049,7 @@
       }
       return false;
     }
-    writes.forEach(w => state.pendingWrites.push({ kind: 'update', row: extractRow(w.range), range: w.range, value: w.value, queuedAt: new Date().toISOString() }));
+    writes.forEach(w => state.pendingWrites.push({ kind: 'update', row: extractRow(w.range), range: w.range, value: w.value, tomb: !!w.tomb, queuedAt: new Date().toISOString() }));
     localStorage.setItem(QUEUE_KEY, JSON.stringify(state.pendingWrites));
     renderQueue();
     return true;
@@ -2012,10 +2083,11 @@
     const queue = state.pendingWrites.slice();
     // SPEC §8.3: the tombstone is written AT FLUSH — the engine's 6h race
     // window starts when the write lands on the Sheet, not when the offline
-    // tap happened. Refresh every col-O value to now; everything else flushes
-    // as queued (in tap order).
+    // tap happened. Refresh every tombstone value to now; everything else
+    // flushes as queued (in tap order). The tombstone is flagged at enqueue by
+    // FIELD (w.tomb, Lane C) — never a hardcoded column letter, which could
+    // shift if a non-write column left of it is removed.
     const flushTs = fmtISOts(new Date());
-    const isTombstone = (range) => /!O\d+$/.test(range);
     try {
       await gapi.client.sheets.spreadsheets.values.batchUpdate({
         spreadsheetId: cfg.SHEET_ID,
@@ -2023,7 +2095,7 @@
           valueInputOption: 'USER_ENTERED',
           data: queue.map(w => ({
             range: w.range,
-            values: [[isTombstone(w.range) ? flushTs : w.value]],
+            values: [[w.tomb ? flushTs : w.value]],
           })),
         },
       });

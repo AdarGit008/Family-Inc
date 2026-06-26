@@ -120,7 +120,7 @@ Authoritative tab list. The three tabs with code contracts get column-level sche
 | A | Title | humans | used verbatim in messages |
 | B | Domain | humans | Car / Health / Education / Finance / Contracts / Goals / Other |
 | C | Owner | humans | Adar / Shanee / Both |
-| D | Due Date | humans, engine (recurrence bump) | DD/MM/YYYY |
+| D | Due Date | humans, engine + dashboard (recurrence bump / snooze) | a real Sheets **date** cell (he-IL renders it DD/MM); machine writes emit the **ISO `YYYY-MM-DD`** literal — Sheets parses ISO locale-unambiguously — and both surfaces **read** ISO *or* the DD/MM·DD.MM render (Lane C) |
 | E | Lead Times | humans | CSV of day offsets, e.g. `60,30,7,1` |
 | F | Recurrence | humans | One-off / Yearly / Monthly / Quarterly / Weekly / Custom |
 | G | Status | engine, dashboard | Pending / Snoozed / Sent / Done / Skipped / Overdue |
@@ -217,7 +217,7 @@ The ledger is shared across **all** senders — the engine and the summarizer ca
 
 ### 7.6 Dashboard (PWA)
 
-Read: `batchGet` over all bound ranges (UI contract in `DESIGN.md`). Write: per the §6.1 write contract — optimistic UI, an offline queue in `localStorage.pendingWrites[]` (cap 50), flushed on reconnect in tap order, failed flushes retried on the next online event. Identity: Google sign-in → `Settings.UserMap` → display name. Demo mode renders `mock_data.json` and never calls gapi.
+Read: `batchGet` over all bound ranges (UI contract in `DESIGN.md`). Write: per the §6.1 write contract — optimistic UI, an offline queue in `localStorage.pendingWrites[]` (cap 50), flushed on reconnect in tap order, failed flushes retried on the next online event. The write surface resolves its target columns by **header name** (not a hardcoded letter) and **pauses writes on header drift** — the JS mirror of the engine's §7.1 schema guard (Lane C), so a restructured Reminders tab can't be written by position. Identity: Google sign-in → `Settings.UserMap` → display name. Demo mode renders `mock_data.json` and never calls gapi.
 
 **Cross-domain timeline (read-only derived view, V3.6).** The Today *Timeline* tile flattens every dated row already read above into one chronology, governed by two ratified rules. **Milestone-inclusion:** one timeline item per dated field — `Reminders.Due Date` (excluding the terminal Status values {Done, Skipped}), `Calendar-Events.Date`, `Goals.Target Date`, `Health.Next Due`, `Car`'s {Annual Test, Insurance Renewal, License Expiry}, `Education.Next Key Date`, `Contracts.Renewal Date` — kept only within the window `today − 14d … today + 5y`; undated and out-of-window rows are excluded. **Domain→category** (the filter set): each item carries exactly one of `finance · health · car · education · goals · contracts · calendar · other`; calendar and other are assigned by source, every other source maps to its own domain, and a reminder's free-text `Domain` (§6.1 col B) maps near-identity (lower-cased) with any unrecognised value falling to `other` — **never dropped**. The view is read-only (no write contract — items are edited at their source tab) and fully Sheet-derived (no new tab). This timeline is **Education's only Today home** (Education has no portfolio tile).
 
@@ -245,7 +245,7 @@ Outbox messages carry stable ids: summarizer `wa-{msg_id}`, briefings `brief-{ty
 
 ### 8.5 Time & locale
 
-All schedules in Asia/Jerusalem (DST-correct via system TZ, never UTC offsets). Dates DD/MM/YYYY; week starts Sunday; money `Intl.NumberFormat('he-IL', ILS)` / `₪{n:,}` in Python. Chrome strings are Hebrew-default with an English fallback; data values stay Hebrew always. Machine-written datetime stamps (Last Sent, DoneAt, WriteQueue_Tombstone) are ISO-8601 `T`-form **text** on both surfaces — the `T` stops Sheets from coercing them into locale date cells, so they round-trip byte-exact and keep the hour resolution the 6h tombstone window needs.
+All schedules in Asia/Jerusalem (DST-correct via system TZ, never UTC offsets). Dates are **displayed** DD/MM/YYYY; week starts Sunday; money `Intl.NumberFormat('he-IL', ILS)` / `₪{n:,}` in Python. The one **stored** date both surfaces write, `Reminders.Due Date` (§6.1 col D), is a real Sheets date — machine writes emit the **ISO** literal (locale-safe) and the reads accept ISO or the he-IL DD/MM·DD.MM render (Lane C), so it round-trips regardless of the Sheet's locale. Chrome strings are Hebrew-default with an English fallback; data values stay Hebrew always. Machine-written datetime stamps (Last Sent, DoneAt, WriteQueue_Tombstone) are ISO-8601 `T`-form **text** on both surfaces — the `T` stops Sheets from coercing them into locale date cells, so they round-trip byte-exact and keep the hour resolution the 6h tombstone window needs.
 
 ### 8.6 Privacy & security
 

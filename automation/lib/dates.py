@@ -11,9 +11,10 @@ from datetime import date, datetime, timedelta
 
 def to_date(v) -> date | None:
     """Best-effort date. Accepts date/datetime cells, ISO strings (date or
-    datetime — the engine stamps `Last Sent` as ISO datetime text since M2),
-    and the Sheet's DD/MM/YYYY contract (SPEC.md §6.1 col D). None when
-    unparseable — callers skip + report, never raise (data-hygiene principle)."""
+    datetime — the engine stamps `Last Sent` as ISO datetime text since M2, and
+    writes col D as ISO since Lane C), and the he-IL DD/MM/YYYY render (humans
+    type it; the API returns it for a real date cell — SPEC §6.1 col D). None
+    when unparseable — callers skip + report, never raise (data-hygiene)."""
     if v is None:
         return None
     if isinstance(v, date) and not isinstance(v, datetime):
