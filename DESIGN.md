@@ -69,7 +69,7 @@ Today-first wins the 8 AM glance; tiles demote to drawers; the Sunday week-ahead
 ## 4. States
 
 - **Loading**: the status pill shows its neutral `loading` tier (`Loading…`) while the first `batchGet` is in flight — never a premature "all clear"; header/tabs are real from t=0; lists render once data arrives (cached snapshot first if present, then live). No skeleton or shimmer.
-- **Quiet day**: the status pill shows the sage `clear` tier (`Nothing urgent`, or `Sunday briefing ready` on Sundays) and TODAY renders "(nothing urgent)". The screen is never blank.
+- **Quiet day**: the status pill shows the sage `clear` tier (`Nothing urgent`, or `Sunday briefing ready` on Sundays) and the desk renders its warm empty line ("Nothing on fire. ☕" / "שום דבר לא בוער. ☕"). The screen is never blank.
 - **Offline**: a one-shot toast confirms each queued write; the stale-data badge shows if the view was served from cache; rows keep working and re-render optimistically (the pending-write count is in Settings). **Buttons never disable offline.**
 - **Write failure (online)**: optimistic UI rolls back; inline "Couldn't save — retry?"; token expiry → silent refresh once, then a re-sign-in banner.
 - **Back from vacation (30 overdue)**: top 10 by due date + "+20 more" expander; bulk-done multi-select via the V3.3 select-to-act desk, with zero commentary.

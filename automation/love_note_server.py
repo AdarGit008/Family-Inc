@@ -21,8 +21,9 @@ Shape: stdlib ThreadingHTTPServer bound to localhost; a Cloudflare Tunnel fronts
 it (ENGINEERING §5). Storage is one flat JSON file per direction under the state
 dir ({slug(from)}__to__{slug(to)}.json), atomic tmp+replace — the property /
 finance seen.json idiom. The PWA verifies its live Google access_token by
-forwarding it once to Google's userinfo endpoint; the email maps to a parent via
-Settings.UserMap, then the token is dropped.
+forwarding it once to Google's tokeninfo endpoint (tokeninfo, not userinfo —
+it returns the token's aud/azp, the load-bearing confused-deputy check); the
+email maps to a parent via Settings.UserMap, then the token is dropped.
 
 Separation of concerns (so the suite needs no sockets and no network):
   handle()         — pure: (method, path, headers, body) → (status, headers, obj).

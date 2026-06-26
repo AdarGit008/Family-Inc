@@ -1024,7 +1024,7 @@
     if (!u || u.startsWith('PASTE_')) return null;
     return u.replace(/\/+$/, '');
   }
-  // The live Google access_token the server re-verifies against Google userinfo.
+  // The live Google access_token the server re-verifies against Google tokeninfo.
   function loveNoteToken() {
     try {
       return (window.gapi && gapi.client && gapi.client.getToken && gapi.client.getToken()?.access_token)
