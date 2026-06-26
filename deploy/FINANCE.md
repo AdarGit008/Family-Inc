@@ -185,6 +185,69 @@ real month (Groceries/Transport/Health).
 
 M6.3 acceptance is the first real **monthly** review (~30 days of live data).
 
+### Budget-vocab migration — exactly what we need from Shanee
+
+Shanee is the **vocabulary authority**: the `Finance-Budget` category list is what the
+rules engine must map to (the actuals `SUMIFS` keys on the literal `Category` string, so
+a label mismatch reads ₪0). She delivers it by filling **two columns of the live
+`Finance-Budget` tab directly** — the installer titles + stamps every machine column
+itself, so she touches only:
+
+1. **Column A — `Category`:** the canonical list. Confirm / rename / split / merge / drop
+   the provisional 11 the rules engine emits today — **Health, Groceries, Transport,
+   Childcare, Utilities, Housing, Dining out, Entertainment, Shopping, Income, Fees**
+   (pick a language per label; the briefing + dashboard render the string verbatim).
+2. **Column B — `Monthly Target (ILS)`:** a target per category (approximate is fine).
+   Drives variance / % / over-budget; a row with no target is skipped by the Money
+   section. *(These ₪ values live in the Sheet only — never the repo.)*
+3. **The 3 currently-unmapped labels — `Fees`, `Income`, `Shopping`:** the rules emit
+   them but no budget row exists yet (held as an allow-list, so their spend reads ₪0).
+   For each: **add a row** (give it a target), **remap** the rule to another category, or
+   **drop** it.
+4. **Where `Income` lives:** it's positive (not spend) — decide a budget row (target =
+   expected income) **or** out-of-grid (recommended; the actuals `SUMIFS` negates spend,
+   so an income row reads oddly).
+
+Then re-point the rules seed to her exact labels (if renamed), shrink the
+`Fees/Income/Shopping` allow-list in `test_rules_vocab_within_budget_categories`, and
+re-run the installer (§6) + the backfill (§7). No code from her — only A:B.
+
+## 7. M6.4/M6.5 — re-categorize backfill + coverage (the 06-26 gate)
+
+`finance_ingest` categorizes **new rows only**, so the rows that landed before the
+M6.5 `Card Settlement` rule existed stay blank. Apply that rule (and any merchant
+the engine now covers) to history with the **one-time backfill**, then read the
+**coverage** the milestone accepts on. As `familyinc`, live Sheet env loaded.
+
+```bash
+# 1. Baseline coverage (read-only — writes nothing).
+python3 /opt/family-inc/automation/finance_coverage.py --write   # → Briefings/<date>_finance_coverage.md
+
+# 2. Preview the backfill (rules-only, no write). Sanity-check: the Card Settlement
+#    count should be ~66 (the Cal-mirror lines), and SHUFERSAL/PAZ-type blanks resolve.
+python3 /opt/family-inc/automation/finance_recategorize.py --dry-run
+
+# 3. Run it for real (rules + DeepSeek gap-fill; --no-llm for rules-only).
+python3 /opt/family-inc/automation/finance_recategorize.py
+
+# 4. Re-read coverage — confirm the lift + that excluded(Card Settlement) jumped.
+python3 /opt/family-inc/automation/finance_coverage.py --write
+```
+
+The backfill is **idempotent** (touches blank rows only) and **safe to re-run** —
+re-run after Shanee's budget-vocab migration re-points the rules, or whenever a new
+card's source comes online. Set the **accept bar** from step 4 (report-first;
+candidate ≥90% of budget-eligible rows). Coverage is *not* correctness — a true
+categorizer FP rate is deferred (`ROADMAP.md` rank 12).
+
+**Summarizer accuracy (the other half of the gate):** run the weekly review over
+≥1 week of live classifier output and confirm **< 1 ALERT-tier false positive/week**;
+the fix for an over-firing pattern is narrowing it in the group-config seed.
+
+```bash
+python3 /opt/family-inc/automation/accuracy_review.py --weeks 1   # → Briefings/<date>_accuracy_review.md
+```
+
 ## Day-to-day
 
 No digest/finance section by 08:00 → the fail-flag and `journalctl -u family-finance` tell

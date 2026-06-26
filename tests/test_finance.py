@@ -824,3 +824,274 @@ def test_scrape_js_missing_creds_fails_loud():
     res = _node(env=env)
     assert res.returncode == 1
     assert "[fatal]" in res.stderr and "bank_creds.json" in res.stderr
+
+
+# ---------------------------------------------------------------------------
+# Re-categorize backfill + coverage (M6.4/M6.5 acceptance; SPEC §12.2)
+# ---------------------------------------------------------------------------
+from automation import finance_recategorize as recat  # noqa: E402
+from automation.lib import finance_coverage as fincov  # noqa: E402
+
+# Finance-Transactions rows for the backfill: a Cal mirror (→ Card Settlement via
+# the existing rule), a grocery (→ Groceries), a genuine unknown (stays blank,
+# LLM off in tests), Shanee's debit mirror (→ Card Settlement), and an
+# already-categorized manual row whose description WOULD match a rule (PAZ →
+# Transport) — it must survive untouched.
+TXN_ROWS = [
+    {"Date": "2026-06-15", "Account": "MIZ-0001", "Description": "ויזה כאל",
+     "Amount (ILS)": -540.00, "Category": "", "Cat-Source": "",
+     "Txn-ID": "h:cal0000000000a1", "Imported-At": "2026-06-19T06:00:00"},
+    {"Date": "2026-06-15", "Account": "MIZ-0001", "Description": "SHUFERSAL DEAL TLV",
+     "Amount (ILS)": -432.50, "Category": "", "Cat-Source": "",
+     "Txn-ID": "h:groc000000000b2", "Imported-At": "2026-06-19T06:00:00"},
+    {"Date": "2026-06-16", "Account": "MIZ-0001", "Description": "ZZZ MYSTERY VENDOR",
+     "Amount (ILS)": -12.00, "Category": "", "Cat-Source": "",
+     "Txn-ID": "h:unkn000000000c3", "Imported-At": "2026-06-19T06:00:00"},
+    {"Date": "2026-06-16", "Account": "MIZ-0001", "Description": "רכישה בכרטיס דביט",
+     "Amount (ILS)": -77.00, "Category": "", "Cat-Source": "",
+     "Txn-ID": "h:dbit000000000d4", "Imported-At": "2026-06-19T06:00:00"},
+    {"Date": "2026-06-17", "Account": "MIZ-0001", "Description": "PAZ GAS HAIFA",
+     "Amount (ILS)": -280.00, "Category": "Health", "Cat-Source": "manual",
+     "Txn-ID": "h:hand000000000e5", "Imported-At": "2026-06-19T06:00:00"},
+]
+
+
+def _txn_sheet(tmp_path, rows=TXN_ROWS, columns=None):
+    """A tmp xlsx with a Finance-Transactions tab (header + rows)."""
+    cols = columns or sheet.FINANCE_TRANSACTIONS_COLUMNS
+    wb = Workbook()
+    wb.active.title = "Placeholder"
+    ws = wb.create_sheet(cfg.FINANCE_TRANSACTIONS_TAB)
+    ws.append(cols)
+    for r in rows:
+        ws.append([r.get(c, "") for c in cols])
+    p = tmp_path / "finance.xlsx"
+    wb.save(p)
+    return p
+
+
+def _by_txn(path):
+    """{Txn-ID: (Category, Cat-Source)} read back from the live tab. openpyxl
+    rounds an empty cell to None on read — coerce to "" so a blank reads ("","")."""
+    tab = _rows(path, cfg.FINANCE_TRANSACTIONS_TAB)
+    hdr = tab[0]
+    ti, ci, si = hdr.index("Txn-ID"), hdr.index("Category"), hdr.index("Cat-Source")
+    s = lambda v: "" if v is None else v
+    return {r[ti]: (s(r[ci]), s(r[si])) for r in tab[1:]}
+
+
+def test_recategorize_backfills_blank_rows(tmp_path):
+    sp = _txn_sheet(tmp_path)
+    res = recat.run(sheet_path=sp, allow_llm=False)        # rules-only, deterministic
+    assert res.wrote
+    assert res.total == 5 and res.blank_before == 4
+    assert res.recategorized == 3 and res.now_rules == 3 and res.still_blank == 1
+    got = _by_txn(sp)
+    assert got["h:cal0000000000a1"] == ("Card Settlement", "rules")  # Cal mirror
+    assert got["h:groc000000000b2"] == ("Groceries", "rules")
+    assert got["h:dbit000000000d4"] == ("Card Settlement", "rules")  # Shanee debit mirror
+    assert got["h:unkn000000000c3"] == ("", "")                       # genuine unknown stays blank
+    assert got["h:hand000000000e5"] == ("Health", "manual")           # manual row untouched
+
+
+def test_recategorize_only_touches_blank_rows(tmp_path):
+    """The manual 'Health' row whose description (PAZ) WOULD map to Transport is
+    never re-derived — the backfill is scoped to blank rows, so a human (or prior)
+    categorization is never clobbered."""
+    sp = _txn_sheet(tmp_path)
+    recat.run(sheet_path=sp, allow_llm=False)
+    assert _by_txn(sp)["h:hand000000000e5"] == ("Health", "manual")
+
+
+def test_recategorize_is_idempotent(tmp_path):
+    sp = _txn_sheet(tmp_path)
+    recat.run(sheet_path=sp, allow_llm=False)
+    before = _by_txn(sp)
+    res2 = recat.run(sheet_path=sp, allow_llm=False)       # only the 1 unknown left blank
+    assert res2.blank_before == 1 and res2.recategorized == 0 and not res2.wrote
+    assert _by_txn(sp) == before                            # nothing changed on the second pass
+
+
+def test_recategorize_dry_run_writes_nothing(tmp_path):
+    sp = _txn_sheet(tmp_path)
+    res = recat.run(sheet_path=sp, dry_run=True, allow_llm=False)
+    assert not res.wrote and res.recategorized == 3         # rules-preview counts the 3 hits
+    # ...but the tab is untouched: every blank row is still blank.
+    got = _by_txn(sp)
+    for tid in ("h:cal0000000000a1", "h:groc000000000b2", "h:dbit000000000d4"):
+        assert got[tid] == ("", "")
+
+
+def test_recategorize_skips_without_live_or_path(monkeypatch):
+    """Seed-safety: no live backend and no --sheet → reads/writes nothing, never
+    touches the committed seed (mirrors test_upsert_rows_skips_without_live_or_path)."""
+    monkeypatch.delenv(cfg.SHEET_ID_ENV, raising=False)
+    sheet.reset_backend()
+    res = recat.run(sheet_path=None)
+    assert res.total == 0 and not res.wrote
+
+
+def test_recategorize_fails_loud_on_missing_header(tmp_path):
+    """A Finance-Transactions tab missing a load-bearing column (Cat-Source) fails
+    loud (§7.1) rather than writing Category by guessed position."""
+    cols = [c for c in sheet.FINANCE_TRANSACTIONS_COLUMNS if c != "Cat-Source"]
+    sp = _txn_sheet(tmp_path, columns=cols)
+    with pytest.raises(recat.RecategorizeError):
+        recat.run(sheet_path=sp, allow_llm=False)
+
+
+def test_recategorize_empty_tab_is_noop(tmp_path):
+    sp = _txn_sheet(tmp_path, rows=[])
+    res = recat.run(sheet_path=sp, allow_llm=False)
+    assert res.total == 0 and not res.wrote
+
+
+def test_recategorize_handles_blank_interior_row(tmp_path):
+    """A fully-blank interior row must not shift the physical write index: every
+    Txn-ID still maps to its OWN (Category, Cat-Source) and res.total counts only the
+    non-blank rows. Pins the enumerate(grid[1:], start=2) invariant — a refactor that
+    derived the write row from the filtered candidate list would stamp the rows BELOW
+    the blank one onto the wrong transactions (silent ledger corruption)."""
+    rows = TXN_ROWS[:2] + [{c: "" for c in sheet.FINANCE_TRANSACTIONS_COLUMNS}] + TXN_ROWS[2:]
+    sp = _txn_sheet(tmp_path, rows=rows)
+    res = recat.run(sheet_path=sp, allow_llm=False)
+    assert res.total == 5                                  # the all-blank interior row is skipped
+    got = _by_txn(sp)
+    assert got["h:cal0000000000a1"] == ("Card Settlement", "rules")   # above the blank
+    assert got["h:groc000000000b2"] == ("Groceries", "rules")
+    assert got["h:dbit000000000d4"] == ("Card Settlement", "rules")   # below the blank — index held
+    assert got["h:unkn000000000c3"] == ("", "")
+    assert got["h:hand000000000e5"] == ("Health", "manual")           # below the blank — untouched
+
+
+def test_recategorize_llm_fills_blank_and_dry_run_skips_llm(tmp_path, monkeypatch):
+    """The live LLM gap-fill path: a genuine-unknown blank gets Cat-Source 'llm' from
+    DeepSeek; and --dry-run must NOT call the LLM (the documented no-API-spend preview,
+    so live merchant descriptions don't leave the box during a no-write run, §8.6)."""
+    calls = {"n": 0}
+
+    def fake_complete(prompt, **kw):
+        calls["n"] += 1
+        return '{"results":[{"i":0,"category":"Shopping"}]}'
+
+    monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "complete", fake_complete)
+    rows = [r for r in TXN_ROWS if r["Txn-ID"] == "h:unkn000000000c3"]   # the one rules-miss
+    sp = _txn_sheet(tmp_path, rows=rows)
+    # (1) dry-run with allow_llm=True must NOT call the LLM and must not write.
+    res_dry = recat.run(sheet_path=sp, dry_run=True, allow_llm=True)
+    assert calls["n"] == 0 and not res_dry.wrote
+    assert _by_txn(sp)["h:unkn000000000c3"] == ("", "")
+    # (2) live run calls the LLM once and writes Cat-Source 'llm'.
+    res = recat.run(sheet_path=sp, dry_run=False, allow_llm=True)
+    assert calls["n"] == 1 and res.now_llm == 1 and res.wrote
+    assert _by_txn(sp)["h:unkn000000000c3"] == ("Shopping", "llm")
+
+
+# ---- coverage (the read-only yield surface) ----
+
+COV_ROWS = [
+    {"Category": "Groceries", "Cat-Source": "rules", "Account": "MIZ", "Description": "shufersal"},
+    {"Category": "Health", "Cat-Source": "llm", "Account": "MIZ", "Description": "clinic"},
+    {"Category": "Card Settlement", "Cat-Source": "rules", "Account": "MIZ", "Description": "ויזה כאל"},
+    {"Category": "", "Cat-Source": "", "Account": "MIZ", "Description": "ATM WITHDRAWAL"},
+    {"Category": "Dining out", "Cat-Source": "", "Account": "CAL", "Description": "wolt"},  # manual
+]
+
+
+def test_coverage_counts_and_buckets():
+    c = fincov.coverage(COV_ROWS)
+    assert c.total == 5
+    assert c.categorized == 3 and c.excluded == 1 and c.blank == 1     # partition → total
+    assert c.categorized + c.excluded + c.blank == c.total
+    assert c.eligible == 4                                             # total − excluded
+    assert round(c.coverage_pct, 3) == 0.75                            # 3/4
+    # by_source is scoped to CATEGORIZED rows, so it sums to `categorized` and the
+    # excluded Card-Settlement row (Cat-Source "rules") is NOT counted here — else the
+    # rules sub-count would overshoot the categorized headline on live data.
+    assert c.by_source == {"rules": 1, "llm": 1, "manual": 1}          # Groceries · Health · Dining out
+    assert sum(c.by_source.values()) == c.categorized
+
+
+def test_coverage_per_account():
+    c = fincov.coverage(COV_ROWS)
+    miz, cal = c.by_account["MIZ"], c.by_account["CAL"]
+    assert (miz.total, miz.categorized, miz.excluded, miz.blank) == (4, 2, 1, 1)
+    assert miz.eligible == 3 and round(miz.pct, 3) == round(2 / 3, 3)
+    assert (cal.total, cal.categorized, cal.pct) == (1, 1, 1.0)
+
+
+def test_coverage_blank_samples_name_the_merchant():
+    c = fincov.coverage(COV_ROWS)
+    assert c.blank_samples == [("ATM WITHDRAWAL", 1)]
+
+
+def test_coverage_empty_degrades():
+    c = fincov.coverage([])
+    assert c.total == 0 and c.coverage_pct == 0.0 and c.eligible == 0
+    assert "No finance transactions" in fincov.render(c, date(2026, 6, 26))
+
+
+def test_coverage_rows_from_grid_skips_blank_and_short_rows():
+    grid = [
+        ["Date", "Account", "Description", "Category", "Cat-Source"],
+        ["2026-06-15", "MIZ", "shufersal", "Groceries", "rules"],
+        ["2026-06-16", "MIZ", "atm"],                 # short row — trailing cells absent
+        [None, None, None, None, None],               # fully blank — skipped
+    ]
+    rows = fincov.rows_from_grid(grid)
+    assert len(rows) == 2
+    assert rows[0]["Category"] == "Groceries"
+    assert rows[1]["Description"] == "atm" and rows[1]["Category"] is None
+
+
+def test_coverage_cli_reads_live_tab(tmp_path):
+    """The read-only CLI reads the tab through lib/sheet and never writes it."""
+    from automation import finance_coverage as cli
+    sp = _txn_sheet(tmp_path)                          # 5 rows, 4 blank, 0 categorized yet
+    cov = cli.run(date(2026, 6, 26), sheet_path=sp)
+    assert cov.total == 5 and cov.blank == 4 and cov.categorized == 1   # only the manual Health row
+    # read-only: the tab is byte-for-byte unchanged (still 4 blank).
+    assert sum(1 for v in _by_txn(sp).values() if v == ("", "")) == 4
+
+
+# ---- review follow-ups (milestone review 2026-06-26) ----
+
+def test_recategorize_reverify_columns_catches_drift(tmp_path):
+    """The pre-write header re-validation (§7.1): if the write columns no longer sit
+    where the read resolved them (a column shifted between read and write), abort
+    rather than stamp the wrong column on the live ledger."""
+    sp = _txn_sheet(tmp_path)
+    cols = sheet.FINANCE_TRANSACTIONS_COLUMNS
+    good = {"Category": cols.index("Category"), "Cat-Source": cols.index("Cat-Source")}
+    recat._reverify_columns(good, sp)                       # canonical positions → no raise
+    bad = {"Category": 0, "Cat-Source": good["Cat-Source"]}  # col 0 is Date, not Category
+    with pytest.raises(recat.RecategorizeError):
+        recat._reverify_columns(bad, sp)
+
+
+def test_coverage_rows_from_grid_normalizes_header_casing():
+    """A cased/spaced live header must not make every row read as blank (a false 0%
+    on the milestone surface) — rows_from_grid maps headers to canonical keys."""
+    grid = [
+        ["date", "ACCOUNT", "Description", "category ", "cat-source"],
+        ["2026-06-15", "MIZ", "shufersal", "Groceries", "rules"],
+    ]
+    rows = fincov.rows_from_grid(grid)
+    assert rows[0]["Category"] == "Groceries" and rows[0]["Cat-Source"] == "rules"
+    assert rows[0]["Account"] == "MIZ"
+    c = fincov.coverage(rows)
+    assert c.categorized == 1 and c.coverage_pct == 1.0    # NOT a false 0%
+
+
+def test_excluded_block_is_last_in_rules_file():
+    """The Card Settlement exclusion block must be the LAST rules in the file — a
+    last-resort fallback below every merchant rule, so a merchant-bearing settlement
+    line categorizes by its merchant. Pins the raw file-order invariant directly (the
+    existing shadow test checks token concatenation; this checks ordering), since the
+    backfill runs the same load_rules/apply_rules and depends on it."""
+    rules = categorize.load_rules()
+    excluded_idx = [i for i, (_, c) in enumerate(rules) if c in categorize.EXCLUDED_CATEGORIES]
+    merchant_idx = [i for i, (_, c) in enumerate(rules) if c not in categorize.EXCLUDED_CATEGORIES]
+    assert excluded_idx and merchant_idx                   # both populated
+    assert min(excluded_idx) > max(merchant_idx)           # every excluded pattern below every merchant rule

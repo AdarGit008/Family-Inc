@@ -156,9 +156,12 @@ The now→06-26 work. Each item is small, low-risk, needs no new live data, and 
 **Landed 2026-06-25:**
 - **v3 Today redesign decided** — 8 design calls co-signed (Adar + Shanee) after an 8-dimension adversarial review of a hi-fi prototype handoff. Captured as forward lane §3.8 + `V3_RECONCILE.md` (decision record + design tokens). Build not started; **window is an open PO call** (now vs after the boring-hold ~07-13). The first canon fold was mistakenly written against a stale base and discarded (the redesign reviewed while origin raced ahead with M6.5); this is the clean placement.
 
+**Landed 2026-06-26 (finance-acceptance tooling):**
+- **Classifier-accuracy PASS THRESHOLD defined** (resolves the open call below). **Summarizer:** accept at **< 1 ALERT-tier FP/week** (`accuracy_review.py`, SPEC §7.3); at/above → narrow the pattern + re-run. **Finance categorizer:** the milestone metric is **coverage** (categorized / budget-eligible), **report-first** — the numeric bar is set from the first live read (candidate ≥90%; Cal ~90%); categorizer *correctness* (a true FP rate) is **coverage's** distinct, deferred sibling (rank 12). Tooling: the one-time **re-categorize backfill** (`finance_recategorize.py`) + the read-only **coverage** surface (`finance_coverage.py` / `lib/finance_coverage.py`), hermetic + tested (481 green); SPEC §12.2 + `deploy/FINANCE.md §6/§7` graduated. Box-run is the only remaining step.
+
 **Open PO calls before / at the 06-26 gate:**
-- **Define the classifier-accuracy PASS THRESHOLD** (e.g. ALERT-tier FP < 1/week = accept; ≥ that = narrow patterns and re-run) *before* 06-26, so the milestone close isn't a judgment call on ambiguous ground.
-- **Box-side verification** (lane 7) run before the gate treats the live claims as settled.
-- Add the CI gate, or document a deliberate no-CI choice.
+- ~~Define the classifier-accuracy PASS THRESHOLD~~ **done 2026-06-26** (above).
+- **Box-side verification** (lane 7) — ✅ done 06-23.
+- Add the CI gate, or document a deliberate no-CI choice — ✅ done 06-23 (lane 1).
 
 **Standing principle reaffirmed:** anomaly/subscription detection stays **killed**; `big-charge-alert` is its only bounded re-entry and needs a **joint** PO call + a recurring-payee exclusion (which itself depends on Shanee's budget-vocab migration) + the live finance baseline — it does **not** auto-ride card activation.
