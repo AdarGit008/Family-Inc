@@ -1,7 +1,7 @@
 // Family inc. dashboard — minimal service worker.
 // Caches the app shell so the dashboard opens offline; data still tries network first.
 
-const SHELL_CACHE = 'family-inc-shell-v5'; // v5: appreciation ticker removed (D-036); v4: publication day — Pages config.js was generated with DEMO_MODE:true (workflow sed now flips it); v3: app.js ticker de-escape (boot fix)
+const SHELL_CACHE = 'family-inc-shell-v6'; // v6: V3 Today redesign (new IA/tokens + love-note/timeline/desk) — bump invalidates the cached old shell so existing PWA installs pick up the new design; v5: appreciation ticker removed (D-036); v4: publication day — Pages config.js was generated with DEMO_MODE:true (workflow sed now flips it); v3: app.js ticker de-escape (boot fix)
 const SHELL_FILES = [
   './',
   './index.html',
