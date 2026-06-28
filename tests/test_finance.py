@@ -336,6 +336,9 @@ def test_rules_engine_maps_known_merchants():
     assert categorize.apply_rules("פז חיפה דרום", rules) == "Transport"
     # Ordering is load-bearing: SUPERPHARM must resolve to Health, not Groceries.
     assert categorize.apply_rules("SUPERPHARM 123", rules) == "Health"
+    # OBSIDIAN (public recurring SaaS) — added at the M6 close (2026-06-28); pin the
+    # new rule so the ordering test below isn't its only coverage.
+    assert categorize.apply_rules("OBSIDIAN.MD MEMBERSHIP", rules) == "Shopping"
     assert categorize.apply_rules("totally unknown vendor", rules) is None
 
 

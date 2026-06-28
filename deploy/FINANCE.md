@@ -217,35 +217,48 @@ re-run the installer (§6) + the backfill (§7). No code from her — only A:B.
 `finance_ingest` categorizes **new rows only**, so the rows that landed before the
 M6.5 `Card Settlement` rule existed stay blank. Apply that rule (and any merchant
 the engine now covers) to history with the **one-time backfill**, then read the
-**coverage** the milestone accepts on. As `familyinc`, live Sheet env loaded.
+**coverage** the milestone accepts on. Run **as `familyinc`** (live Sheet env + the
+project venv) — the same invocation the systemd units use: `uv run --no-sync python`,
+from `/opt/family-inc`. Bare `python3` as `root` has neither the creds nor the deps;
+one way in: `sudo -u familyinc -i sh -c 'cd /opt/family-inc && …'`.
 
 ```bash
 # 1. Baseline coverage (read-only — writes nothing).
-python3 /opt/family-inc/automation/finance_coverage.py --write   # → Briefings/<date>_finance_coverage.md
+uv run --no-sync python automation/finance_coverage.py --write   # → Briefings/<date>_finance_coverage.md
 
 # 2. Preview the backfill (rules-only, no write). Sanity-check: the Card Settlement
-#    count should be ~66 (the Cal-mirror lines), and SHUFERSAL/PAZ-type blanks resolve.
-python3 /opt/family-inc/automation/finance_recategorize.py --dry-run
+#    count is ~66 ONLY if history isn't already excluded — on the 06-28 run it was
+#    (finance_ingest had tagged the mirrors), so the dry-run showed 0; the live run's
+#    DeepSeek gap-fill is then the only lift.
+uv run --no-sync python automation/finance_recategorize.py --dry-run
 
 # 3. Run it for real (rules + DeepSeek gap-fill; --no-llm for rules-only).
-python3 /opt/family-inc/automation/finance_recategorize.py
+uv run --no-sync python automation/finance_recategorize.py
 
 # 4. Re-read coverage — confirm the lift + that excluded(Card Settlement) jumped.
-python3 /opt/family-inc/automation/finance_coverage.py --write
+uv run --no-sync python automation/finance_coverage.py --write
 ```
 
 The backfill is **idempotent** (touches blank rows only) and **safe to re-run** —
 re-run after Shanee's budget-vocab migration re-points the rules, or whenever a new
-card's source comes online. Set the **accept bar** from step 4 (report-first;
-candidate ≥90% of budget-eligible rows). Coverage is *not* correctness — a true
-categorizer FP rate is deferred (`ROADMAP.md` rank 12).
+card's source comes online. **Accept bar set report-first 2026-06-28: coverage
+landed at 88% (137/155 budget-eligible rows; +OBSIDIAN rule → ~89%).** The headline
+is gated by *structure*, not classifier quality — of the 18 still-blank, ~12 are
+merchant-less wrappers (Leumi ATM cash ×9, BIT/PAYBOX P2P, an ANOMALY) that are
+**correctly** blank, so of genuinely-categorizable rows it's ~96%. Coverage is *not*
+correctness — a true categorizer FP rate is deferred (`ROADMAP.md` rank 12). **One
+residual class has no home:** a **household-specific local merchant** (e.g. a local
+grocery) can't enter the public, portfolio-safe `seeds/14_…csv` (national brands +
+generic labels only) and there's no box-local overlay yet → tracked as the
+**finance-local-rules-overlay** forward item (`ROADMAP.md`); until it lands, such a
+merchant stays blank by design.
 
 **Summarizer accuracy (the other half of the gate):** run the weekly review over
 ≥1 week of live classifier output and confirm **< 1 ALERT-tier false positive/week**;
 the fix for an over-firing pattern is narrowing it in the group-config seed.
 
 ```bash
-python3 /opt/family-inc/automation/accuracy_review.py --weeks 1   # → Briefings/<date>_accuracy_review.md
+uv run --no-sync python automation/accuracy_review.py --weeks 1   # → Briefings/<date>_accuracy_review.md
 ```
 
 ## Day-to-day
