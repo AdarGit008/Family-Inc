@@ -927,9 +927,13 @@ def test_recategorize_dry_run_writes_nothing(tmp_path):
 
 def test_recategorize_skips_without_live_or_path(monkeypatch):
     """Seed-safety: no live backend and no --sheet → reads/writes nothing, never
-    touches the committed seed (mirrors test_upsert_rows_skips_without_live_or_path)."""
-    monkeypatch.delenv(cfg.SHEET_ID_ENV, raising=False)
-    sheet.reset_backend()
+    touches the committed seed (mirrors test_upsert_rows_skips_without_live_or_path).
+
+    Force is_live() False DIRECTLY — do NOT delenv SHEET_ID. On a box with an env
+    file, delenv lets a later load_env() setdefault repopulate the real SHEET_ID, so
+    the run hits the LIVE Sheet. That regression actually fired 2026-06-28: this test,
+    under deploy.sh on the appliance, read live and wrote OBSIDIAN to production."""
+    monkeypatch.setattr(sheet, "is_live", lambda: False)
     res = recat.run(sheet_path=None)
     assert res.total == 0 and not res.wrote
 

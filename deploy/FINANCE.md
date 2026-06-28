@@ -219,8 +219,10 @@ M6.5 `Card Settlement` rule existed stay blank. Apply that rule (and any merchan
 the engine now covers) to history with the **one-time backfill**, then read the
 **coverage** the milestone accepts on. Run **as `familyinc`** (live Sheet env + the
 project venv) — the same invocation the systemd units use: `uv run --no-sync python`,
-from `/opt/family-inc`. Bare `python3` as `root` has neither the creds nor the deps;
-one way in: `sudo -u familyinc -i sh -c 'cd /opt/family-inc && …'`.
+from `/opt/family-inc`. Bare `python3` as `root` has neither the creds nor the deps.
+From a **root** shell: `sudo -u familyinc -i sh -c 'cd /opt/family-inc && …'`. If you're
+**already in the `familyinc` shell**, drop the `sudo` and run `uv run …` directly —
+`familyinc` is not granted `sudo -u familyinc` (it would be denied).
 
 ```bash
 # 1. Baseline coverage (read-only — writes nothing).
