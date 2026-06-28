@@ -84,12 +84,16 @@
       'cal.allDay': 'כל היום',
       'cal.today': 'היום',
       'cal.tomorrow': 'מחר',
+      'cal.reset': 'היום',
       // Portfolio bottom-sheet
       'sheet.close': 'סגור',
       'sheet.recentTxns': 'עסקאות אחרונות',
       // Cross-domain timeline (V3.6) — zoom rungs + category-filter chips
       'timeline.zoomLabel': 'טווח זמן',
       'timeline.filterLabel': 'סינון לפי תחום',
+      'timeline.rangeLabel': 'טווח התצוגה',
+      'timeline.range.min': 'חודש',
+      'timeline.range.max': 'שנתיים',
       'timeline.now': 'עכשיו',
       'timeline.zoom.1wk': 'שבוע',
       'timeline.zoom.1mo': 'חודש',
@@ -107,7 +111,7 @@
       'timeline.cat.other': 'אחר',
       // Love-note (V3.7) — parent-to-parent ephemeral note
       'lovenote.heading': 'פתק',
-      'lovenote.inboundFrom': 'פתק מ{name}',
+      'lovenote.inboundFrom': 'פתק מאת {name}',
       'lovenote.composePlaceholder': 'פתק ל{name}…',
       'lovenote.composeGeneric': 'השאר פתק…',
       'lovenote.send': 'שלח',
@@ -247,10 +251,14 @@
       'cal.allDay': 'all day',
       'cal.today': 'Today',
       'cal.tomorrow': 'Tomorrow',
+      'cal.reset': 'Today',
       'sheet.close': 'Close',
       'sheet.recentTxns': 'Recent transactions',
       'timeline.zoomLabel': 'Time range',
       'timeline.filterLabel': 'Filter by domain',
+      'timeline.rangeLabel': 'Visible range',
+      'timeline.range.min': '1 mo',
+      'timeline.range.max': '2 yr',
       'timeline.now': 'now',
       'timeline.zoom.1wk': '1wk',
       'timeline.zoom.1mo': '1mo',
@@ -1116,16 +1124,16 @@
     const clearBtn = outbound ? `<button class="action-btn danger" id="love-note-clear" type="button">${escapeHtml(t('lovenote.clear'))}</button>` : '';
     slot.innerHTML = `
       <div class="love-note">
-        <h2 class="love-note-heading"><span aria-hidden="true">💌</span> ${escapeHtml(t('lovenote.heading'))}</h2>
         ${inboundCard}
         <div class="love-note-compose">
-          <textarea id="love-note-input" class="love-note-input" rows="2" maxlength="500"
-            placeholder="${escapeHtml(placeholder)}" aria-label="${escapeHtml(placeholder)}">${escapeHtml(outbound?.text || '')}</textarea>
-          <div class="love-note-actions">
-            ${waiting}
-            ${clearBtn}
-            <button class="action-btn primary" id="love-note-send" type="button">${escapeHtml(t('lovenote.send'))}</button>
+          <div class="love-note-inputwrap">
+            <textarea id="love-note-input" class="love-note-input" rows="2" maxlength="500"
+              placeholder="${escapeHtml(placeholder)}" aria-label="${escapeHtml(placeholder)}">${escapeHtml(outbound?.text || '')}</textarea>
+            <button class="love-note-send-inline" id="love-note-send" type="button" aria-label="${escapeHtml(t('lovenote.send'))}" title="${escapeHtml(t('lovenote.send'))}">
+              <span class="love-note-send-glyph" aria-hidden="true">➤</span>
+            </button>
           </div>
+          ${(clearBtn || waiting) ? `<div class="love-note-actions">${clearBtn}${waiting}</div>` : ''}
         </div>
       </div>`;
     slot.hidden = false;
@@ -1361,22 +1369,79 @@
   // overdue/today reminders, so they are NOT repeated here (PO call 2026-06-26:
   // the back-scroll shows past EVENTS only). Opens positioned at "now"; scroll
   // back for the past, forward for what's coming. No write affordance.
+  // V3.9 (review: Adar): the "coming up" band is now a horizontal TIMELINE with event
+  // pins spanning now → now + a selectable range (1-month–2-year scroller). Pins place
+  // proportionally by date; labels alternate above/below the axis to limit overlap. RTL:
+  // inset-inline-start runs the axis from now (inline-start/right) to the horizon (left).
+  // Read-only — items are edited at their source tab, never here.
   function renderComingUp() {
     const el = document.getElementById('coming-up-strip');
     if (!el) return;
-    const items = comingUpItems();
-    if (!items.length) {
-      el.innerHTML = `<div class="empty">${escapeHtml(t('empty.noUpcoming'))}</div>`;
-      return;
-    }
-    let html = '', placed = false;
-    items.forEach(it => {
-      if (!placed && it.daysUntil >= 0) { html += comingUpNowMarker(); placed = true; }
-      html += comingUpChip(it);
+    const months = clampRange(state.timelineRange || 2);
+    const rangeDays = Math.round(months * 30.44);
+    const lbl = document.getElementById('tl-range-label');
+    if (lbl) lbl.textContent = monthsLabel(months);
+    const slider = document.getElementById('tl-range-slider');
+    if (slider && +slider.value !== months) slider.value = months;
+    // Event pins = reminders (non-terminal) + calendar events within [now, now+range].
+    // Leaner than the full cross-domain timeline so the axis doesn't crowd at a glance.
+    const items = [];
+    (state.data.reminders || []).forEach(r => {
+      const st = String(r.status || '').toLowerCase();
+      if (!r.due || st === 'done' || st === 'skipped') return;
+      const du = daysBetween(r.due, state.today);
+      if (du < 1 || du > rangeDays) return;   // today's items live on the desk/calendar, not here
+      items.push({ date: r.due, daysUntil: du, title: r.title, category: domainCategory(r.domain) });
     });
-    if (!placed) html += comingUpNowMarker();   // everything is past → marker at the end
-    el.innerHTML = html;
-    scrollComingUpToNow(el);
+    (state.data.calendarEvents || []).forEach(e => {
+      if (!e.date) return;
+      const du = daysBetween(e.date, state.today);
+      if (du < 1 || du > rangeDays) return;   // today's events live in the 3-day calendar
+      items.push({ date: e.date, daysUntil: du, title: e.title, category: 'calendar' });
+    });
+    items.sort((a, b) => a.date - b.date);
+    const ticks = timelineTicks(months, rangeDays);
+    const nowPin = `<div class="tl-pin tl-pin-now" style="inset-inline-start:0%">
+        <span class="tl-dot" aria-hidden="true"></span>
+        <span class="tl-flag tl-flag-now">${escapeHtml(t('timeline.now'))}</span>
+      </div>`;
+    // 4-slot stagger (above-near / below-near / above-far / below-far) on the date-sorted
+    // list so adjacent pins separate both by side and by height.
+    const SLOTS = ['tl-a1', 'tl-b1', 'tl-a2', 'tl-b2'];
+    const pins = items.map((it, idx) => {
+      const f = Math.max(0, Math.min(1, it.daysUntil / rangeDays));
+      return `<div class="tl-pin ${SLOTS[idx % 4]} tl-cat-${it.category}" style="inset-inline-start:${(f * 100).toFixed(2)}%" title="${escapeHtml(it.title)}">
+        <span class="tl-flag">
+          <span class="tl-flag-title">${escapeHtml(it.title)}</span>
+          <span class="tl-flag-date num">${escapeHtml(fmtDate(it.date))}</span>
+        </span>
+        <span class="tl-stem" aria-hidden="true"></span>
+        <span class="tl-dot" aria-hidden="true"></span>
+      </div>`;
+    }).join('');
+    const empty = items.length ? '' : `<div class="tl-empty">${escapeHtml(t('empty.noUpcoming'))}</div>`;
+    el.innerHTML = `<div class="timeline"><div class="tl-axis" aria-hidden="true"></div>${ticks}${nowPin}${pins}${empty}</div>`;
+  }
+  function clampRange(m) { return Math.max(1, Math.min(24, Math.round(m || 6))); }
+  // Natural-language span label for the range scroller.
+  function monthsLabel(m) {
+    const he = currentLang() === 'he';
+    if (m === 12) return he ? 'שנה' : '1 year';
+    if (m === 24) return he ? 'שנתיים' : '2 years';
+    if (m % 12 === 0) return he ? `${m / 12} שנים` : `${m / 12} years`;
+    if (he) return m === 1 ? 'חודש' : m === 2 ? 'חודשיים' : `${m} חודשים`;
+    return m === 1 ? '1 month' : `${m} months`;
+  }
+  // Faint month gridlines for scale (no labels — the range label + pin dates carry the
+  // numbers). The step widens as the span grows so ticks never crowd.
+  function timelineTicks(months, rangeDays) {
+    const step = months <= 6 ? 1 : months <= 12 ? 2 : 3;
+    let html = '';
+    for (let k = step; k <= months; k += step) {
+      const f = Math.min(1, (k * 30.44) / rangeDays);
+      html += `<div class="tl-tick" style="inset-inline-start:${(f * 100).toFixed(2)}%" aria-hidden="true"></div>`;
+    }
+    return html;
   }
 
   function comingUpItems() {
@@ -1451,17 +1516,18 @@
     return (+h || 0) * 60 + (+m || 0);
   }
 
-  // V3.4: the calendar slot is a 3-day scroll-snap strip (today, +1, +2),
-  // replacing the single-day list. Exactly 3 panes ALWAYS render so an empty day
-  // never collapses the strip and the horizontal snap keeps stable geometry.
-  // Read-only — no data-row, no write affordances; events are edited at their
-  // source, the strip is a glance surface. Days 3–7 live in the coming-up/Next-7
-  // list (📆-tagged), so this stays today+2 with no overlap.
+  // V3.9 (review: Adar): the calendar shows 3 days at once and scrolls back/forward
+  // across a ±30-day window, with a "Today" reset that snaps back to today. 61 panes
+  // (today−30 … today+30) render at ~1/3 width each; horizontal scroll-snap. RTL "just
+  // works" off dir=rtl + logical props; today is marked + is the default position.
+  const CAL_BACK_DAYS = 30, CAL_FWD_DAYS = 30;
   function render3DayCalendar() {
     const el = document.getElementById('today-cal-strip');
     if (!el) return;
+    const prevScroll = el.scrollLeft;
     const locale = currentLang() === 'en' ? 'en-GB' : 'he-IL';
-    el.innerHTML = [0, 1, 2].map(offset => {
+    const panes = [];
+    for (let offset = -CAL_BACK_DAYS; offset <= CAL_FWD_DAYS; offset++) {
       const day = new Date(state.today);
       day.setDate(day.getDate() + offset);
       const events = state.data.calendarEvents
@@ -1470,20 +1536,62 @@
       const body = events.length
         ? events.map(renderCalEvent).join('')
         : `<div class="empty">${escapeHtml(t('empty.noEventsDay'))}</div>`;
-      return `<div class="cal-day">
+      const isToday = offset === 0;
+      panes.push(`<div class="cal-day${isToday ? ' cal-day-today' : ''}"${isToday ? ' data-cal-today="1"' : ''}>
         <div class="cal-day-head">
           <span class="cal-day-name">${escapeHtml(dayLabel(offset, day, locale))}</span>
           <span class="cal-day-date num">${escapeHtml(fmtDate(day))}</span>
         </div>
         ${body}
-      </div>`;
-    }).join('');
+      </div>`);
+    }
+    el.innerHTML = panes.join('');
+    // First paint lands on today; later (background) re-renders preserve the user's
+    // scroll position instead of yanking back. calReady is set by scrollCalToToday once
+    // it actually lands, so a boot double-render can't strand the strip in the past.
+    if (el.dataset.calReady === '1') {
+      el.scrollLeft = prevScroll;
+    } else {
+      scrollCalToToday(el);
+    }
   }
 
-  // Day-head label: today / tomorrow / the weekday name for +2 (locale-aware).
+  // Scroll the strip so today sits at the inline-start (right in RTL, left in LTR),
+  // showing today/+1/+2 by default. Same rect-delta + scrollBy model as the timeline
+  // (never scrollIntoView, which would yank the PAGE to this below-the-fold strip).
+  function scrollCalToToday(el) {
+    el = el || document.getElementById('today-cal-strip');
+    if (!el) return;
+    const go = () => {
+      const pane = el.querySelector('[data-cal-today="1"]');
+      if (!pane || el.clientWidth <= 0 || el.scrollWidth <= el.clientWidth + 1) return false;
+      const isRtl = getComputedStyle(el).direction === 'rtl';
+      const er = el.getBoundingClientRect();
+      const pr = pane.getBoundingClientRect();
+      el.scrollBy({ left: isRtl ? (pr.right - er.right) : (pr.left - er.left), behavior: 'auto' });
+      el.dataset.calReady = '1';
+      return true;
+    };
+    if (go()) return;   // already laid out (normal foreground case) → scroll now
+    // Not laid out yet (e.g. a background/zero-size frame). Run a timer backstop
+    // (polls until the strip has real dimensions) ALONGSIDE a ResizeObserver — the
+    // observer wins instantly when it fires, the timer guarantees we still land if
+    // RO / fonts.ready never fire in this environment. First to succeed tears down both.
+    let ro = null, n = 0;
+    const stop = () => { if (ro) { ro.disconnect(); ro = null; } clearInterval(iv); };
+    const iv = setInterval(() => { if (go() || n++ > 120) stop(); }, 80);   // poll until laid out (~long cap)
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => { if (go()) stop(); });
+      ro.observe(el);
+    }
+  }
+
+  // Day-head label: today / tomorrow / yesterday / the weekday name (locale-aware)
+  // across the ±30-day window.
   function dayLabel(offset, day, locale) {
     if (offset === 0) return t('cal.today');
     if (offset === 1) return t('cal.tomorrow');
+    if (offset === -1) return currentLang() === 'he' ? 'אתמול' : 'Yesterday';
     return day.toLocaleDateString(locale, { weekday: 'long' });
   }
 
@@ -1519,8 +1627,6 @@
     const grid = document.getElementById('portfolio-grid');
     if (!grid) return;
     grid.innerHTML = [moneyTile(), timelineTile(), healthTile(), goalsTile(), carTile(), contractsTile()].join('');
-    // The money sparkline needs a live <svg> (renderSparkline writes into it).
-    renderSparkline(document.getElementById('money-tile-spark'), txnTrend7d());
     grid.querySelectorAll('.tile[data-portfolio]').forEach(tile => {
       tile.addEventListener('click', () => openSheet(tile.dataset.portfolio));
     });
@@ -1558,20 +1664,15 @@
   // ---- tile faces ----
   function moneyTile() {
     const m = moneyTotals();
-    const status = m.over.length
-      ? `<span class="tile-flag" aria-hidden="true">▲</span> ${escapeHtml(t('summary.over', { n: m.over.length }))}`
-      : escapeHtml(t('state.allGood'));
     return `<button class="tile tile-money" data-portfolio="money" type="button">
       <div class="tile-head">
         <span class="tile-name">${escapeHtml(t('drawer.money'))}</span>
-        <span class="tile-status${m.over.length ? ' is-warn' : ''}">${status}</span>
       </div>
       <div class="tile-money-viz">
         ${donut(m.pct)}
         <div class="tile-money-side">
           <div class="tile-amount">${amountHtml(m.actual)} <span class="tile-amount-of">/ ${amountHtml(m.target)}</span></div>
           ${catBar(state.data.budget)}
-          <svg class="sparkline" id="money-tile-spark" viewBox="0 0 80 24"></svg>
         </div>
       </div>
     </button>`;
@@ -1655,15 +1756,34 @@
     const segs = cats.map((b, i) => `<span class="cat-seg cat-seg-${i % 4}" style="flex:${(b.actual / total).toFixed(3)}"></span>`).join('');
     return `<div class="cat-bar" aria-hidden="true">${segs}</div>`;
   }
-  // Initials avatar (NO photo — no stored media) + a non-color urgency badge: a
+  // Person → portrait file (V3.8). Falls back to initials when absent or if the
+  // image fails to load (onerror strips the <img>, revealing the initials beneath).
+  const AVATAR_FILES = {
+    adar: 'adar', shanee: 'shanee', itamar: 'itamar', shalev: 'shalev',
+    'אדר': 'adar', 'שני': 'shanee', 'איתמר': 'itamar', 'שלו': 'shalev',
+  };
+  function avatarSrc(person) {
+    const key = (person || '').trim().toLowerCase().split(/\s+/)[0];
+    return AVATAR_FILES[key] ? `assets/avatars/${AVATAR_FILES[key]}.png` : null;
+  }
+  // Photo avatar (V3.8) with initials fallback + a non-color urgency badge: a
   // glyph + a day-count (3 buckets: overdue / ≤14d / later), never color alone.
   function healthAvatar(h) {
-    const initials = (h.person || '?').trim().slice(0, 2);
+    // Robust initials: strip brackets/digits/punctuation, take the first letter of
+    // up to two words, uppercased — so placeholder names like "[Child 1]" can't leak
+    // a literal "[" into the avatar (the old blind slice(0,2) showed "[A").
+    const initials = (() => {
+      const words = (h.person || '').replace(/[^\p{L}\s]/gu, ' ').trim().split(/\s+/).filter(Boolean);
+      return words.length ? words.slice(0, 2).map(w => w[0]).join('').toUpperCase() : '?';
+    })();
     const d = daysBetween(h.nextDue, state.today);
     const bucket = d < 0 ? 'over' : d <= 14 ? 'soon' : 'ok';
     const glyph = { over: '🔴', soon: '⚠', ok: '·' }[bucket];
+    const src = avatarSrc(h.person);
+    const photo = src ? `<img class="avatar-photo" src="${escapeHtml(src)}" alt="" loading="lazy" onerror="this.remove()">` : '';
     return `<span class="avatar avatar-${bucket}" title="${escapeHtml(h.person)}">
-      <span class="avatar-initials">${escapeHtml(initials)}</span>
+      <span class="avatar-initials" aria-hidden="true">${escapeHtml(initials)}</span>
+      ${photo}
       <span class="avatar-badge"><span aria-hidden="true">${glyph}</span><span class="num">${Math.abs(d)}d</span></span>
     </span>`;
   }
@@ -2326,6 +2446,16 @@
     // Tab clicks
     document.querySelectorAll('nav.tabbar button').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
+    // Calendar "Today" reset — snap the ±30-day strip back to today (V3.9)
+    document.getElementById('cal-reset')?.addEventListener('click', () => scrollCalToToday(null));
+
+    // Timeline range scroller (V3.9) — 1mo … 2yr; re-pins without re-creating the slider
+    const tlSlider = document.getElementById('tl-range-slider');
+    if (tlSlider) {
+      state.timelineRange = state.timelineRange || +tlSlider.value || 6;
+      tlSlider.addEventListener('input', () => { state.timelineRange = +tlSlider.value; renderComingUp(); });
+    }
+
     // Sign-in screen buttons
     document.getElementById('signin-btn').addEventListener('click', requestSignIn);
     document.getElementById('demo-link').addEventListener('click', (e) => {
@@ -2442,6 +2572,10 @@
     if (cfg.DEMO_MODE) {
       showApp();
       await loadAll();
+      scrollCalToToday(null);   // land on today now…
+      // …and re-align once web fonts load (they reflow pane widths, shifting the strip)
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => scrollCalToToday(null));
+      window.addEventListener('load', () => scrollCalToToday(null));   // final backstop after full load
       return;
     }
     if (!cfg.CLIENT_ID || cfg.CLIENT_ID.startsWith('PASTE_')) {

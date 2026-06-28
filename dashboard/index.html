@@ -66,8 +66,8 @@
   <!-- App shell -->
   <div id="app" hidden>
     <header class="app-header">
-      <h1>🏠 Family inc.</h1>
       <div class="date" id="header-date"></div>
+      <h1>Family inc.</h1>
     </header>
 
     <div id="stale-badge" class="stale-badge" hidden></div>
@@ -78,15 +78,8 @@
          existing renderers stay green this slice; V3.3–V3.7 swap the innards
          slot-by-slot. -->
     <section class="view active" id="view-today">
-      <!-- 3-tier status pill (replaces the old pill + the status banner). Starts
-           in the loading tier so it never reads as a premature "all clear";
-           renderStatusPill sets data-tier + glyph/count/label once data lands.
-           Tier is conveyed by color + count + label (never color-only). -->
-      <div id="status-pill" class="status-pill" data-tier="loading" role="status" aria-live="polite">
-        <span class="pill-glyph" id="status-pill-glyph" aria-hidden="true"></span>
-        <span class="pill-count num" id="status-pill-count" hidden></span>
-        <span class="pill-label" id="status-pill-text" data-i18n="state.loading">Loading…</span>
-      </div>
+      <!-- Status pill removed per review (Adar) — the overdue/today signal is
+           already carried by the desk's flagged rows below. -->
 
       <!-- Love-note slot (V3.7) — a parent-to-parent ephemeral note. renderLoveNote
            fills it: an inbound card (the note your partner left, hidden when none)
@@ -100,7 +93,10 @@
            read-only. render3DayCalendar fills #today-cal-strip with exactly 3
            panes; days 3–7 live in the coming-up strip below. -->
       <div id="calendar-slot" class="section">
-        <h2 data-i18n="section.calendar">Calendar</h2>
+        <div class="section-head">
+          <h2 data-i18n="section.calendar">Calendar</h2>
+          <button type="button" id="cal-reset" class="section-action" data-i18n="cal.reset">Today</button>
+        </div>
         <div id="today-cal-strip" class="cal-strip"></div>
       </div>
 
@@ -141,8 +137,15 @@
            now-marker: scroll back for past calendar events, forward for week/month-
            out reminders + upcoming events. today/+1/+2 events stay in the 3-day strip. -->
       <div id="coming-up" class="section">
-        <h2 data-i18n="section.comingUp">Coming up</h2>
-        <div id="coming-up-strip" class="coming-up-strip" tabindex="0" role="group" data-i18n-aria="section.comingUp" aria-label="Coming up"></div>
+        <div class="section-head">
+          <h2 data-i18n="drawer.timeline">Timeline</h2>
+          <span class="tl-range-label num" id="tl-range-label"></span>
+        </div>
+        <div id="coming-up-strip" class="timeline-body" role="group" data-i18n-aria="drawer.timeline" aria-label="Timeline"></div>
+        <div class="tl-range-row">
+          <input type="range" id="tl-range-slider" class="tl-range-slider" min="1" max="24" step="1" value="2" data-i18n-aria="timeline.rangeLabel" aria-label="Visible range" />
+          <div class="tl-range-scale"><span data-i18n="timeline.range.min">1 mo</span><span data-i18n="timeline.range.max">2 yr</span></div>
+        </div>
       </div>
 
       <!-- Portfolios slot (V3.5) — a grid of domain TILES that open one shared,
@@ -245,11 +248,9 @@
       </div>
     </section>
 
-    <nav class="tabbar">
-      <button data-tab="today" class="active" data-i18n="tabbar.today">Today</button>
-      <button data-tab="sunday" data-i18n="tabbar.sunday">Sunday</button>
-      <button data-tab="settings" data-i18n="tabbar.settings">Settings</button>
-    </nav>
+    <!-- Bottom tab bar removed entirely per review (Adar): Today is the sole
+         screen for this prototype. The Sunday/Settings view sections remain in
+         the DOM (unreachable without the tabbar) for when navigation returns. -->
   </div>
 
   <!-- Bottom-sheet (V3.5) — ONE shared, data-driven drawer; opened per domain by

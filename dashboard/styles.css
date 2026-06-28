@@ -115,7 +115,7 @@ body {
   max-width: 640px;
   margin: 0 auto;
   padding-block-start: env(safe-area-inset-top, 0);
-  padding-block-end: calc(80px + env(safe-area-inset-bottom, 0));
+  padding-block-end: calc(24px + env(safe-area-inset-bottom, 0));
   padding-inline: 12px;
   min-height: 100vh;
   font-feature-settings: "tnum", "cv11";
@@ -216,8 +216,33 @@ header.app-header .date {
   line-height: 1.4;
 }
 .love-note-input::placeholder { color: var(--muted); }
-.love-note-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-.love-note-waiting { font-size: 12px; color: var(--muted); margin-inline-end: auto; }
+.love-note-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-start; }
+.love-note-waiting { font-size: 12px; color: var(--muted); margin-inline-start: auto; }
+/* Inline send button living inside the composer textbox (review: Adar) */
+.love-note-inputwrap { position: relative; }
+.love-note-inputwrap .love-note-input { padding-inline-end: 40px; }
+.love-note-send-inline {
+  position: absolute;
+  inset-block-end: 7px;
+  inset-inline-end: 7px;
+  inline-size: 26px;
+  block-size: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+.love-note-send-inline:hover { filter: brightness(1.06); }
+.love-note-send-inline:active { transform: scale(0.95); }
+.love-note-send-glyph { display: block; }
+[dir="rtl"] .love-note-send-glyph { transform: scaleX(-1); }
 
 /* Sections */
 .section {
@@ -454,6 +479,41 @@ time {
 .cu-now-bar { flex: 1; inline-size: 2px; min-block-size: 44px; background: var(--accent); border-radius: 2px; }
 .cu-now-label { color: var(--accent); font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 
+/* Timeline (V3.9, review: Adar) — horizontal axis spanning now → now+range, with event
+   pins alternating above/below to limit label overlap; a 1mo–2yr range scroller below
+   sets the span. RTL: pins place from the inline-start (now, right) toward the horizon. */
+.timeline-body { padding: 0; }
+.timeline { position: relative; block-size: 192px; margin: 8px 10px 2px; }
+.tl-axis { position: absolute; inset-inline: 0; inset-block-start: 50%; block-size: 2px; background: var(--line); border-radius: 2px; transform: translateY(-50%); }
+.tl-tick { position: absolute; inset-block: 30px; inline-size: 0; }
+.tl-tick::before { content: ""; position: absolute; left: 0; transform: translateX(-50%); inset-block: 0; width: 1px; background: var(--line); opacity: .5; }
+.tl-pin { position: absolute; inset-block: 0; inline-size: 0; }
+.tl-dot { position: absolute; left: 0; inset-block-start: 50%; inline-size: 9px; block-size: 9px; border-radius: 50%; background: var(--accent); transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--tile); }
+.tl-stem { position: absolute; left: 0; inline-size: 2px; background: var(--line); transform: translateX(-50%); }
+.tl-a1 .tl-stem, .tl-a2 .tl-stem { inset-block-end: 50%; }
+.tl-b1 .tl-stem, .tl-b2 .tl-stem { inset-block-start: 50%; }
+.tl-a1 .tl-stem, .tl-b1 .tl-stem { block-size: 13px; }
+.tl-a2 .tl-stem, .tl-b2 .tl-stem { block-size: 50px; }
+.tl-flag { position: absolute; left: 50%; transform: translateX(-50%); inline-size: 62px; text-align: center; display: flex; flex-direction: column; gap: 0; pointer-events: none; }
+.tl-a1 .tl-flag { inset-block-end: calc(50% + 15px); }
+.tl-b1 .tl-flag { inset-block-start: calc(50% + 15px); }
+.tl-a2 .tl-flag { inset-block-end: calc(50% + 52px); }
+.tl-b2 .tl-flag { inset-block-start: calc(50% + 52px); }
+.tl-flag-title { font-size: 10px; font-weight: 500; line-height: 1.2; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tl-flag-date { font-size: 10px; color: var(--muted); }
+/* category hues — reuse the semantic tokens; others fall back to accent */
+.tl-cat-health .tl-dot, .tl-cat-health .tl-stem { background: var(--green); }
+.tl-cat-car .tl-dot, .tl-cat-car .tl-stem { background: var(--amber); }
+.tl-cat-calendar .tl-dot, .tl-cat-calendar .tl-stem { background: var(--blue); }
+.tl-pin-now .tl-dot { inline-size: 11px; block-size: 11px; }
+.tl-flag-now { position: absolute; inset-block-end: 0; inset-block-start: auto; left: 0; transform: none; inline-size: auto; white-space: nowrap; font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; }
+.tl-empty { position: absolute; inset-inline: 0; inset-block-start: calc(50% + 18px); text-align: center; color: var(--muted); font-size: 12px; }
+/* range scroller */
+.tl-range-row { margin: 4px 6px 0; }
+.tl-range-slider { inline-size: 100%; accent-color: var(--accent); cursor: pointer; }
+.tl-range-scale { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin: 2px 2px 0; }
+.tl-range-label { font-size: 12px; color: var(--accent); font-weight: 600; }
+
 /* Reduced motion (V3.8) — one consolidated block. Neutralizes every transition,
    scroll animation, and :active scale-feedback in the app for users who ask for
    less motion (replaces the three per-component blocks the earlier slices added). */
@@ -471,7 +531,7 @@ time {
 .cal-strip {
   display: flex;
   align-items: flex-start;        /* an empty pane must not stretch to a tall sibling */
-  gap: 12px;
+  gap: 8px;
   overflow-x: auto;
   /* overflow-x:auto forces the computed overflow-y to 'auto' too, making this a
      two-axis scroll box that would otherwise clip the card drop-shadows flush —
@@ -484,19 +544,51 @@ time {
 }
 .cal-strip::-webkit-scrollbar { display: none; }
 .cal-day {
-  flex: 0 0 calc(100% - 32px);    /* near-full-width; ~32px of the next pane peeks */
+  flex: 0 0 calc((100% - 16px) / 3);   /* 3 days visible at once; scroll the ±30-day window */
   min-width: 0;
   scroll-snap-align: start;
+  background: var(--tile2);
+  border-radius: var(--rad-sm);
+  padding: 8px 6px;
+  min-block-size: 104px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
+.cal-day-today { box-shadow: inset 0 0 0 2px var(--accent); }
+.cal-day-today .cal-day-name { color: var(--accent); }
 .cal-day-head {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
-  margin: 2px 4px 8px;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 2px 4px;
 }
-.cal-day-name { font-weight: 600; font-size: 14px; }
-.cal-day-date { font-size: 13px; color: var(--muted); }
+.cal-day-name { font-weight: 600; font-size: 12px; line-height: 1.2; }
+.cal-day-date { font-size: 11px; color: var(--muted); }
+/* compact event cards inside the narrow 3-up day columns */
+.cal-day .cal-event { padding: 6px 8px; }
+.cal-day .cal-event .row-top { flex-direction: column; align-items: flex-start; gap: 1px; }
+.cal-day .cal-event .row-title { font-size: 12px; line-height: 1.25; white-space: normal; }
+.cal-day .cal-time { font-size: 11px; }
+.cal-day .cal-event .row-note { font-size: 10px; }
+.cal-day .empty { font-size: 11px; padding: 4px 2px; }
+/* section header with an inline action (e.g. calendar → "Today" reset) */
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.section-head h2 { margin: 0; }
+.section-action {
+  border: 1px solid var(--line);
+  background: var(--tile);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  min-block-size: 28px;
+}
+.section-action:hover { background: var(--soft); }
+.section-action:active { transform: scale(0.97); }
 
 /* Calendar event card — read-only (no tap affordance, no :active feedback) */
 .cal-event { padding: 10px 14px; cursor: default; }
@@ -573,6 +665,7 @@ time {
 .tile-allgood { color: var(--green); font-size: 20px; }
 .avatar { position: relative; display: inline-flex; align-items: center; justify-content: center; inline-size: 38px; block-size: 38px; border-radius: 999px; background: var(--tile2); border: 1px solid var(--line); }
 .avatar-initials { font-size: 13px; font-weight: 600; }
+.avatar-photo { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; object-fit: cover; border-radius: 999px; }
 .avatar-badge { position: absolute; inset-block-end: -7px; inset-inline-end: -7px; display: inline-flex; align-items: center; gap: 1px; font-size: 9px; background: var(--tile); border: 1px solid var(--line); border-radius: 999px; padding: 0 3px; }
 .avatar-badge .num { font-size: 9px; }
 .avatar-over { border-color: var(--red); }
@@ -740,6 +833,7 @@ nav.tabbar button {
 nav.tabbar button.active { color: var(--accent); font-weight: 600; }
 
 /* Sign-in screen */
+.signin[hidden] { display: none; }   /* guard: .signin's display would otherwise override the [hidden] attr */
 .signin {
   display: flex;
   flex-direction: column;

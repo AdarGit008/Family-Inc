@@ -1,745 +1,103 @@
 {
   "reminders": [
     [
-      "Title",
-      "Domain",
-      "Owner",
-      "Due Date",
-      "Lead Times",
-      "Recurrence",
-      "Status",
-      "Last Sent",
-      "Channel",
-      "Notes",
-      "Days Until",
-      "Auto-flag",
-      "LastDoneBy",
-      "DoneAt",
-      "WriteQueue_Tombstone",
-      "Guide URL"
+      "Title", "Domain", "Owner", "Due Date", "Lead Times", "Recurrence", "Status",
+      "Last Sent", "Channel", "Notes", "Days Until", "Auto-flag", "LastDoneBy", "DoneAt",
+      "WriteQueue_Tombstone", "Guide URL"
     ],
-    [
-      "Car annual test (Test Rishui)",
-      "Car",
-      "Adar",
-      "2026-10-15",
-      "60,30,7,1",
-      "Yearly",
-      "Pending",
-      "",
-      "WhatsApp",
-      "Plate XX-XXX-XX",
-      "140",
-      ""
-    ],
-    [
-      "Car insurance renewal",
-      "Car",
-      "Adar",
-      "2026-11-01",
-      "30,7,1",
-      "Yearly",
-      "Pending",
-      "",
-      "WhatsApp",
-      "Currently with Harel",
-      "157",
-      ""
-    ],
-    [
-      "Dentist — Adar",
-      "Health",
-      "Adar",
-      "2026-05-26",
-      "30,7",
-      "6-month",
-      "Pending",
-      "",
-      "WhatsApp",
-      "",
-      "-2",
-      "OVERDUE"
-    ],
-    [
-      "Dentist — Child 1",
-      "Health",
-      "Partner",
-      "2026-09-10",
-      "30,7",
-      "6-month",
-      "Pending",
-      "",
-      "WhatsApp",
-      "",
-      "105",
-      ""
-    ],
-    [
-      "1st-grade registration opens",
-      "Education",
-      "Both",
-      "2026-12-15",
-      "30,14,7,1",
-      "Once",
-      "Pending",
-      "",
-      "WhatsApp",
-      "City portal",
-      "201",
-      ""
-    ],
-    [
-      "Parent-teacher conference",
-      "Education",
-      "Both",
-      "2026-11-20",
-      "14,3,1",
-      "Bi-yearly",
-      "Pending",
-      "",
-      "WhatsApp",
-      "",
-      "176",
-      ""
-    ],
-    [
-      "Quarterly savings transfer",
-      "Finance",
-      "Adar",
-      "2026-06-30",
-      "7,1",
-      "Quarterly",
-      "Pending",
-      "",
-      "WhatsApp",
-      "₪5000 → savings",
-      "33",
-      ""
-    ],
-    [
-      "Pay annual home insurance",
-      "Finance",
-      "Adar",
-      "2026-06-03",
-      "14,3",
-      "Yearly",
-      "Pending",
-      "",
-      "WhatsApp",
-      "",
-      "6",
-      "WEEK OUT"
-    ],
-    [
-      "Pharmacy pickup",
-      "Health",
-      "Adar",
-      "2026-06-26",
-      "1",
-      "One-off",
-      "Pending",
-      "",
-      "WhatsApp",
-      "Pick up Child 1's prescription",
-      "0",
-      "FIRE TODAY"
-    ],
-    [
-      "Renew passport",
-      "Other",
-      "Both",
-      "2026-07-14",
-      "30,7",
-      "One-off",
-      "Pending",
-      "",
-      "WhatsApp",
-      "",
-      "18",
-      "MONTH OUT"
-    ]
+    ["תור לרופא שיניים — אדר", "Health", "אדר", "2026-06-22", "30,7", "6-month", "Pending", "", "WhatsApp", "ניקוי אבנית + בדיקה", "", "", "", "", "", ""],
+    ["תשלום ביטוח דירה", "Finance", "אדר", "2026-06-24", "14,3", "Yearly", "Pending", "", "WhatsApp", "הראל · ₪3,840 לשנה", "", "", "", "", "", ""],
+    ["איסוף מרשם מבית המרקחת", "Health", "שני", "2026-06-27", "1", "One-off", "Pending", "", "WhatsApp", "מרשם של איתמר", "", "", "", "", "", ""],
+    ["אסיפת הורים — הרשמה", "Education", "שניהם", "2026-07-01", "14,3,1", "Bi-yearly", "Pending", "", "WhatsApp", "לבחור שעה בפורטל", "", "", "", "", "", ""],
+    ["העברה רבעונית לחיסכון", "Finance", "אדר", "2026-07-02", "7,1", "Quarterly", "Pending", "", "WhatsApp", "₪5,000 → חיסכון", "", "", "", "", "", ""],
+    ["שלו — חיסונים בגיל שנה", "Health", "שני", "2026-07-10", "30,7", "Per schedule", "Pending", "", "WhatsApp", "טיפת חלב", "", "", "", "", "", ""],
+    ["חידוש דרכון", "Other", "שניהם", "2026-07-14", "30,7", "One-off", "Pending", "", "WhatsApp", "הדרכונים של שני ההורים פגים", "", "", "", "", "", ""],
+    ["חידוש ביטוח רכב", "Car", "אדר", "2026-07-20", "30,7,1", "Yearly", "Pending", "", "WhatsApp", "להשוות מחירים — כרגע הראל", "", "", "", "", "", ""],
+    ["טסט שנתי לרכב", "Car", "אדר", "2026-10-15", "60,30,7,1", "Yearly", "Pending", "", "WhatsApp", "מספר רישוי 12-345-67", "", "", "", "", "", ""],
+    ["נפתחת ההרשמה לכיתה א׳", "Education", "שניהם", "2026-12-15", "30,14,7,1", "Once", "Pending", "", "WhatsApp", "פורטל העירייה — אדר מוביל", "", "", "", "", "", ""]
   ],
   "calendarEvents": [
-    [
-      "Date",
-      "Start",
-      "End",
-      "Title",
-      "Owner",
-      "Source",
-      "Location",
-      "Notes"
-    ],
-    [
-      "2026-05-29",
-      "19:00",
-      "20:30",
-      "Date night",
-      "Both",
-      "Manual",
-      "Cafe Levinsky"
-    ],
-    [
-      "2026-06-03",
-      "",
-      "",
-      "Sunday review",
-      "Both",
-      "Manual",
-      "Home",
-      "Sunday family operating ritual"
-    ],
-    [
-      "2026-06-06",
-      "20:00",
-      "21:30",
-      "Adar's cousin's birthday",
-      "Adar",
-      "iCloud",
-      "Tel Aviv",
-      "Bring small gift"
-    ],
-    [
-      "2026-06-10",
-      "",
-      "",
-      "Quarterly savings transfer",
-      "Adar",
-      "System",
-      "Reminders tab",
-      "Auto-linked from Reminders row 8"
-    ],
-    [
-      "2026-06-25",
-      "08:30",
-      "09:15",
-      "Dentist appointment",
-      "Shanee",
-      "Manual",
-      "Ramat Gan"
-    ],
-    [
-      "2026-06-26",
-      "19:13",
-      "",
-      "הדלקת נרות",
-      "System",
-      "hebcal"
-    ],
-    [
-      "2026-06-27",
-      "11:00",
-      "12:30",
-      "Brunch with friends",
-      "Both",
-      "Manual",
-      "Florentin"
-    ],
-    [
-      "2026-07-08",
-      "09:00",
-      "09:45",
-      "Pediatrician — Child 2",
-      "Shanee",
-      "Manual",
-      "Maccabi clinic"
-    ]
+    ["Date", "Start", "End", "Title", "Owner", "Source", "Location", "Notes"],
+    ["2026-06-05", "08:30", "09:15", "בדיקה — שני", "שני", "Manual", "מכבי רמת גן", ""],
+    ["2026-06-12", "19:00", "20:30", "ערב זוגי", "שניהם", "Manual", "", ""],
+    ["2026-06-20", "17:00", "19:00", "פיקניק סוף שנה בגן", "שניהם", "Manual", "פארק הירקון", ""],
+    ["2026-06-27", "11:00", "12:30", "בראנץ׳ עם חברים", "שניהם", "Manual", "פלורנטין", ""],
+    ["2026-06-27", "20:35", "", "צאת שבת", "System", "shabbat", "", ""],
+    ["2026-06-28", "10:00", "11:00", "סקירת משפחה — יום ראשון", "שניהם", "Manual", "בית", "טקס שבועי קבוע"],
+    ["2026-07-01", "20:00", "21:30", "יום הולדת לבן הדוד של אדר", "אדר", "iCloud", "תל אביב", "להביא מתנה קטנה"],
+    ["2026-07-08", "09:00", "09:45", "רופא ילדים — שלו", "שני", "Manual", "מרפאת מכבי", ""],
+    ["2026-07-15", "19:00", "20:30", "ערב זוגי", "שניהם", "Manual", "קפה לבינסקי", ""]
   ],
   "people": [
-    [
-      "Name",
-      "Role",
-      "Date of Birth",
-      "Teudat Zehut",
-      "Kupat Holim",
-      "Primary Doctor",
-      "Blood Type",
-      "Allergies",
-      "Notes"
-    ],
-    [
-      "[Adar]",
-      "Parent",
-      "1985-01-01",
-      "000000000",
-      "Clalit",
-      "Dr. Cohen",
-      "O+",
-      "None",
-      "Replace with real values"
-    ],
-    [
-      "[Partner]",
-      "Parent",
-      "1986-01-01",
-      "000000000",
-      "Maccabi",
-      "Dr. Levi",
-      "A+",
-      "Peanuts"
-    ],
-    [
-      "[Child 1]",
-      "Child",
-      "2018-01-01",
-      "000000000",
-      "Clalit",
-      "Dr. Cohen",
-      "?",
-      "None"
-    ],
-    [
-      "[Child 2]",
-      "Child",
-      "2021-01-01",
-      "000000000",
-      "Clalit",
-      "Dr. Cohen",
-      "?",
-      "Dairy"
-    ]
+    ["Name", "Role", "Date of Birth", "Teudat Zehut", "Kupat Holim", "Primary Doctor", "Blood Type", "Allergies", "Notes"],
+    ["אדר", "הורה", "1985-01-01", "000000000", "כללית", "ד״ר כהן", "O+", "אין", "נתוני דוגמה — לא ערכים אמיתיים"],
+    ["שני", "הורה", "1986-01-01", "000000000", "מכבי", "ד״ר לוי", "A+", "בוטנים", ""],
+    ["איתמר", "ילד", "2018-01-01", "000000000", "כללית", "ד״ר כהן", "—", "אין", ""],
+    ["שלו", "ילד", "2021-01-01", "000000000", "כללית", "ד״ר כהן", "—", "חלב", ""]
   ],
   "finance_bdgt": [
-    [
-      "Category",
-      "Monthly Target (ILS)",
-      "Actual (current month)",
-      "Variance",
-      "% of Target",
-      "YTD Actual"
-    ],
-    [
-      "Housing",
-      "8500",
-      "6800",
-      "1700",
-      "0.8000",
-      "0"
-    ],
-    [
-      "Groceries",
-      "4000",
-      "432",
-      "3568",
-      "0.1081",
-      "0"
-    ],
-    [
-      "Transport",
-      "1500",
-      "280",
-      "1220",
-      "0.1867",
-      "0"
-    ],
-    [
-      "Childcare",
-      "5000",
-      "0",
-      "5000",
-      "0.0000",
-      "0"
-    ],
-    [
-      "Utilities",
-      "1200",
-      "0",
-      "1200",
-      "0.0000",
-      "0"
-    ],
-    [
-      "Health",
-      "800",
-      "0",
-      "800",
-      "0.0000",
-      "0"
-    ],
-    [
-      "Entertainment",
-      "800",
-      "0",
-      "800",
-      "0.0000",
-      "0"
-    ],
-    [
-      "Dining out",
-      "1000",
-      "0",
-      "1000",
-      "0.0000",
-      "0"
-    ],
-    [
-      "Subscriptions",
-      "400",
-      "0",
-      "400",
-      "0.0000",
-      "0"
-    ],
-    [
-      "Savings",
-      "5000",
-      "0",
-      "5000",
-      "0.0000",
-      "0"
-    ],
-    [
-      "Other",
-      "500",
-      "0",
-      "500",
-      "0.0000",
-      "0"
-    ],
-    [
-      "TOTAL",
-      "28700",
-      "7512",
-      "21188",
-      "0.2617",
-      "0"
-    ]
+    ["Category", "Monthly Target (ILS)", "Actual (current month)", "Variance", "% of Target", "YTD Actual"],
+    ["דיור", "8500", "6800", "1700", "0.8000", "40800"],
+    ["מצרכים", "4000", "3120", "880", "0.7800", "21500"],
+    ["תחבורה", "1500", "1180", "320", "0.7867", "7400"],
+    ["מעונות וטיפול", "5000", "5000", "0", "1.0000", "30000"],
+    ["חשבונות בית", "1200", "940", "260", "0.7833", "6100"],
+    ["בריאות", "800", "420", "380", "0.5250", "2600"],
+    ["בידור", "800", "610", "190", "0.7625", "3500"],
+    ["אוכל בחוץ", "1000", "880", "120", "0.8800", "4900"],
+    ["מנויים", "400", "360", "40", "0.9000", "2200"],
+    ["חיסכון", "5000", "5000", "0", "1.0000", "30000"],
+    ["אחר", "500", "290", "210", "0.5800", "1800"],
+    ["TOTAL", "28700", "24600", "4100", "0.8571", "150700"]
   ],
   "finance_txns": [
-    [
-      "Date",
-      "Account",
-      "Description",
-      "Amount (ILS)",
-      "Category",
-      "Subcategory",
-      "Tags",
-      "Imported From",
-      "Notes"
-    ],
-    [
-      "2026-05-10",
-      "[Joint Checking]",
-      "SHUFERSAL DEAL",
-      "-432.5",
-      "Groceries",
-      "Supermarket",
-      "kids",
-      "hapoalim_2026-05.csv",
-      "Sample row"
-    ],
-    [
-      "2026-05-12",
-      "[Visa Cal — Adar]",
-      "PAZ GAS STATION",
-      "-280",
-      "Transport",
-      "Fuel",
-      "car",
-      "cal_2026-05.csv"
-    ],
-    [
-      "2026-05-15",
-      "[Joint Checking]",
-      "MORTGAGE PAYMENT",
-      "-6800",
-      "Housing",
-      "Mortgage",
-      "fixed",
-      "hapoalim_2026-05.csv"
-    ],
-    [
-      "2026-05-20",
-      "[Joint Checking]",
-      "SALARY — ADAR",
-      "28500",
-      "Income",
-      "Salary",
-      "income",
-      "hapoalim_2026-05.csv"
-    ]
+    ["Date", "Account", "Description", "Amount (ILS)", "Category", "Subcategory", "Tags", "Imported From", "Notes"],
+    ["2026-06-25", "עו״ש משותף", "שופרסל דיל", "-432.50", "מצרכים", "סופרמרקט", "ילדים", "cal_2026-06.csv", "שורת דוגמה"],
+    ["2026-06-20", "ויזה כאל — אדר", "תחנת דלק פז", "-280", "תחבורה", "דלק", "רכב", "cal_2026-06.csv", ""],
+    ["2026-06-15", "עו״ש משותף", "תשלום משכנתא", "-6800", "דיור", "משכנתא", "קבוע", "mizrahi_2026-06.csv", ""],
+    ["2026-06-10", "עו״ש משותף", "משכורת — אדר", "28500", "הכנסה", "משכורת", "הכנסה", "mizrahi_2026-06.csv", ""]
   ],
   "goals": [
-    [
-      "Goal",
-      "Owner",
-      "Horizon",
-      "Target Date",
-      "90-Day Milestone",
-      "% Complete",
-      "Last Update",
-      "Status",
-      "Notes"
-    ],
-    [
-      "[Buy a home in the Center]",
-      "Both",
-      "3 years",
-      "2029-05-01",
-      "Open dedicated savings account + 30k₪ in",
-      "5",
-      "2026-05-25",
-      "On track",
-      "Need partner alignment on neighborhood"
-    ],
-    [
-      "[60k₪ emergency fund]",
-      "Adar",
-      "1 year",
-      "2027-05-01",
-      "Reach 20k₪",
-      "20",
-      "2026-05-25",
-      "On track"
-    ],
-    [
-      "[Career: lead larger team]",
-      "Partner",
-      "2 years",
-      "2028-05-01",
-      "Take internal management course",
-      "0",
-      "2026-05-25",
-      "Not started"
-    ]
+    ["Goal", "Owner", "Horizon", "Target Date", "90-Day Milestone", "% Complete", "Last Update", "Status", "Notes"],
+    ["לקנות בית במרכז", "שניהם", "3 שנים", "2029-05-01", "לפתוח חשבון חיסכון ייעודי + ₪30k בפנים", "8", "2026-06-22", "בתוך היעד", "ליישר קו על שכונה"],
+    ["קרן חירום — ₪60k", "אדר", "שנה", "2027-05-01", "להגיע ל-₪20k", "32", "2026-06-22", "בתוך היעד", ""],
+    ["להוביל צוות גדול יותר", "שני", "שנתיים", "2028-05-01", "לעשות את קורס הניהול הפנימי", "10", "2026-06-22", "בתוך היעד", ""]
   ],
   "health": [
-    [
-      "Person",
-      "Provider",
-      "Specialty",
-      "Last Visit",
-      "Next Due",
-      "Frequency",
-      "Action Needed",
-      "Contact",
-      "Notes"
-    ],
-    [
-      "[Adar]",
-      "Dr. Cohen — Clalit",
-      "Family doctor",
-      "2026-01-10",
-      "2027-01-10",
-      "Yearly",
-      "Schedule annual check",
-      "[clinic phone]"
-    ],
-    [
-      "[Adar]",
-      "Dr. Stern",
-      "Dentist",
-      "2026-02-15",
-      "2026-08-15",
-      "6-month",
-      "Schedule cleaning",
-      "[clinic phone]"
-    ],
-    [
-      "[Partner]",
-      "Dr. Levi — Maccabi",
-      "Family doctor",
-      "2025-11-05",
-      "2026-11-05",
-      "Yearly",
-      "",
-      "[clinic phone]"
-    ],
-    [
-      "[Child 1]",
-      "Dr. Cohen — Clalit",
-      "Pediatrician",
-      "2026-03-20",
-      "2026-09-20",
-      "6-month",
-      "Routine check",
-      "[clinic phone]"
-    ],
-    [
-      "[Child 1]",
-      "Tipat Halav",
-      "Vaccines",
-      "2026-04-01",
-      "2026-10-01",
-      "Per schedule",
-      "MMR booster",
-      "[Tipat Halav phone]"
-    ],
-    [
-      "[Child 2]",
-      "Tipat Halav",
-      "Vaccines",
-      "2026-02-10",
-      "2026-08-10",
-      "Per schedule",
-      "12-month vaccines",
-      "[Tipat Halav phone]"
-    ]
+    ["Person", "Provider", "Specialty", "Last Visit", "Next Due", "Frequency", "Action Needed", "Contact", "Notes"],
+    ["אדר", "ד״ר כהן — כללית", "רופא משפחה", "2026-01-10", "2027-01-10", "שנתי", "לקבוע בדיקה שנתית", "מרפאה", ""],
+    ["אדר", "ד״ר שטרן", "רופא שיניים", "2026-01-22", "2026-07-22", "חצי שנתי", "לקבוע ניקוי אבנית", "מרפאה", ""],
+    ["שני", "ד״ר לוי — מכבי", "רופא משפחה", "2025-12-05", "2026-07-05", "שנתי", "בדיקה שנתית", "מרפאה", ""],
+    ["איתמר", "ד״ר כהן — כללית", "רופא ילדים", "2026-03-30", "2026-06-30", "חצי שנתי", "בדיקה שגרתית", "מרפאה", ""],
+    ["שלו", "טיפת חלב", "חיסונים", "2025-10-10", "2026-07-10", "לפי לוח", "חיסונים בגיל שנה", "טיפת חלב", ""]
   ],
   "education": [
-    [
-      "Child",
-      "Institution",
-      "Year/Grade",
-      "Teacher/Caregiver",
-      "Next Key Date",
-      "Type",
-      "Action Needed",
-      "Contact",
-      "Notes"
-    ],
-    [
-      "[Child 1]",
-      "[Preschool name]",
-      "Gan Trom-Hova",
-      "[Teacher]",
-      "2026-09-01",
-      "School year start",
-      "Buy supplies, label clothes",
-      "[teacher@school]"
-    ],
-    [
-      "[Child 1]",
-      "[Preschool name]",
-      "Gan Trom-Hova",
-      "[Teacher]",
-      "2026-11-20",
-      "Parent-teacher",
-      "Schedule meeting slot",
-      "[teacher@school]"
-    ],
-    [
-      "[Child 2]",
-      "[Daycare name]",
-      "Maon",
-      "[Caregiver]",
-      "2026-12-15",
-      "1st-grade registration opens",
-      "Register on city portal",
-      "[city helpdesk]",
-      "Adar to lead"
-    ]
+    ["Child", "Institution", "Year/Grade", "Teacher/Caregiver", "Next Key Date", "Type", "Action Needed", "Contact", "Notes"],
+    ["איתמר", "גן שקד", "גן טרום-חובה", "מורה דנה", "2026-09-01", "תחילת שנת לימודים", "לקנות ציוד, לסמן בגדים", "גן", ""],
+    ["איתמר", "גן שקד", "גן טרום-חובה", "מורה דנה", "2026-07-01", "אסיפת הורים", "לבחור שעה", "גן", ""],
+    ["שלו", "מעון תומר", "מעון", "גלית", "2026-12-15", "הרשמה לכיתה א׳", "להירשם בפורטל העירייה", "עירייה", "אדר מוביל"]
   ],
   "car": [
-    [
-      "Vehicle",
-      "Plate",
-      "Owner",
-      "Annual Test (Rishui)",
-      "Insurance Renewal",
-      "Insurance Provider",
-      "License Expiry",
-      "Mechanic",
-      "Notes"
-    ],
-    [
-      "[Make/Model — Year]",
-      "[XX-XXX-XX]",
-      "Adar",
-      "2026-10-15",
-      "2026-11-01",
-      "Harel",
-      "2030-03-15",
-      "[Mechanic shop]",
-      "Last service date in notes"
-    ]
+    ["Vehicle", "Plate", "Owner", "Annual Test (Rishui)", "Insurance Renewal", "Insurance Provider", "License Expiry", "Mechanic", "Notes"],
+    ["מאזדה 3 — 2021", "12-345-67", "אדר", "2026-10-15", "2026-07-20", "הראל", "2030-03-15", "המוסך של משה", "טיפול אחרון 03/2026"]
   ],
   "contracts": [
-    [
-      "Contract",
-      "Provider",
-      "Type",
-      "Start Date",
-      "Renewal Date",
-      "Monthly Cost (ILS)",
-      "Annual Cost (ILS)",
-      "Auto-Renew",
-      "Notes"
-    ],
-    [
-      "[Mortgage]",
-      "Bank Hapoalim",
-      "Mortgage",
-      "2024-06-01",
-      "—",
-      "6800",
-      "81600",
-      "Yes",
-      "30-year fixed"
-    ],
-    [
-      "[Home insurance]",
-      "Harel",
-      "Insurance",
-      "2025-09-01",
-      "2026-09-01",
-      "320",
-      "3840",
-      "Yes"
-    ],
-    [
-      "[Car insurance]",
-      "Harel",
-      "Insurance",
-      "2025-11-01",
-      "2026-11-01",
-      "580",
-      "6960",
-      "No",
-      "Shop around each year"
-    ],
-    [
-      "[Electricity]",
-      "IEC",
-      "Utility",
-      "—",
-      "—",
-      "550",
-      "6600",
-      "Yes",
-      "Estimated avg"
-    ],
-    [
-      "[Internet]",
-      "Bezeq",
-      "Utility",
-      "2025-01-01",
-      "2027-01-01",
-      "99",
-      "1188",
-      "Yes"
-    ],
-    [
-      "[Mobile — Adar]",
-      "Pelephone",
-      "Utility",
-      "—",
-      "—",
-      "49",
-      "588",
-      "Yes"
-    ]
+    ["Contract", "Provider", "Type", "Start Date", "Renewal Date", "Monthly Cost (ILS)", "Annual Cost (ILS)", "Auto-Renew", "Notes"],
+    ["משכנתא", "מזרחי טפחות", "משכנתא", "2024-06-01", "—", "6800", "81600", "Yes", "ריבית קבועה ל-30 שנה"],
+    ["ביטוח דירה", "הראל", "ביטוח", "2025-06-24", "2026-06-24", "320", "3840", "No", "מתחדש — לבדוק"],
+    ["ביטוח רכב", "הראל", "ביטוח", "2025-07-20", "2026-07-20", "580", "6960", "No", "להשוות מחירים כל שנה"],
+    ["חשמל", "חברת חשמל", "תשתית", "—", "—", "550", "6600", "Yes", "ממוצע משוער"],
+    ["אינטרנט", "בזק", "תשתית", "2025-01-01", "2027-01-01", "99", "1188", "Yes", ""],
+    ["סלולר — אדר", "פלאפון", "תשתית", "—", "—", "49", "588", "Yes", ""]
   ],
   "settings": [
-    [
-      "Key",
-      "Value"
-    ],
-    [
-      "you@example.com",
-      "Adar"
-    ],
-    [
-      "partner@example.com",
-      "Shanee"
-    ],
-    [
-      "lang",
-      "he"
-    ]
+    ["Key", "Value"],
+    ["you@example.com", "אדר"],
+    ["partner@example.com", "שני"],
+    ["lang", "he"]
   ],
   "loveNote": {
-    "inbound": { "from": "Shanee", "text": "אל תשכח לנשום היום ❤️ אני איתך", "sent_at": "2026-06-25T07:40:00" },
+    "inbound": { "from": "שני", "text": "אל תשכח לנשום היום ❤️ אני איתך", "sent_at": "2026-06-26T07:40:00" },
     "outbound": null
   }
 }
