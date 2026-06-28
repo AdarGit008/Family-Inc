@@ -1,5 +1,9 @@
 # OS
 .DS_Store
+# Windows/WSL mark-of-the-web alternate-data-stream stubs — created when design
+# files are copied in from Windows; zero-byte junk, never source (6928c2b swept
+# 9 of these in alongside the avatars; publish path is dashboard/** → they'd ship to Pages)
+*:Zone.Identifier
 
 # Python
 __pycache__/
